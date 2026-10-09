@@ -5,11 +5,12 @@ use crate::ui::palette::Palette;
 use crate::utils::format;
 use crate::utils::math::{ease_out_cubic, geo_lerp, lerp};
 use crate::utils::text::elide_start;
-use crate::layout::{self, Item, Ov, Params, R};
+use crate::core::geometry::Rect;
+use crate::core::layout::{self, Item, LayoutParams, Reshape};
 use crate::core::fs::{self as scan, Drive, ScanControl};
 use crate::core::model::{self, Tree};
 use eframe::egui::{
-    self, Align2, Color32, FontId, Id, Order, Painter, Pos2, Rect, Sense, Stroke, Vec2,
+    self, Align2, Color32, FontId, Id, Order, Painter, Pos2, Sense, Stroke, Vec2,
 };
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -63,7 +64,7 @@ struct DriveDialog {
 #[derive(Clone)]
 struct Fit {
     /// Full-strength reshape, relative to the folder's natural box.
-    ov: Ov,
+    ov: Reshape,
     /// Camera scale (root width / view width) at which the folder exactly fills the view.
     scale: f64,
 }
@@ -80,26 +81,22 @@ impl Fit {
     }
 }
 
-fn faded(ov: &Ov, b: f64) -> Ov {
-    Ov { path: ov.path.clone(), a: (ov.a.0.powf(b), ov.a.1.powf(b)), d: (ov.d.0 * b, ov.d.1 * b) }
-}
-
 /// Camera move to a folder: an even zoom about the move's fixed point (so the folder's centre
 /// travels in a straight line and the root keeps covering the view), with the folder's box
 /// changing shape on the way.
 struct Anim {
     start: Instant,
     target: Vec<usize>,
-    from_cam: R,
+    from_cam: Rect,
     /// Target folder's natural centre at start / end.
     n0: (f64, f64),
     n1: (f64, f64),
     /// Target's reshape relative to its natural box, at start / end.
-    ov0: Ov,
-    ov1: Ov,
+    ov0: Reshape,
+    ov1: Reshape,
     /// Another folder's reshape fading out during the move.
-    old: Option<Ov>,
-    end_cam: R,
+    old: Option<Reshape>,
+    end_cam: Rect,
     end_fit: Option<Fit>,
     /// Keep the selection when the move ends (framing), rather than clearing it (zooming in).
     keep_sel: bool,
@@ -151,7 +148,7 @@ pub struct SpaceMonger {
     zoom: Vec<usize>,
     /// Box of the scan root in view coordinates; always the view's shape, scaled evenly.
     /// Equal to the view when fully zoomed out.
-    cam: Option<R>,
+    cam: Option<Rect>,
     /// Folder currently stretched to fill the window, if any.
     fit: Option<Fit>,
     /// View size (points) the camera was last fitted to.
@@ -160,7 +157,7 @@ pub struct SpaceMonger {
     resize_anchor: Option<(Option<Anchor>, Instant)>,
 
     items: Vec<Item>,
-    layout_key: Option<(f32, f32, u64, R, Vec<Ov>)>,
+    layout_key: Option<(f32, f32, u64, Rect, Vec<Reshape>)>,
     generation: u64,
 
     /// Selected entries; the last one is the primary (used by Zoom In and the title).
@@ -173,7 +170,7 @@ pub struct SpaceMonger {
     show_free: bool,
     dark: bool,
     applied_dark: Option<bool>,
-    params: Params,
+    params: LayoutParams,
 
     dialog: Option<DriveDialog>,
     scan: Option<ScanJob>,
@@ -205,7 +202,7 @@ impl SpaceMonger {
             show_free: get("show_free").is_none_or(|v| v == "true"),
             dark: get("dark").is_some_and(|v| v == "true"),
             applied_dark: None,
-            params: Params::default(),
+            params: LayoutParams::default(),
             dialog: None,
             scan: None,
             confirm_delete: None,
@@ -271,7 +268,7 @@ impl SpaceMonger {
 
     /// Boxes of the folder's entries as drawn now (natural split of its content area at the
     /// current camera), without free space.
-    fn sibling_boxes(&self, folder: &[usize]) -> Vec<(usize, R)> {
+    fn sibling_boxes(&self, folder: &[usize]) -> Vec<(usize, Rect)> {
         let (Some(t), Some(cam)) = (&self.tree, self.cam) else { return Vec::new() };
         let p = self.params();
         let Some(f) = t.folder_at(folder) else { return Vec::new() };
@@ -438,20 +435,20 @@ impl SpaceMonger {
         }
     }
 
-    fn params(&self) -> Params {
-        Params { show_free: self.show_free, ..self.params }
+    fn params(&self) -> LayoutParams {
+        LayoutParams { show_free: self.show_free, ..self.params }
     }
 
-    fn full_view(&self) -> R {
-        R::new(0.0, 0.0, self.view.0, self.view.1)
+    fn full_view(&self) -> Rect {
+        Rect::new(0.0, 0.0, self.view.0, self.view.1)
     }
 
     /// Box a folder needs so its content exactly fills the view.
-    fn fill_box(&self) -> R {
-        R::new(-3.0, -12.0, self.view.0 + 5.0, self.view.1 + 14.0)
+    fn fill_box(&self) -> Rect {
+        Rect::new(-3.0, -12.0, self.view.0 + 5.0, self.view.1 + 14.0)
     }
 
-    fn scale_of(&self, c: R) -> f64 {
+    fn scale_of(&self, c: Rect) -> f64 {
         c.w / self.view.0.max(1.0)
     }
 
@@ -460,18 +457,18 @@ impl SpaceMonger {
     }
 
     /// Overrides in effect for camera `c` (outside animations).
-    fn ovs_at(&self, c: R) -> Vec<Ov> {
+    fn ovs_at(&self, c: Rect) -> Vec<Reshape> {
         match &self.fit {
             Some(f) => {
                 let b = f.blend(self.scale_of(c));
-                if b > 0.0 { vec![faded(&f.ov, b)] } else { Vec::new() }
+                if b > 0.0 { vec![f.ov.faded(b)] } else { Vec::new() }
             }
             None => Vec::new(),
         }
     }
 
     /// Camera and overrides to draw this frame.
-    fn view_state(&self) -> (R, Vec<Ov>) {
+    fn view_state(&self) -> (Rect, Vec<Reshape>) {
         let cam = self.cam.unwrap_or(self.full_view());
         match &self.anim {
             Some(a) => self.anim_state(a),
@@ -479,18 +476,18 @@ impl SpaceMonger {
         }
     }
 
-    fn locate(&self, cam: R, path: &[usize], ovs: &[Ov]) -> Option<R> {
+    fn locate(&self, cam: Rect, path: &[usize], ovs: &[Reshape]) -> Option<Rect> {
         layout::locate(&self.tree.as_ref()?.root, cam, path, self.params(), ovs)
     }
 
     /// Scale camera `c` by `k` about point `p`.
-    fn scaled(c: R, p: (f64, f64), k: f64) -> R {
-        R::new(p.0 + (c.x - p.0) * k, p.1 + (c.y - p.1) * k, c.w * k, c.h * k)
+    fn scaled(c: Rect, p: (f64, f64), k: f64) -> Rect {
+        Rect::new(p.0 + (c.x - p.0) * k, p.1 + (c.y - p.1) * k, c.w * k, c.h * k)
     }
 
     /// Keep the root covering the view (no zooming out past the scan root), and while a
     /// folder is fully fitted, keep it covering the view too.
-    fn clamp_cam(&self, mut c: R) -> R {
+    fn clamp_cam(&self, mut c: Rect) -> Rect {
         let (vw, vh) = self.view;
         if c.w < vw || c.h < vh {
             return self.full_view();
@@ -519,7 +516,7 @@ impl SpaceMonger {
     }
 
     /// Keep the root covering the view (ignoring any fitted folder).
-    fn cover_root(&self, mut c: R) -> R {
+    fn cover_root(&self, mut c: Rect) -> Rect {
         let (vw, vh) = self.view;
         if c.w < vw || c.h < vh {
             return self.full_view();
@@ -531,15 +528,15 @@ impl SpaceMonger {
 
     /// Even-zoom camera that centres the bounding box of the entries at `paths` (natural boxes)
     /// and fits it in the view with a margin, as far as the root allows.
-    fn solve_frame(&self, paths: &[Vec<usize>]) -> Option<R> {
+    fn solve_frame(&self, paths: &[Vec<usize>]) -> Option<Rect> {
         let (vw, vh) = self.view;
-        let bbox = |cam: R| {
+        let bbox = |cam: Rect| {
             let mut bb: Option<(f64, f64, f64, f64)> = None;
             for r in paths.iter().filter_map(|p| self.locate(cam, p, &[])) {
                 let (x0, y0, x1, y1) = bb.unwrap_or((r.x, r.y, r.x + r.w, r.y + r.h));
                 bb = Some((x0.min(r.x), y0.min(r.y), x1.max(r.x + r.w), y1.max(r.y + r.h)));
             }
-            bb.map(|(x0, y0, x1, y1)| R::new(x0, y0, x1 - x0, y1 - y0)).filter(|b| b.w > 1e-9 && b.h > 1e-9)
+            bb.map(|(x0, y0, x1, y1)| Rect::new(x0, y0, x1 - x0, y1 - y0)).filter(|b| b.w > 1e-9 && b.h > 1e-9)
         };
         // Folder frames don't scale with the camera, so converge on it.
         let mut cam = self.cam?;
@@ -580,8 +577,8 @@ impl SpaceMonger {
                     from_cam: cam0,
                     n0: cam0.center(),
                     n1: end_cam.center(),
-                    ov0: Ov::between(Vec::new(), cam0, cam0),
-                    ov1: Ov::between(Vec::new(), end_cam, end_cam),
+                    ov0: Reshape::between(Vec::new(), cam0, cam0),
+                    ov1: Reshape::between(Vec::new(), end_cam, end_cam),
                     old,
                     end_cam,
                     end_fit: None,
@@ -596,7 +593,7 @@ impl SpaceMonger {
 
     /// Even-zoom camera at which the folder's natural box has the window's area and sits in
     /// the middle (as far as the root allows), plus the reshape that makes it fill the window.
-    fn solve_fit(&self, path: &[usize]) -> Option<(R, Fit)> {
+    fn solve_fit(&self, path: &[usize]) -> Option<(Rect, Fit)> {
         let t = self.fill_box();
         let mut cam = self.cam?;
         for _ in 0..40 {
@@ -616,7 +613,7 @@ impl SpaceMonger {
         // Root coverage only (the fit itself isn't active yet).
         let cam = self.cover_root(cam);
         let n = self.locate(cam, path, &[])?;
-        let ov = Ov::between(path.to_vec(), n, t);
+        let ov = Reshape::between(path.to_vec(), n, t);
         Some((cam, Fit { ov, scale: self.scale_of(cam) }))
     }
 
@@ -627,7 +624,7 @@ impl SpaceMonger {
         let ovs0 = self.ovs_at(cam0);
         let Some(b0) = self.locate(cam0, path, &ovs0) else { return };
         // Any other reshaped folder fades out on the way.
-        let old: Option<Ov> = ovs0.iter().find(|o| o.path != path).cloned();
+        let old: Option<Reshape> = ovs0.iter().find(|o| o.path != path).cloned();
         let Some(n0) = self.locate(cam0, path, old.as_slice()) else { return };
 
         let (end_cam, end_fit) = if path.is_empty() {
@@ -648,8 +645,8 @@ impl SpaceMonger {
             from_cam: cam0,
             n0: n0.center(),
             n1: n1.center(),
-            ov0: Ov::between(path.to_vec(), n0, b0),
-            ov1: Ov::between(path.to_vec(), n1, b1),
+            ov0: Reshape::between(path.to_vec(), n0, b0),
+            ov1: Reshape::between(path.to_vec(), n1, b1),
             old,
             end_cam,
             end_fit,
@@ -658,7 +655,7 @@ impl SpaceMonger {
     }
 
     /// Camera and overrides partway through an animation.
-    fn anim_state(&self, a: &Anim) -> (R, Vec<Ov>) {
+    fn anim_state(&self, a: &Anim) -> (Rect, Vec<Reshape>) {
         let (vw, vh) = self.view;
         let t = (a.start.elapsed().as_secs_f32() / ANIM_DURATION).min(1.0) as f64;
         let e = ease_out_cubic(t);
@@ -669,11 +666,11 @@ impl SpaceMonger {
         let fp = |q: (f64, f64), e: f64| move_point(c0, c1, q, e);
         let (x, y) = fp((c0.x, c0.y), e);
         let r = k.powf(e);
-        let mut cam = R::new(x, y, c0.w * r, c0.h * r);
+        let mut cam = Rect::new(x, y, c0.w * r, c0.h * r);
 
         // Another folder's reshape fades out; that moves things inside it, so keep the target's
         // natural centre on its straight path regardless.
-        let mut ovs: Vec<Ov> = a.old.iter().map(|o| faded(o, 1.0 - e)).collect();
+        let mut ovs: Vec<Reshape> = a.old.iter().map(|o| o.faded(1.0 - e)).collect();
         if !ovs.is_empty() {
             let (end, want) = (fp(a.n0, 1.0), fp(a.n0, e));
             let want = (want.0 + (a.n1.0 - end.0) * e, want.1 + (a.n1.1 - end.1) * e);
@@ -686,7 +683,7 @@ impl SpaceMonger {
 
         // The target's box changes shape evenly between its start and end reshape.
         if !a.target.is_empty() {
-            ovs.push(Ov {
+            ovs.push(Reshape {
                 path: a.target.clone(),
                 a: (geo_lerp(a.ov0.a.0, a.ov1.a.0, e), geo_lerp(a.ov0.a.1, a.ov1.a.1, e)),
                 d: (lerp(a.ov0.d.0, a.ov1.d.0, e), lerp(a.ov0.d.1, a.ov1.d.1, e)),
@@ -713,12 +710,7 @@ impl SpaceMonger {
 
     fn zoom_in_item(&mut self, idx: usize) {
         let it = &self.items[idx];
-        let Some(i) = it.index else { return };
-        if !it.is_folder {
-            return;
-        }
-        let mut target = it.folder.to_vec();
-        target.push(i);
+        let Some(target) = it.path().filter(|_| it.is_folder) else { return };
         self.zoom_to(&target);
     }
 
@@ -751,11 +743,7 @@ impl SpaceMonger {
             .iter()
             .rev()
             .find(|it| it.index.is_some() && !it.is_free && it.contains(px as f32, py as f32))
-            .map(|it| {
-                let mut path = it.folder.to_vec();
-                path.extend(it.index);
-                path
-            });
+            .and_then(Item::path);
         let before = anchor.and_then(|path| self.locate(cam, &path, &self.ovs_at(cam)).map(|b| (path, b)));
 
         let mut c = Self::scaled(cam, (px, py), k);
@@ -781,7 +769,7 @@ impl SpaceMonger {
 
     fn pan(&mut self, dx: f64, dy: f64) {
         if let Some(c) = self.cam {
-            self.cam = Some(self.clamp_cam(R::new(c.x + dx, c.y + dy, c.w, c.h)));
+            self.cam = Some(self.clamp_cam(Rect::new(c.x + dx, c.y + dy, c.w, c.h)));
         }
     }
 
@@ -801,8 +789,7 @@ impl SpaceMonger {
                 (w.max(0.0) * h.max(0.0)) as f64 >= ANCHOR_MIN_SHARE * vw * vh
             })
             .max_by_key(|it| it.folder.len())?;
-        let mut path = it.folder.to_vec();
-        path.extend(it.index);
+        let path = it.path()?;
         let b = self.locate(cam, &path, &ovs)?;
         let (bx, by) = b.center();
         Some(Anchor { path, share: b.area() / (vw * vh), u: bx / vw, v: by / vh })
@@ -829,7 +816,7 @@ impl SpaceMonger {
         let (rx, ry) = ((ow / 2.0 - cam.x) / cam.w, (oh / 2.0 - cam.y) / cam.h);
         self.view = (vw, vh);
         let (w, h) = (vw * s, vh * s);
-        let mut c = R::new(vw / 2.0 - rx * w, vh / 2.0 - ry * h, w, h);
+        let mut c = Rect::new(vw / 2.0 - rx * w, vh / 2.0 - ry * h, w, h);
         if !was_zoomed {
             self.cam = Some(self.full_view());
             return;
@@ -1568,7 +1555,7 @@ impl eframe::App for SpaceMonger {
 
 /// Where point `q` is at progress `e` of a camera move from `c0` to `c1` (same aspect):
 /// an even zoom about the move's fixed point, or a plain pan when the scale doesn't change.
-fn move_point(c0: R, c1: R, q: (f64, f64), e: f64) -> (f64, f64) {
+fn move_point(c0: Rect, c1: Rect, q: (f64, f64), e: f64) -> (f64, f64) {
     let k = c1.w / c0.w;
     if (k - 1.0).abs() < 1e-9 {
         return (q.0 + (c1.x - c0.x) * e, q.1 + (c1.y - c0.y) * e);
@@ -1594,9 +1581,9 @@ impl Draw<'_> {
         Pos2::new((p.x * self.ppp).round() / self.ppp, (p.y * self.ppp).round() / self.ppp)
     }
 
-    fn rect(&self, x: f32, y: f32, w: f32, h: f32) -> Rect {
-        let r = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, h)).translate(self.origin.to_vec2());
-        Rect::from_min_max(self.snap(r.min), self.snap(r.max))
+    fn rect(&self, x: f32, y: f32, w: f32, h: f32) -> egui::Rect {
+        let r = egui::Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, h)).translate(self.origin.to_vec2());
+        egui::Rect::from_min_max(self.snap(r.min), self.snap(r.max))
     }
 
     fn fill(&self, c: Color32, x: f32, y: f32, w: f32, h: f32) {

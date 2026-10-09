@@ -10,6 +10,15 @@ pub struct Folder {
 }
 
 impl Folder {
+    /// The folder at index path `path` below this one (`self` for an empty path).
+    pub fn descendant(&self, path: &[usize]) -> Option<&Folder> {
+        let mut f = self;
+        for &i in path {
+            f = f.entries.get(i)?.child()?;
+        }
+        Some(f)
+    }
+
     /// Sort entries largest first and recompute the total.
     pub fn finalize(&mut self) {
         // Stable sort keeps name order for equal sizes.

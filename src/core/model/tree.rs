@@ -16,11 +16,7 @@ pub struct Tree {
 
 impl Tree {
     pub fn folder_at(&self, path: &[usize]) -> Option<&Folder> {
-        let mut f = &self.root;
-        for &i in path {
-            f = f.entries.get(i)?.child()?;
-        }
-        Some(f)
+        self.root.descendant(path)
     }
 
     pub fn entry_at(&self, folder: &[usize], index: usize) -> Option<&Entry> {
