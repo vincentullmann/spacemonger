@@ -16,8 +16,7 @@ use std::time::{Duration, Instant};
 const APP_NAME: &str = "SpaceMonger One";
 const NAMETIP_DELAY: Duration = Duration::from_millis(125);
 const INFOTIP_DELAY: Duration = Duration::from_millis(250);
-const ANIM_FRAME: Duration = Duration::from_millis(25);
-const ANIM_STEPS: u32 = 16;
+const ANIM_DURATION: f32 = 0.18; // seconds
 
 #[derive(Clone, Copy, PartialEq)]
 enum Action {
@@ -29,6 +28,7 @@ enum Action {
     ToggleFree,
     RunOpen,
     Delete,
+    Hide,
     ToggleDark,
 }
 
@@ -44,10 +44,10 @@ struct DriveDialog {
     path: String,
 }
 
-/// Zoom animation: a box morphing between two rectangles (l, t, r, b).
+/// Zoom animation: a box morphing between two rectangles (view-local coordinates).
 struct Anim {
-    from: [i32; 4],
-    to: [i32; 4],
+    from: Rect,
+    to: Rect,
     start: Instant,
     target: Vec<usize>,
 }
@@ -68,6 +68,8 @@ pub struct SpaceMonger {
     selected: Option<Sel>,
     hovered: Option<usize>,
     hover_since: Instant,
+    /// Accumulated wheel delta, so trackpads don't zoom on every tiny scroll.
+    scroll_accum: f32,
     anim: Option<Anim>,
 
     show_free: bool,
@@ -96,6 +98,7 @@ impl SpaceMonger {
             selected: None,
             hovered: None,
             hover_since: Instant::now(),
+            scroll_accum: 0.0,
             anim: None,
             show_free: get("show_free").is_none_or(|v| v == "true"),
             dark: get("dark").is_some_and(|v| v == "true"),
@@ -196,7 +199,7 @@ impl SpaceMonger {
         }
     }
 
-    fn set_zoom(&mut self, target: Vec<usize>, from: [i32; 4], to: [i32; 4]) {
+    fn set_zoom(&mut self, target: Vec<usize>, from: Rect, to: Rect) {
         if target == self.zoom {
             return;
         }
@@ -223,14 +226,34 @@ impl SpaceMonger {
         }
         let mut target = it.folder.to_vec();
         target.push(i);
-        let from = [it.x, it.y, it.x + it.w, it.y + it.h];
+        let from = irect(it.x, it.y, it.w, it.h);
         let (w, h) = self.view_size();
-        self.set_zoom(target, from, [0, 0, w, h]);
+        self.set_zoom(target, from, irect(0, 0, w, h));
+    }
+
+    /// Zoom one level deeper, towards the folder under the point.
+    fn zoom_towards(&mut self, x: i32, y: i32) {
+        // Deepest item containing the point (children come after parents).
+        let Some(it) = self.items.iter().rev().find(|it| !it.is_free && it.contains(x, y)) else { return };
+        let mut path = it.folder.to_vec();
+        if it.is_folder {
+            if let Some(i) = it.index {
+                path.push(i);
+            }
+        }
+        let depth = self.zoom.len();
+        if path.len() <= depth {
+            return;
+        }
+        let (parent, index) = (&path[..depth], path[depth]);
+        let Some(idx) = self.items.iter().position(|it| it.index == Some(index) && *it.folder == *parent) else { return };
+        self.zoom_in_item(idx);
     }
 
     fn zoom_out_to(&mut self, target: Vec<usize>) {
         let (w, h) = self.view_size();
-        self.set_zoom(target, [0, 0, w, h], [w / 2, h / 2, w / 2, h / 2]);
+        let to = Rect::from_center_size(Pos2::new(w as f32 / 2.0, h as f32 / 2.0), Vec2::new(w as f32, h as f32) * 0.15);
+        self.set_zoom(target, irect(0, 0, w, h), to);
     }
 
     fn run(&mut self, action: Action, ctx: &egui::Context) {
@@ -269,6 +292,12 @@ impl SpaceMonger {
             Action::Delete => {
                 if let (Some(sel), Some(p)) = (self.selected.clone(), self.selected_path()) {
                     self.confirm_delete = Some((sel, p));
+                }
+            }
+            Action::Hide => {
+                if let (Some(sel), Some(t)) = (self.selected.take(), &mut self.tree) {
+                    t.remove(&sel.0, sel.1);
+                    self.invalidate();
                 }
             }
             Action::ToggleDark => self.dark = !self.dark,
@@ -341,6 +370,7 @@ impl SpaceMonger {
             ui.separator();
             btn(ui, has_sel, b("▶ Run or Open"), Action::RunOpen);
             btn(ui, has_sel, b("🗑 Delete"), Action::Delete);
+            btn(ui, has_sel, b("Hide"), Action::Hide);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 btn(ui, true, b(if dark { "☀" } else { "🌙" }), Action::ToggleDark);
             });
@@ -353,7 +383,8 @@ impl SpaceMonger {
 
     fn treemap(&mut self, ui: &mut egui::Ui) -> Option<Action> {
         let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click());
-        let origin = resp.rect.min;
+        let ppp = ui.ctx().pixels_per_point();
+        let origin = Pos2::new((resp.rect.min.x * ppp).round() / ppp, (resp.rect.min.y * ppp).round() / ppp);
         let (w, h) = (resp.rect.width() as i32, resp.rect.height() as i32);
 
         // Rebuild layout on resize / data change.
@@ -373,20 +404,7 @@ impl SpaceMonger {
             self.hovered = None;
         }
 
-        let pal = self.palette();
-        let d = Draw { painter: &painter, origin, pal, font: self.font.clone() };
-
-        d.fill(pal.background, 0, 0, w, h);
-        d.outline(pal.background, 0, 0, w, h);
-
-        if let Some(tree) = &self.tree {
-            for it in &self.items {
-                d.item(tree, it, self.is_selected(it));
-            }
-            if let Some(si) = self.selected_item() {
-                d.item(tree, &self.items[si], true);
-            }
-        }
+        let mut act = None;
 
         // Pointer / hover handling.
         let local = |p: Pos2| ((p.x - origin.x) as i32, (p.y - origin.y) as i32);
@@ -402,7 +420,35 @@ impl SpaceMonger {
             self.hover_since = Instant::now();
         }
 
-        let mut act = None;
+        let pal = self.palette();
+        let d = Draw { painter: &painter, origin, ppp, pal, font: self.font.clone() };
+
+        d.fill(pal.background, 0, 0, w, h);
+        if let Some(tree) = &self.tree {
+            // Parents come before children, so a selected folder's children stay visible.
+            for (i, it) in self.items.iter().enumerate() {
+                d.item(tree, it, self.is_selected(it), self.hovered == Some(i));
+            }
+        }
+
+        // Scroll wheel: up = zoom one level towards the pointer, down = zoom out.
+        if resp.hovered() && self.anim.is_none() && self.tree.is_some() {
+            let dy = ui.input(|i| i.smooth_scroll_delta.y);
+            if dy != 0.0 {
+                self.scroll_accum += dy;
+                if self.scroll_accum >= 30.0 {
+                    self.scroll_accum = 0.0;
+                    if let Some(p) = resp.hover_pos() {
+                        let (x, y) = local(p);
+                        self.zoom_towards(x, y);
+                    }
+                } else if self.scroll_accum <= -30.0 {
+                    self.scroll_accum = 0.0;
+                    act = act.or(Some(Action::ZoomOut));
+                }
+            }
+        }
+
         let pointer_hit = || {
             resp.interact_pointer_pos().and_then(|p| {
                 let (x, y) = local(p);
@@ -436,6 +482,7 @@ impl SpaceMonger {
             ui.separator();
             item(ui, has_sel, "Run / Open", Action::RunOpen);
             item(ui, has_sel, "Delete", Action::Delete);
+            item(ui, has_sel, "Hide (H)", Action::Hide);
             ui.separator();
             item(ui, true, "Open Drive...", Action::Open);
             item(ui, true, "Rescan Drive", Action::Reload);
@@ -472,6 +519,7 @@ impl SpaceMonger {
                             .fixed_pos(pp + off)
                             .show(ui.ctx(), |ui| {
                                 egui::Frame::popup(ui.style()).show(ui, |ui| {
+                                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
                                     ui.label(egui::RichText::new(&e.name).strong());
                                     ui.label(format::file_size(e.actual));
                                     ui.label(format::date(e.mtime));
@@ -484,22 +532,19 @@ impl SpaceMonger {
             }
         }
 
-        // Zoom animation.
+        // Zoom animation: one eased box, then switch views.
         if let Some(a) = &self.anim {
-            let step = (a.start.elapsed().as_millis() / ANIM_FRAME.as_millis()) as u32;
-            if step >= ANIM_STEPS {
+            let t = (a.start.elapsed().as_secs_f32() / ANIM_DURATION).min(1.0);
+            if t >= 1.0 {
                 self.finish_anim();
-                ui.ctx().request_repaint();
             } else {
-                let s = (step % 8) as i32;
-                let lerp = |k: usize| (a.from[k] * (8 - s) + a.to[k] * s) / 8;
-                let r = Rect::from_min_max(
-                    origin + Vec2::new(lerp(0) as f32, lerp(1) as f32),
-                    origin + Vec2::new(lerp(2) as f32, lerp(3) as f32),
-                );
-                painter.rect_stroke(r, 0.0, Stroke::new(1.0, pal.text), egui::StrokeKind::Inside);
-                ui.ctx().request_repaint_after(ANIM_FRAME);
+                let e = 1.0 - (1.0 - t).powi(3);
+                let r = Rect::from_min_max(a.from.min.lerp(a.to.min, e), a.from.max.lerp(a.to.max, e))
+                    .translate(origin.to_vec2());
+                painter.rect_filled(r, 0.0, pal.text.gamma_multiply(0.10));
+                painter.rect_stroke(r, 0.0, Stroke::new(1.5, pal.text), egui::StrokeKind::Inside);
             }
+            ui.ctx().request_repaint();
         }
 
         act
@@ -682,6 +727,8 @@ impl eframe::App for SpaceMonger {
                     Some(Action::ZoomIn)
                 } else if i.key_pressed(egui::Key::Delete) {
                     Some(Action::Delete)
+                } else if i.key_pressed(egui::Key::H) {
+                    Some(Action::Hide)
                 } else if i.key_pressed(egui::Key::F5) {
                     Some(Action::Reload)
                 } else {
@@ -705,6 +752,10 @@ impl eframe::App for SpaceMonger {
         }
     }
 
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        self.palette().background.to_normalized_gamma_f32()
+    }
+
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         storage.set_string("dark", self.dark.to_string());
         storage.set_string("show_free", self.show_free.to_string());
@@ -714,16 +765,26 @@ impl eframe::App for SpaceMonger {
 // ---------------------------------------------------------------------------
 // Drawing (port of FolderView.minimalDrawDisplayFolder & friends)
 
+fn irect(x: i32, y: i32, w: i32, h: i32) -> Rect {
+    Rect::from_min_size(Pos2::new(x as f32, y as f32), Vec2::new(w as f32, h as f32))
+}
+
 struct Draw<'a> {
     painter: &'a Painter,
     origin: Pos2,
+    ppp: f32,
     pal: Palette,
     font: FontId,
 }
 
 impl Draw<'_> {
+    fn snap(&self, p: Pos2) -> Pos2 {
+        Pos2::new((p.x * self.ppp).round() / self.ppp, (p.y * self.ppp).round() / self.ppp)
+    }
+
     fn rect(&self, x: i32, y: i32, w: i32, h: i32) -> Rect {
-        Rect::from_min_size(self.origin + Vec2::new(x as f32, y as f32), Vec2::new(w as f32, h as f32))
+        let r = irect(x, y, w, h).translate(self.origin.to_vec2());
+        Rect::from_min_max(self.snap(r.min), self.snap(r.max))
     }
 
     fn fill(&self, c: Color32, x: i32, y: i32, w: i32, h: i32) {
@@ -732,55 +793,34 @@ impl Draw<'_> {
         }
     }
 
-    /// 1px outline covering [x, x+w) × [y, y+h).
-    fn outline(&self, c: Color32, x: i32, y: i32, w: i32, h: i32) {
-        self.dual(c, c, x, y, w, h);
-    }
-
-    fn dual(&self, tl: Color32, br: Color32, x: i32, y: i32, w: i32, h: i32) {
-        if w <= 0 || h <= 0 {
-            return;
-        }
-        self.fill(tl, x, y, w, 1);
-        self.fill(tl, x, y, 1, h);
-        self.fill(br, x, y + h - 1, w, 1);
-        self.fill(br, x + w - 1, y, 1, h);
-    }
-
     fn text_width(&self, s: &str) -> (i32, i32) {
         let g = self.painter.layout_no_wrap(s.to_string(), self.font.clone(), Color32::WHITE);
         (g.size().x.ceil() as i32, g.size().y.ceil() as i32)
     }
 
     fn text(&self, p: &Painter, s: &str, x: i32, y: i32, c: Color32) {
-        let pos = self.origin + Vec2::new(x as f32, y as f32);
-        if self.pal.dark && c == self.pal.text {
-            p.text(pos + Vec2::splat(1.0), Align2::LEFT_TOP, s, self.font.clone(), self.pal.text_shadow);
-        }
+        let pos = self.snap(self.origin + Vec2::new(x as f32, y as f32));
         p.text(pos, Align2::LEFT_TOP, s, self.font.clone(), c);
     }
 
-    fn item(&self, tree: &Tree, it: &Item, sel: bool) {
+    /// Flat box: a single fill with a 1px gap to its neighbours, plus its label.
+    fn item(&self, tree: &Tree, it: &Item, sel: bool, hover: bool) {
         let pal = &self.pal;
         let (x, y, w, h) = (it.x, it.y, it.w + 1, it.h + 1);
 
-        if it.depth != -1 {
-            self.outline(pal.border, x, y, w, h);
-        }
-        if w > 2 && h > 2 {
-            let (color, bright, dark) = if sel && !it.is_free {
-                (pal.text, pal.text, pal.text)
-            } else if it.depth != -1 {
+        if !it.is_free {
+            let color = if sel {
+                pal.text
+            } else if hover {
+                pal.depth(it.depth).lerp_to_gamma(Color32::WHITE, 0.2)
+            } else {
                 pal.depth(it.depth)
-            } else {
-                (pal.background, pal.background, pal.background)
             };
-            self.dual(bright, dark, x + 1, y + 1, w - 2, h - 2);
-            if it.is_folder {
-                self.outline(color, x + 2, y + 2, w - 4, h - 4);
-                self.fill(color, x + 3, y + 3, w - 6, 9);
-            } else {
-                self.fill(color, x + 2, y + 2, w - 4, h - 4);
+            self.fill(color, x + 1, y + 1, w - 2, h - 2);
+            if w > 4 && h > 4 {
+                // 1 physical pixel dark-grey border, just inside the fill.
+                let r = self.rect(x + 1, y + 1, w - 2, h - 2);
+                self.painter.rect_stroke(r, 0.0, Stroke::new(1.0 / self.ppp, pal.border), egui::StrokeKind::Inside);
             }
         }
 
@@ -807,13 +847,13 @@ impl Draw<'_> {
         }
 
         let (tw, th) = self.text_width(&entry.name);
-        let tx = if tw > w - 2 || it.is_folder { x + 2 } else { x + (w - tw) / 2 };
-        let mut ty = if th > h - 2 || it.is_folder { y + 1 } else { y + (h - th) / 2 };
+        let tx = if tw > w - 2 || it.is_folder { x + 3 } else { x + (w - tw) / 2 };
+        let mut ty = if th > h - 2 || it.is_folder { y + 2 } else { y + (h - th) / 2 };
 
         if !it.is_folder && h >= 36 && w >= 48 {
             for (s, dy) in [(format::file_size(entry.actual), 1), (format::date(entry.mtime), 11)] {
                 let (sw, _) = self.text_width(&s);
-                let sx = if sw > w - 2 { x + 2 } else { x + (w - sw) / 2 };
+                let sx = if sw > w - 2 { x + 3 } else { x + (w - sw) / 2 };
                 self.text(&p, &s, sx, ty + dy, fg);
             }
             ty -= 12;
@@ -823,6 +863,9 @@ impl Draw<'_> {
 
     /// Full name drawn over a box whose label doesn't fit (port of SetupNameTip).
     fn name_tip(&self, ctx: &egui::Context, tree: &Tree, it: &Item, sel: bool) {
+        if it.is_folder {
+            return; // the info tooltip is enough for folders
+        }
         let Some(entry) = it.index.and_then(|i| tree.entry_at(&it.folder, i)) else { return };
         let (tw, th) = self.text_width(&entry.name);
         let (x, y, w, h) = (it.x, it.y, it.w + 1, it.h + 1);
@@ -831,12 +874,12 @@ impl Draw<'_> {
         if fits_w && fits_h {
             return;
         }
-        let tx = if !fits_w || it.is_folder { x + 2 } else { x + (w - tw) / 2 };
-        let mut ty = if !fits_h || it.is_folder { y + 1 } else { y + (h - th) / 2 };
+        let tx = if !fits_w || it.is_folder { x + 3 } else { x + (w - tw) / 2 };
+        let mut ty = if !fits_h || it.is_folder { y + 2 } else { y + (h - th) / 2 };
         if !it.is_folder && h >= 36 && w >= 48 {
             ty -= 12;
         }
-        let (bg, fg) = if sel { (self.pal.text, self.pal.background) } else { (self.pal.depth(it.depth).0, self.pal.text) };
+        let (bg, fg) = if sel { (self.pal.text, self.pal.background) } else { (self.pal.depth(it.depth), self.pal.text) };
 
         let screen = ctx.content_rect();
         let mut r = self.rect(tx - 2, ty - 1, tw + 4, th + 2);
@@ -851,7 +894,6 @@ impl Draw<'_> {
 
         let p = ctx.layer_painter(LayerId::new(Order::Tooltip, Id::new("nametip")));
         p.rect_filled(r, 0.0, bg);
-        p.rect_stroke(r, 0.0, Stroke::new(1.0, self.pal.border), egui::StrokeKind::Inside);
         p.text(r.min + Vec2::new(2.0, 1.0), Align2::LEFT_TOP, &entry.name, self.font.clone(), fg);
     }
 }

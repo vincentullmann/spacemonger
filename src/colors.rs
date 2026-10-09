@@ -6,7 +6,8 @@ const fn c(r: u8, g: u8, b: u8) -> Color32 {
     Color32::from_rgb(r, g, b)
 }
 
-/// 8 base colours, then 8 bright, then 8 dark (indexed by depth & 7).
+/// Rainbow by depth (depth & 7). Only the first 8 entries are used by the flat style;
+/// the bright/dark rows are kept from the original palette.
 const BOX_LIGHT: [Color32; 24] = [
     c(0xFF, 0x7F, 0x7F), c(0xFF, 0xBF, 0x7F), c(0xFF, 0xFF, 0x00), c(0x7F, 0xFF, 0x7F),
     c(0x7F, 0xFF, 0xFF), c(0xBF, 0xBF, 0xFF), c(0xBF, 0xBF, 0xBF), c(0xFF, 0x7F, 0xFF),
@@ -27,11 +28,10 @@ const BOX_DARK: [Color32; 24] = [
 
 #[derive(Clone, Copy)]
 pub struct Palette {
-    pub dark: bool,
     pub background: Color32,
-    pub border: Color32,
     pub text: Color32,
-    pub text_shadow: Color32,
+    /// Thin outline drawn inside every box.
+    pub border: Color32,
     boxes: &'static [Color32; 24],
 }
 
@@ -39,28 +39,23 @@ impl Palette {
     pub fn new(dark: bool) -> Self {
         if dark {
             Self {
-                dark,
                 background: c(0x16, 0x17, 0x18),
-                border: c(0x30, 0x32, 0x32),
                 text: c(0xD0, 0xD0, 0xC8),
-                text_shadow: Color32::from_rgba_unmultiplied(0x20, 0x20, 0x20, 160),
+                border: c(0x10, 0x10, 0x10),
                 boxes: &BOX_DARK,
             }
         } else {
             Self {
-                dark,
                 background: c(0xEE, 0xEE, 0xEE),
-                border: c(0xA0, 0xA0, 0xA0),
                 text: Color32::BLACK,
-                text_shadow: Color32::TRANSPARENT,
+                border: c(0x55, 0x55, 0x55),
                 boxes: &BOX_LIGHT,
             }
         }
     }
 
-    /// (base, bright, dark) for a nesting depth.
-    pub fn depth(&self, depth: i32) -> (Color32, Color32, Color32) {
-        let i = (depth & 7) as usize;
-        (self.boxes[i], self.boxes[i + 8], self.boxes[i + 16])
+    /// Fill colour for a nesting depth.
+    pub fn depth(&self, depth: i32) -> Color32 {
+        self.boxes[(depth & 7) as usize]
     }
 }

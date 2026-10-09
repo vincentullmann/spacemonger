@@ -24,7 +24,19 @@ fn main() -> eframe::Result {
         viewport = viewport.with_icon(icon);
     }
 
-    let options = eframe::NativeOptions { viewport, ..Default::default() };
+    let options = eframe::NativeOptions {
+        viewport,
+        // We only repaint on input, so vsync buys nothing; without it a resize
+        // never blocks waiting for a frame and the treemap redraws live.
+        wgpu_options: eframe::egui_wgpu::WgpuConfiguration {
+            surface: eframe::egui_wgpu::SurfaceConfig {
+                present_mode: eframe::wgpu::PresentMode::AutoNoVsync,
+                desired_maximum_frame_latency: Some(1),
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    };
     eframe::run_native(
         "spacemonger",
         options,
