@@ -2,7 +2,7 @@
 
 use crate::colors::Palette;
 use crate::format;
-use crate::layout::{self, Item, Params};
+use crate::layout::{self, Item, Params, R};
 use crate::scan::{self, Drive, ScanControl, Tree};
 use eframe::egui::{
     self, Align2, Color32, FontId, Id, Order, Painter, Pos2, Rect, Sense, Stroke, Vec2,
@@ -15,7 +15,11 @@ use std::time::{Duration, Instant};
 
 const APP_NAME: &str = "SpaceMonger One";
 const INFOTIP_DELAY: Duration = Duration::from_millis(250);
-const ANIM_DURATION: f32 = 0.18; // seconds
+const ANIM_DURATION: f32 = 0.25; // seconds
+/// Zoom factor per point of wheel scroll (a mouse notch is ~50 points, about 1.2x).
+const WHEEL_ZOOM: f64 = 0.004;
+/// Deepest zoom, as a multiple of the view size.
+const MAX_ZOOM: f64 = 1e8;
 /// Height of the path (breadcrumb) bar above the treemap.
 const BAR_H: i32 = 18;
 
@@ -46,12 +50,11 @@ struct DriveDialog {
     path: String,
 }
 
-/// Zoom animation: a box morphing between two rectangles (view-local coordinates).
+/// Camera animation between two root boxes (view-local coordinates).
 struct Anim {
-    from: Rect,
-    to: Rect,
+    from: R,
+    to: R,
     start: Instant,
-    target: Vec<usize>,
 }
 
 /// A selected entry, identified by its folder path and index.
@@ -60,18 +63,20 @@ type Sel = (Rc<[usize]>, usize);
 pub struct SpaceMonger {
     tree: Option<Tree>,
     drive: Option<Drive>,
-    /// Index path of the folder currently filling the view.
+    /// Index path of the deepest folder covering the whole view (derived from `cam`).
     zoom: Vec<usize>,
+    /// Box of the scan root in view coordinates. Equal to the view when fully zoomed out.
+    cam: Option<R>,
+    /// View size (points) the camera was last fitted to.
+    view: (f64, f64),
 
     items: Vec<Item>,
-    layout_key: Option<(i32, i32, u64)>,
+    layout_key: Option<(f32, f32, u64, R)>,
     generation: u64,
 
     selected: Option<Sel>,
     hovered: Option<usize>,
     hover_since: Instant,
-    /// Accumulated wheel delta, so trackpads don't zoom on every tiny scroll.
-    scroll_accum: f32,
     anim: Option<Anim>,
 
     show_free: bool,
@@ -94,13 +99,14 @@ impl SpaceMonger {
             tree: None,
             drive: None,
             zoom: Vec::new(),
+            cam: None,
+            view: (0.0, 0.0),
             items: Vec::new(),
             layout_key: None,
             generation: 0,
             selected: None,
             hovered: None,
             hover_since: Instant::now(),
-            scroll_accum: 0.0,
             anim: None,
             show_free: get("show_free").is_none_or(|v| v == "true"),
             dark: get("dark").is_some_and(|v| v == "true"),
@@ -172,6 +178,7 @@ impl SpaceMonger {
         }
         self.tree = None;
         self.zoom.clear();
+        self.cam = None;
         self.selected = None;
         self.anim = None;
         self.invalidate();
@@ -201,23 +208,65 @@ impl SpaceMonger {
         }
     }
 
-    fn set_zoom(&mut self, target: Vec<usize>, from: Rect, to: Rect) {
-        if target == self.zoom {
-            return;
-        }
-        self.anim = Some(Anim { from, to, start: Instant::now(), target });
+    fn params(&self) -> Params {
+        Params { show_free: self.show_free, ..self.params }
     }
 
-    fn finish_anim(&mut self) {
-        if let Some(a) = self.anim.take() {
-            self.zoom = a.target;
-            self.selected = None;
-            self.invalidate();
-        }
+    fn full_view(&self) -> R {
+        R::new(0.0, 0.0, self.view.0, self.view.1)
     }
 
-    fn view_size(&self) -> (i32, i32) {
-        self.layout_key.map_or((0, 0), |(w, h, _)| (w, h))
+    fn zoomed(&self) -> bool {
+        self.cam.is_some_and(|c| c != self.full_view())
+    }
+
+    /// Keep the root box covering the view (no zooming out past the scan root).
+    fn clamp_cam(&self, mut c: R) -> R {
+        let (vw, vh) = self.view;
+        if c.w <= vw {
+            (c.x, c.w) = (0.0, vw);
+        } else {
+            c.x = c.x.min(0.0).max(vw - c.w);
+        }
+        if c.h <= vh {
+            (c.y, c.h) = (0.0, vh);
+        } else {
+            c.y = c.y.min(0.0).max(vh - c.h);
+        }
+        c
+    }
+
+    /// Camera that puts the content of the folder at `path` exactly over the view.
+    fn fit_cam(&self, path: &[usize]) -> Option<R> {
+        if path.is_empty() {
+            return Some(self.full_view());
+        }
+        let tree = self.tree.as_ref()?;
+        let p = self.params();
+        let view = layout::root_content(self.full_view());
+        let mut cam = self.cam?;
+        // Frames are fixed in points, so the box doesn't scale exactly with the camera;
+        // a few affine corrections converge on it.
+        for _ in 0..16 {
+            let mut c = layout::content_of(&tree.root, cam, path, p)?;
+            if c.w < 1.0 || c.h < 1.0 {
+                c = layout::locate(&tree.root, cam, path, p)?;
+            }
+            if (c.x - view.x).abs() < 1e-3 && (c.y - view.y).abs() < 1e-3 && (c.w - view.w).abs() < 1e-3 && (c.h - view.h).abs() < 1e-3 {
+                break;
+            }
+            let (sx, sy) = (view.w / c.w, view.h / c.h);
+            cam = R::new(view.x + (cam.x - c.x) * sx, view.y + (cam.y - c.y) * sy, cam.w * sx, cam.h * sy);
+        }
+        Some(cam)
+    }
+
+    /// Animate to the folder at `path`, filling the view.
+    fn zoom_to(&mut self, path: &[usize]) {
+        let (Some(from), Some(to)) = (self.cam, self.fit_cam(path)) else { return };
+        if from != to {
+            self.anim = Some(Anim { from, to, start: Instant::now() });
+        }
     }
 
     fn zoom_in_item(&mut self, idx: usize) {
@@ -228,34 +277,86 @@ impl SpaceMonger {
         }
         let mut target = it.folder.to_vec();
         target.push(i);
-        let from = irect(it.x, it.y, it.w, it.h);
-        let (w, h) = self.view_size();
-        self.set_zoom(target, from, irect(0, 0, w, h));
+        self.zoom_to(&target);
     }
 
-    /// Zoom one level deeper, towards the folder under the point.
-    fn zoom_towards(&mut self, x: i32, y: i32) {
-        // Deepest item containing the point (children come after parents).
-        let Some(it) = self.items.iter().rev().find(|it| !it.is_free && it.contains(x, y)) else { return };
-        let mut path = it.folder.to_vec();
-        if it.is_folder {
-            if let Some(i) = it.index {
-                path.push(i);
+    /// Zoom out: fit the current folder if it isn't already, otherwise its parent.
+    fn zoom_out(&mut self) {
+        let (Some(tree), Some(cam)) = (&self.tree, self.cam) else { return };
+        let view = layout::root_content(self.full_view());
+        let fitted = layout::content_of(&tree.root, cam, &self.zoom, self.params())
+            .is_some_and(|c| (c.x - view.x).abs() < 0.5 && (c.y - view.y).abs() < 0.5 && (c.w - view.w).abs() < 0.5 && (c.h - view.h).abs() < 0.5);
+        let mut target = self.zoom.clone();
+        if fitted {
+            target.pop();
+        }
+        self.zoom_to(&target);
+    }
+
+    /// Scale the camera by `k` about a view point, keeping whatever is under it in place.
+    fn zoom_at(&mut self, px: f64, py: f64, k: f64) {
+        let (Some(tree), Some(cam)) = (&self.tree, self.cam) else { return };
+        let p = self.params();
+        let (vw, vh) = self.view;
+        let k = k.min(MAX_ZOOM * vw / cam.w).min(MAX_ZOOM * vh / cam.h);
+
+        // Deepest entry under the point (children come after parents).
+        let anchor = self
+            .items
+            .iter()
+            .rev()
+            .find(|it| it.index.is_some() && !it.is_free && it.contains(px as f32, py as f32))
+            .map(|it| {
+                let mut path = it.folder.to_vec();
+                path.extend(it.index);
+                path
+            });
+        let before = anchor.and_then(|path| layout::locate(&tree.root, cam, &path, p).map(|b| (path, b)));
+
+        let mut c = R::new(px + (cam.x - px) * k, py + (cam.y - py) * k, cam.w * k, cam.h * k);
+        // Frames don't scale, so nested boxes drift slightly; pin the anchor to the pointer.
+        if let Some((path, b0)) = before.filter(|(_, b)| b.w > 1e-6 && b.h > 1e-6) {
+            if let Some(b1) = layout::locate(&tree.root, c, &path, p) {
+                let (u, v) = ((px - b0.x) / b0.w, (py - b0.y) / b0.h);
+                c.x += px - (b1.x + u * b1.w);
+                c.y += py - (b1.y + v * b1.h);
             }
         }
-        let depth = self.zoom.len();
-        if path.len() <= depth {
-            return;
-        }
-        let (parent, index) = (&path[..depth], path[depth]);
-        let Some(idx) = self.items.iter().position(|it| it.index == Some(index) && *it.folder == *parent) else { return };
-        self.zoom_in_item(idx);
+        self.cam = Some(self.clamp_cam(c));
     }
 
-    fn zoom_out_to(&mut self, target: Vec<usize>) {
-        let (w, h) = self.view_size();
-        let to = Rect::from_center_size(Pos2::new(w as f32 / 2.0, h as f32 / 2.0), Vec2::new(w as f32, h as f32) * 0.15);
-        self.set_zoom(target, irect(0, 0, w, h), to);
+    fn pan(&mut self, dx: f64, dy: f64) {
+        if let Some(c) = self.cam {
+            self.cam = Some(self.clamp_cam(R::new(c.x + dx, c.y + dy, c.w, c.h)));
+        }
+    }
+
+    /// Advance the camera animation. Each axis zooms geometrically about its fixed point,
+    /// so big zooms feel even rather than rushing at the start.
+    fn step_anim(&mut self) {
+        let Some(a) = &self.anim else { return };
+        let t = (a.start.elapsed().as_secs_f32() / ANIM_DURATION).min(1.0) as f64;
+        if t >= 1.0 {
+            self.cam = Some(a.to);
+            self.anim = None;
+            self.selected = None;
+            return;
+        }
+        let e = 1.0 - (1.0 - t).powi(3);
+        let axis = |a0: f64, s0: f64, a1: f64, s1: f64| -> (f64, f64) {
+            let k = s1 / s0;
+            if (k - 1.0).abs() < 1e-9 {
+                (a0 + (a1 - a0) * e, s0)
+            } else {
+                // a1 = f + k * (a0 - f)  =>  fixed point f
+                let f = (a1 - k * a0) / (1.0 - k);
+                let ke = k.powf(e);
+                (f + ke * (a0 - f), s0 * ke)
+            }
+        };
+        let (x, w) = axis(a.from.x, a.from.w, a.to.x, a.to.w);
+        let (y, h) = axis(a.from.y, a.from.h, a.to.y, a.to.h);
+        self.cam = Some(R::new(x, y, w, h));
     }
 
     fn run(&mut self, action: Action, ctx: &egui::Context) {
@@ -268,13 +369,8 @@ impl SpaceMonger {
                     self.show_free = show_free;
                 }
             }
-            Action::ZoomFull => self.zoom_out_to(Vec::new()),
-            Action::ZoomOut => {
-                if !self.zoom.is_empty() {
-                    let t = self.zoom[..self.zoom.len() - 1].to_vec();
-                    self.zoom_out_to(t);
-                }
-            }
+            Action::ZoomFull => self.zoom_to(&[]),
+            Action::ZoomOut => self.zoom_out(),
             Action::ZoomIn => {
                 if let Some(idx) = self.selected_item() {
                     self.zoom_in_item(idx);
@@ -354,7 +450,7 @@ impl SpaceMonger {
 
     fn toolbar(&mut self, ui: &mut egui::Ui) -> Option<Action> {
         let has_tree = self.tree.is_some();
-        let zoomed = !self.zoom.is_empty();
+        let zoomed = self.zoomed();
         let sel_folder = self.selected_entry().is_some_and(|e| e.child().is_some());
         let has_sel = self.selected.is_some();
         let show_free = self.show_free;
@@ -415,11 +511,11 @@ impl SpaceMonger {
         let origin = Pos2::new((resp.rect.min.x * ppp).round() / ppp, (resp.rect.min.y * ppp).round() / ppp);
         let d = Draw { painter: &painter, origin, ppp, pal, font: self.font.clone() };
         let w = resp.rect.width() as i32;
-        d.fill(pal.background, 0, 0, w, BAR_H);
+        d.fill(pal.background, 0.0, 0.0, w as f32, BAR_H as f32);
 
         let pad = 12;
-        let widths: Vec<i32> = segs.iter().map(|(l, _, _)| d.text_width(l).0 + pad).collect();
-        let ellipsis_w = d.text_width("…").0 + pad;
+        let widths: Vec<i32> = segs.iter().map(|(l, _, _)| d.text_width(l).0 as i32 + pad).collect();
+        let ellipsis_w = d.text_width("…").0 as i32 + pad;
         // Too long? Drop parents from the left (behind a "…" box), always keeping the current folder.
         let mut first = 0;
         while first + 1 < segs.len() {
@@ -453,7 +549,7 @@ impl SpaceMonger {
                 Some(i) => (segs[i].0.as_str(), segs[i].2),
                 None => ("…", pal.background),
             };
-            d.cell(bx, 0, bw, BAR_H, color, hovered, label);
+            d.cell(bx as f32, 0.0, bw as f32, BAR_H as f32, color, hovered, label);
             if hovered && resp.clicked() {
                 clicked = seg.map(|i| segs[i].1.clone());
             }
@@ -465,24 +561,59 @@ impl SpaceMonger {
     }
 
     fn treemap(&mut self, ui: &mut egui::Ui) -> Option<Action> {
-        let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click());
+        let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
         let ppp = ui.ctx().pixels_per_point();
         let origin = Pos2::new((resp.rect.min.x * ppp).round() / ppp, (resp.rect.min.y * ppp).round() / ppp);
-        let (w, h) = (resp.rect.width() as i32, resp.rect.height() as i32);
+        let (w, h) = (resp.rect.width(), resp.rect.height());
+        let local = |p: Pos2| (p.x - origin.x, p.y - origin.y);
 
-        // Rebuild layout on resize / data change.
-        let key = (w, h, self.generation);
+        // Camera: start fully zoomed out; on resize, stretch it with the view.
+        let (vw, vh) = (w as f64, h as f64);
+        if (vw, vh) != self.view {
+            let (ow, oh) = self.view;
+            self.view = (vw, vh);
+            self.cam = match self.cam {
+                Some(c) if ow > 0.0 && oh > 0.0 => {
+                    let (sx, sy) = (vw / ow, vh / oh);
+                    Some(self.clamp_cam(R::new(c.x * sx, c.y * sy, c.w * sx, c.h * sy)))
+                }
+                _ => None,
+            };
+            self.anim = None;
+        }
+        if self.cam.is_none() {
+            self.cam = Some(self.full_view());
+        }
+        self.step_anim();
+
+        // Wheel / pinch: zoom about the pointer, like an infinite canvas.
+        if resp.hovered() && self.anim.is_none() && self.tree.is_some() {
+            let (dy, pinch) = ui.input(|i| (i.smooth_scroll_delta.y, i.zoom_delta()));
+            let k = pinch as f64 * (dy as f64 * WHEEL_ZOOM).exp();
+            if (k - 1.0).abs() > 1e-6 {
+                if let Some(p) = resp.hover_pos() {
+                    let (x, y) = local(p);
+                    self.zoom_at(x as f64, y as f64, k);
+                }
+            }
+        }
+        // Drag (left or middle button) to pan.
+        if self.tree.is_some() && (resp.dragged_by(egui::PointerButton::Primary) || resp.dragged_by(egui::PointerButton::Middle)) {
+            self.anim = None;
+            let d = resp.drag_delta();
+            self.pan(d.x as f64, d.y as f64);
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+        }
+
+        // Rebuild layout when the view, data or camera changes.
+        let cam = self.cam.unwrap_or(self.full_view());
+        let key = (w, h, self.generation, cam);
         if self.layout_key != Some(key) {
             self.layout_key = Some(key);
-            self.items = match &self.tree {
-                Some(t) => match t.folder_at(&self.zoom) {
-                    Some(f) => {
-                        let p = Params { show_free: self.show_free, ..self.params };
-                        layout::build(f, self.zoom.clone(), w, h, p)
-                    }
-                    None => Vec::new(),
-                },
-                None => Vec::new(),
+            let p = self.params();
+            (self.items, self.zoom) = match &self.tree {
+                Some(t) => (layout::build(&t.root, cam, vw, vh, p), layout::covering(&t.root, cam, vw, vh, p)),
+                None => (Vec::new(), Vec::new()),
             };
             self.hovered = None;
         }
@@ -490,14 +621,13 @@ impl SpaceMonger {
         let mut act = None;
 
         // Pointer / hover handling.
-        let local = |p: Pos2| ((p.x - origin.x) as i32, (p.y - origin.y) as i32);
         let hit = resp
             .hover_pos()
             .and_then(|p| {
                 let (x, y) = local(p);
                 layout::hit_test(&self.items, x, y)
             })
-            .filter(|_| self.anim.is_none());
+            .filter(|_| self.anim.is_none() && !resp.dragged());
         if hit != self.hovered {
             self.hovered = hit;
             self.hover_since = Instant::now();
@@ -506,29 +636,11 @@ impl SpaceMonger {
         let pal = self.palette();
         let d = Draw { painter: &painter, origin, ppp, pal, font: self.font.clone() };
 
-        d.fill(pal.background, 0, 0, w, h);
+        d.fill(pal.background, 0.0, 0.0, w, h);
         if let Some(tree) = &self.tree {
             // Parents come before children, so a selected folder's children stay visible.
             for (i, it) in self.items.iter().enumerate() {
                 d.item(tree, it, self.is_selected(it), self.hovered == Some(i));
-            }
-        }
-
-        // Scroll wheel: up = zoom one level towards the pointer, down = zoom out.
-        if resp.hovered() && self.anim.is_none() && self.tree.is_some() {
-            let dy = ui.input(|i| i.smooth_scroll_delta.y);
-            if dy != 0.0 {
-                self.scroll_accum += dy;
-                if self.scroll_accum >= 30.0 {
-                    self.scroll_accum = 0.0;
-                    if let Some(p) = resp.hover_pos() {
-                        let (x, y) = local(p);
-                        self.zoom_towards(x, y);
-                    }
-                } else if self.scroll_accum <= -30.0 {
-                    self.scroll_accum = 0.0;
-                    act = act.or(Some(Action::ZoomOut));
-                }
             }
         }
 
@@ -550,7 +662,7 @@ impl SpaceMonger {
 
         let has_sel = self.selected.is_some();
         let sel_folder = self.selected_entry().is_some_and(|e| e.child().is_some());
-        let zoomed = !self.zoom.is_empty();
+        let zoomed = self.zoomed();
         let show_free = self.show_free;
         let hidden = self.tree.as_ref().map_or(0, |t| t.hidden_count);
         resp.context_menu(|ui| {
@@ -612,18 +724,7 @@ impl SpaceMonger {
             }
         }
 
-        // Zoom animation: one eased box, then switch views.
-        if let Some(a) = &self.anim {
-            let t = (a.start.elapsed().as_secs_f32() / ANIM_DURATION).min(1.0);
-            if t >= 1.0 {
-                self.finish_anim();
-            } else {
-                let e = 1.0 - (1.0 - t).powi(3);
-                let r = Rect::from_min_max(a.from.min.lerp(a.to.min, e), a.from.max.lerp(a.to.max, e))
-                    .translate(origin.to_vec2());
-                painter.rect_filled(r, 0.0, pal.text.gamma_multiply(0.10));
-                painter.rect_stroke(r, 0.0, Stroke::new(1.5, pal.text), egui::StrokeKind::Inside);
-            }
+        if self.anim.is_some() {
             ui.ctx().request_repaint();
         }
 
@@ -798,7 +899,7 @@ impl eframe::App for SpaceMonger {
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing = Vec2::ZERO;
                 if let Some(target) = self.path_bar(ui) {
-                    self.zoom_out_to(target);
+                    self.zoom_to(&target);
                 }
                 self.treemap(ui)
             })
@@ -853,10 +954,6 @@ impl eframe::App for SpaceMonger {
 // ---------------------------------------------------------------------------
 // Drawing (port of FolderView.minimalDrawDisplayFolder & friends)
 
-fn irect(x: i32, y: i32, w: i32, h: i32) -> Rect {
-    Rect::from_min_size(Pos2::new(x as f32, y as f32), Vec2::new(w as f32, h as f32))
-}
-
 struct Draw<'a> {
     painter: &'a Painter,
     origin: Pos2,
@@ -870,48 +967,48 @@ impl Draw<'_> {
         Pos2::new((p.x * self.ppp).round() / self.ppp, (p.y * self.ppp).round() / self.ppp)
     }
 
-    fn rect(&self, x: i32, y: i32, w: i32, h: i32) -> Rect {
-        let r = irect(x, y, w, h).translate(self.origin.to_vec2());
+    fn rect(&self, x: f32, y: f32, w: f32, h: f32) -> Rect {
+        let r = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, h)).translate(self.origin.to_vec2());
         Rect::from_min_max(self.snap(r.min), self.snap(r.max))
     }
 
-    fn fill(&self, c: Color32, x: i32, y: i32, w: i32, h: i32) {
-        if w > 0 && h > 0 {
+    fn fill(&self, c: Color32, x: f32, y: f32, w: f32, h: f32) {
+        if w > 0.0 && h > 0.0 {
             self.painter.rect_filled(self.rect(x, y, w, h), 0.0, c);
         }
     }
 
-    fn text_width(&self, s: &str) -> (i32, i32) {
+    fn text_width(&self, s: &str) -> (f32, f32) {
         let g = self.painter.layout_no_wrap(s.to_string(), self.font.clone(), Color32::WHITE);
-        (g.size().x.ceil() as i32, g.size().y.ceil() as i32)
+        (g.size().x.ceil(), g.size().y.ceil())
     }
 
-    fn text(&self, p: &Painter, s: &str, x: i32, y: i32, c: Color32) {
-        let pos = self.snap(self.origin + Vec2::new(x as f32, y as f32));
+    fn text(&self, p: &Painter, s: &str, x: f32, y: f32, c: Color32) {
+        let pos = self.snap(self.origin + Vec2::new(x, y));
         p.text(pos, Align2::LEFT_TOP, s, self.font.clone(), c);
     }
 
     /// A path-bar box in the treemap's style: fill, thin border (2px black on hover), label on the left.
     #[allow(clippy::too_many_arguments)]
-    fn cell(&self, x: i32, y: i32, w: i32, h: i32, color: Color32, hover: bool, label: &str) {
+    fn cell(&self, x: f32, y: f32, w: f32, h: f32, color: Color32, hover: bool, label: &str) {
         let fill = if hover { color.lerp_to_gamma(Color32::WHITE, 0.2) } else { color };
-        self.fill(fill, x + 1, y + 1, w - 1, h - 1);
+        self.fill(fill, x + 1.0, y + 1.0, w - 1.0, h - 1.0);
         let (bc, bw) = if hover { (Color32::BLACK, 2.0) } else { (self.pal.border, 1.0) };
         self.painter.rect_stroke(
-            self.rect(x + 1, y + 1, w - 1, h - 1),
+            self.rect(x + 1.0, y + 1.0, w - 1.0, h - 1.0),
             0.0,
             Stroke::new(bw / self.ppp, bc),
             egui::StrokeKind::Inside,
         );
         let (_, th) = self.text_width(label);
         let p = self.painter.with_clip_rect(self.rect(x, y, w, h).intersect(self.painter.clip_rect()));
-        self.text(&p, label, x + 6, y + 1 + (h - 1 - th) / 2, self.pal.text);
+        self.text(&p, label, x + 6.0, y + 1.0 + (h - 1.0 - th) / 2.0, self.pal.text);
     }
 
     /// Flat box: a single fill with a 1px gap to its neighbours, plus its label.
     fn item(&self, tree: &Tree, it: &Item, sel: bool, hover: bool) {
         let pal = &self.pal;
-        let (x, y, w, h) = (it.x, it.y, it.w + 1, it.h + 1);
+        let (x, y, w, h) = (it.x, it.y, it.w + 1.0, it.h + 1.0);
 
         if !it.is_free {
 
@@ -924,10 +1021,10 @@ impl Draw<'_> {
             };
 
             
-            self.fill(color, x + 1, y + 1, w - 2, h - 2);
+            self.fill(color, x + 1.0, y + 1.0, w - 2.0, h - 2.0);
             
             // draw border
-            if w > 4 && h > 4 {
+            if w > 4.0 && h > 4.0 {
                 
                 let border_color = if sel {
                     pal.text
@@ -940,7 +1037,7 @@ impl Draw<'_> {
                 let border_width = if hover { 2.0 } else { 1.0};
 
                 // 1 physical pixel dark-grey border, just inside the fill.
-                let r = self.rect(x + 1, y + 1, w - 2, h - 2);
+                let r = self.rect(x + 1.0, y + 1.0, w - 2.0, h - 2.0);
                 self.painter.rect_stroke(
                     r,
                     0.0,
@@ -967,25 +1064,25 @@ impl Draw<'_> {
                 format!("Folders Total:  {}", tree.num_folders),
             ];
             let (lw, lh) = self.text_width(&lines[0]);
-            let tx = if lw > w - 2 { x + 2 } else { x + (w - lw) / 2 };
-            let ty = if lh > h - 2 { y + 1 } else { y + (h - lh) / 2 };
-            for (line, dy) in lines.iter().zip([-18, -6, 6, 15]) {
+            let tx = if lw > w - 2.0 { x + 2.0 } else { x + (w - lw) / 2.0 };
+            let ty = if lh > h - 2.0 { y + 1.0 } else { y + (h - lh) / 2.0 };
+            for (line, dy) in lines.iter().zip([-18.0, -6.0, 6.0, 15.0]) {
                 self.text(&p, line, tx, ty + dy, pal.text);
             }
             return;
         }
 
         let (tw, th) = self.text_width(&entry.name);
-        let tx = if tw > w - 2 || it.is_folder { x + 3 } else { x + (w - tw) / 2 };
-        let mut ty = if th > h - 2 || it.is_folder { y + 2 } else { y + (h - th) / 2 };
+        let tx = if tw > w - 2.0 || it.is_folder { x + 3.0 } else { x + (w - tw) / 2.0 };
+        let mut ty = if th > h - 2.0 || it.is_folder { y + 2.0 } else { y + (h - th) / 2.0 };
 
-        if !it.is_folder && h >= 36 && w >= 48 {
-            for (s, dy) in [(format::file_size(entry.actual), 1), (format::date(entry.mtime), 11)] {
+        if !it.is_folder && h >= 36.0 && w >= 48.0 {
+            for (s, dy) in [(format::file_size(entry.actual), 1.0), (format::date(entry.mtime), 11.0)] {
                 let (sw, _) = self.text_width(&s);
-                let sx = if sw > w - 2 { x + 3 } else { x + (w - sw) / 2 };
+                let sx = if sw > w - 2.0 { x + 3.0 } else { x + (w - sw) / 2.0 };
                 self.text(&p, &s, sx, ty + dy, fg);
             }
-            ty -= 12;
+            ty -= 12.0;
         }
         self.text(&p, &entry.name, tx, ty, fg);
     }

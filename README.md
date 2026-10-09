@@ -18,11 +18,13 @@ cargo build --release
 ## Usage
 
 - **Open** — pick a mounted volume, or type / browse to a folder.
-- Click to select, double-click a folder to zoom in, double-click a file to open it.
+- Click to select, double-click a folder to zoom in so it exactly fills the view, double-click a file to open it.
 - The bar above the map shows the path from the scan root to the current folder, each folder in
   its treemap colour. Click any parent to zoom back to it.
-- Mouse wheel: scroll up to zoom one level towards the pointer, down to zoom out.
-- **Zoom In / Out / Full**, **Run or Open**, **Delete** (moves to trash, after confirmation).
+- Mouse wheel (or trackpad pinch): smooth zoom in/out around the pointer, like an infinite canvas.
+  Deeper folders' contents appear as they get big enough. Drag (left or middle button) to pan.
+- **Zoom In / Out / Full** — Zoom Out fits the current folder, or its parent if it's already fitted.
+- **Run or Open**, **Delete** (moves to trash, after confirmation).
 - **Hide** (or `H`) removes the selected item from the view only — nothing on disk changes.
   **Unhide All** (or `Shift+H`) brings every hidden item back; the button shows how many are hidden.
 - Right-click for the same commands as a context menu.
