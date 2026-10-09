@@ -803,6 +803,7 @@ impl Draw<'_> {
         let (x, y, w, h) = (it.x, it.y, it.w + 1, it.h + 1);
 
         if !it.is_free {
+
             let color = if sel {
                 pal.text
             } else if hover {
@@ -810,11 +811,31 @@ impl Draw<'_> {
             } else {
                 pal.depth(it.depth)
             };
+
+            
             self.fill(color, x + 1, y + 1, w - 2, h - 2);
+            
+            // draw border
             if w > 4 && h > 4 {
+                
+                let border_color = if sel {
+                    pal.text
+                } else if hover {
+                    Color32::BLACK
+                } else {
+                    pal.border
+                };
+
+                let border_width = if hover { 2.0 } else { 1.0};
+
                 // 1 physical pixel dark-grey border, just inside the fill.
                 let r = self.rect(x + 1, y + 1, w - 2, h - 2);
-                self.painter.rect_stroke(r, 0.0, Stroke::new(1.0 / self.ppp, pal.border), egui::StrokeKind::Inside);
+                self.painter.rect_stroke(
+                    r,
+                    0.0,
+                    Stroke::new(border_width / self.ppp, border_color),
+                    egui::StrokeKind::Inside,
+                );
             }
         }
 
