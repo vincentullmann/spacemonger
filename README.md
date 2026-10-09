@@ -23,6 +23,10 @@ cargo build --release
   its treemap colour. Click any parent to zoom back to it.
 - Mouse wheel (or trackpad pinch): smooth zoom in/out around the pointer, like an infinite canvas.
   Deeper folders' contents appear as they get big enough. Drag (left or middle button) to pan.
+- Zooming to a folder (double-click, Zoom In/Out/Full, path bar) is one camera move: the map
+  zooms evenly while the folder's box reshapes to fill the window. Scrolling back out eases it
+  back to its natural shape.
+- Resizing the window keeps the folder at the centre at about the same size and position.
 - **Zoom In / Out / Full** — Zoom Out fits the current folder, or its parent if it's already fitted.
 - **Run or Open**, **Delete** (moves to trash, after confirmation).
 - **Hide** (or `H`) removes the selected item from the view only — nothing on disk changes.

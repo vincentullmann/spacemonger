@@ -2,7 +2,7 @@
 
 use crate::colors::Palette;
 use crate::format;
-use crate::layout::{self, Item, Params, R};
+use crate::layout::{self, Item, Ov, Params, R};
 use crate::scan::{self, Drive, ScanControl, Tree};
 use eframe::egui::{
     self, Align2, Color32, FontId, Id, Order, Painter, Pos2, Rect, Sense, Stroke, Vec2,
@@ -20,6 +20,10 @@ const ANIM_DURATION: f32 = 0.25; // seconds
 const WHEEL_ZOOM: f64 = 0.004;
 /// Deepest zoom, as a multiple of the view size.
 const MAX_ZOOM: f64 = 1e8;
+/// A resize step within this long of the previous one keeps the same anchor.
+const RESIZE_SETTLE: Duration = Duration::from_millis(400);
+/// Resize anchor: deepest folder at the window centre covering at least this share of it.
+const ANCHOR_MIN_SHARE: f64 = 0.25;
 /// Height of the path (breadcrumb) bar above the treemap.
 const BAR_H: i32 = 18;
 
@@ -50,11 +54,60 @@ struct DriveDialog {
     path: String,
 }
 
-/// Camera animation between two root boxes (view-local coordinates).
+/// A folder reshaped to fill the window. The camera itself always zooms evenly; only this
+/// folder's box is stretched, by an amount that fades out as you zoom out from it.
+#[derive(Clone)]
+struct Fit {
+    /// Full-strength reshape, relative to the folder's natural box.
+    ov: Ov,
+    /// Camera scale (root width / view width) at which the folder exactly fills the view.
+    scale: f64,
+}
+
+impl Fit {
+    /// Strength of the reshape at camera scale `s`: 1 at or above the fit scale, fading to 0
+    /// by half of it (but always 0 when fully zoomed out).
+    fn blend(&self, s: f64) -> f64 {
+        let lo = (self.scale / 2.0).max(1.0);
+        if self.scale - lo < 1e-9 {
+            return if s >= self.scale { 1.0 } else { 0.0 };
+        }
+        ((s / lo).ln() / (self.scale / lo).ln()).clamp(0.0, 1.0)
+    }
+}
+
+fn faded(ov: &Ov, b: f64) -> Ov {
+    Ov { path: ov.path.clone(), a: (ov.a.0.powf(b), ov.a.1.powf(b)), d: (ov.d.0 * b, ov.d.1 * b) }
+}
+
+/// Camera move to a folder: an even zoom about the move's fixed point (so the folder's centre
+/// travels in a straight line and the root keeps covering the view), with the folder's box
+/// changing shape on the way.
 struct Anim {
-    from: R,
-    to: R,
     start: Instant,
+    target: Vec<usize>,
+    from_cam: R,
+    /// Target folder's natural centre at start / end.
+    n0: (f64, f64),
+    n1: (f64, f64),
+    /// Target's reshape relative to its natural box, at start / end.
+    ov0: Ov,
+    ov1: Ov,
+    /// Another folder's reshape fading out during the move.
+    old: Option<Ov>,
+    end_cam: R,
+    end_fit: Option<Fit>,
+}
+
+/// What to hold steady while the window is resized.
+#[derive(Clone)]
+struct Anchor {
+    path: Vec<usize>,
+    /// Box area as a share of the window area.
+    share: f64,
+    /// Box centre as a fraction of the window size.
+    u: f64,
+    v: f64,
 }
 
 /// A selected entry, identified by its folder path and index.
@@ -65,13 +118,18 @@ pub struct SpaceMonger {
     drive: Option<Drive>,
     /// Index path of the deepest folder covering the whole view (derived from `cam`).
     zoom: Vec<usize>,
-    /// Box of the scan root in view coordinates. Equal to the view when fully zoomed out.
+    /// Box of the scan root in view coordinates; always the view's shape, scaled evenly.
+    /// Equal to the view when fully zoomed out.
     cam: Option<R>,
+    /// Folder currently stretched to fill the window, if any.
+    fit: Option<Fit>,
     /// View size (points) the camera was last fitted to.
     view: (f64, f64),
+    /// Anchor held during a window resize, and when the last resize step happened.
+    resize_anchor: Option<(Option<Anchor>, Instant)>,
 
     items: Vec<Item>,
-    layout_key: Option<(f32, f32, u64, R)>,
+    layout_key: Option<(f32, f32, u64, R, Vec<Ov>)>,
     generation: u64,
 
     selected: Option<Sel>,
@@ -100,7 +158,9 @@ impl SpaceMonger {
             drive: None,
             zoom: Vec::new(),
             cam: None,
+            fit: None,
             view: (0.0, 0.0),
+            resize_anchor: None,
             items: Vec::new(),
             layout_key: None,
             generation: 0,
@@ -179,6 +239,7 @@ impl SpaceMonger {
         self.tree = None;
         self.zoom.clear();
         self.cam = None;
+        self.fit = None;
         self.selected = None;
         self.anim = None;
         self.invalidate();
@@ -216,56 +277,200 @@ impl SpaceMonger {
         R::new(0.0, 0.0, self.view.0, self.view.1)
     }
 
-    fn zoomed(&self) -> bool {
-        self.cam.is_some_and(|c| c != self.full_view())
+    /// Box a folder needs so its content exactly fills the view.
+    fn fill_box(&self) -> R {
+        R::new(-3.0, -12.0, self.view.0 + 5.0, self.view.1 + 14.0)
     }
 
-    /// Keep the root box covering the view (no zooming out past the scan root).
+    fn scale_of(&self, c: R) -> f64 {
+        c.w / self.view.0.max(1.0)
+    }
+
+    fn zoomed(&self) -> bool {
+        self.fit.is_some() || self.cam.is_some_and(|c| c != self.full_view())
+    }
+
+    /// Overrides in effect for camera `c` (outside animations).
+    fn ovs_at(&self, c: R) -> Vec<Ov> {
+        match &self.fit {
+            Some(f) => {
+                let b = f.blend(self.scale_of(c));
+                if b > 0.0 { vec![faded(&f.ov, b)] } else { Vec::new() }
+            }
+            None => Vec::new(),
+        }
+    }
+
+    /// Camera and overrides to draw this frame.
+    fn view_state(&self) -> (R, Vec<Ov>) {
+        let cam = self.cam.unwrap_or(self.full_view());
+        match &self.anim {
+            Some(a) => self.anim_state(a),
+            None => (cam, self.ovs_at(cam)),
+        }
+    }
+
+    fn locate(&self, cam: R, path: &[usize], ovs: &[Ov]) -> Option<R> {
+        layout::locate(&self.tree.as_ref()?.root, cam, path, self.params(), ovs)
+    }
+
+    /// Scale camera `c` by `k` about point `p`.
+    fn scaled(c: R, p: (f64, f64), k: f64) -> R {
+        R::new(p.0 + (c.x - p.0) * k, p.1 + (c.y - p.1) * k, c.w * k, c.h * k)
+    }
+
+    /// Keep the root covering the view (no zooming out past the scan root), and while a
+    /// folder is fully fitted, keep it covering the view too.
     fn clamp_cam(&self, mut c: R) -> R {
         let (vw, vh) = self.view;
-        if c.w <= vw {
-            (c.x, c.w) = (0.0, vw);
-        } else {
-            c.x = c.x.min(0.0).max(vw - c.w);
+        if c.w < vw || c.h < vh {
+            return self.full_view();
         }
-        if c.h <= vh {
-            (c.y, c.h) = (0.0, vh);
-        } else {
-            c.y = c.y.min(0.0).max(vh - c.h);
+        // Allowed shifts: keep the root covering the view...
+        let (mut xlo, mut xhi) = (vw - c.w - c.x, -c.x);
+        let (mut ylo, mut yhi) = (vh - c.h - c.y, -c.y);
+        // ...and a fully fitted folder's content too.
+        if let Some(f) = self.fit.as_ref().filter(|f| f.blend(self.scale_of(c)) >= 1.0) {
+            if let Some(b) = self.locate(c, &f.ov.path, std::slice::from_ref(&f.ov)) {
+                let k = layout::content(b);
+                let view = layout::root_content(self.full_view());
+                let (fxlo, fxhi) = (view.x + view.w - (k.x + k.w), view.x - k.x);
+                let (fylo, fyhi) = (view.y + view.h - (k.y + k.h), view.y - k.y);
+                if fxlo.max(xlo) <= fxhi.min(xhi) {
+                    (xlo, xhi) = (fxlo.max(xlo), fxhi.min(xhi));
+                }
+                if fylo.max(ylo) <= fyhi.min(yhi) {
+                    (ylo, yhi) = (fylo.max(ylo), fyhi.min(yhi));
+                }
+            }
         }
+        c.x += 0f64.clamp(xlo, xhi.max(xlo));
+        c.y += 0f64.clamp(ylo, yhi.max(ylo));
         c
     }
 
-    /// Camera that puts the content of the folder at `path` exactly over the view.
-    fn fit_cam(&self, path: &[usize]) -> Option<R> {
-        if path.is_empty() {
-            return Some(self.full_view());
-        }
-        let tree = self.tree.as_ref()?;
-        let p = self.params();
-        let view = layout::root_content(self.full_view());
+    /// Even-zoom camera at which the folder's natural box has the window's area and sits in
+    /// the middle (as far as the root allows), plus the reshape that makes it fill the window.
+    fn solve_fit(&self, path: &[usize]) -> Option<(R, Fit)> {
+        let t = self.fill_box();
         let mut cam = self.cam?;
-        // Frames are fixed in points, so the box doesn't scale exactly with the camera;
-        // a few affine corrections converge on it.
-        for _ in 0..16 {
-            let mut c = layout::content_of(&tree.root, cam, path, p)?;
-            if c.w < 1.0 || c.h < 1.0 {
-                c = layout::locate(&tree.root, cam, path, p)?;
+        for _ in 0..40 {
+            let n = self.locate(cam, path, &[])?;
+            if n.area() <= 0.0 {
+                return None;
             }
-            if (c.x - view.x).abs() < 1e-3 && (c.y - view.y).abs() < 1e-3 && (c.w - view.w).abs() < 1e-3 && (c.h - view.h).abs() < 1e-3 {
+            let k = (t.area() / n.area()).sqrt();
+            let (nc, tc) = (n.center(), t.center());
+            cam = Self::scaled(cam, nc, k);
+            cam.x += tc.0 - nc.0;
+            cam.y += tc.1 - nc.1;
+            if (k - 1.0).abs() < 1e-9 && (tc.0 - nc.0).abs() < 1e-6 && (tc.1 - nc.1).abs() < 1e-6 {
                 break;
             }
-            let (sx, sy) = (view.w / c.w, view.h / c.h);
-            cam = R::new(view.x + (cam.x - c.x) * sx, view.y + (cam.y - c.y) * sy, cam.w * sx, cam.h * sy);
         }
-        Some(cam)
+        // Root coverage only (the fit itself isn't active yet).
+        let cam = {
+            let (vw, vh) = self.view;
+            let mut c = cam;
+            if c.w < vw || c.h < vh {
+                c = self.full_view();
+            }
+            c.x = c.x.min(0.0).max(vw - c.w);
+            c.y = c.y.min(0.0).max(vh - c.h);
+            c
+        };
+        let n = self.locate(cam, path, &[])?;
+        let ov = Ov::between(path.to_vec(), n, t);
+        Some((cam, Fit { ov, scale: self.scale_of(cam) }))
     }
 
     /// Animate to the folder at `path`, filling the view.
     fn zoom_to(&mut self, path: &[usize]) {
-        let (Some(from), Some(to)) = (self.cam, self.fit_cam(path)) else { return };
-        if from != to {
-            self.anim = Some(Anim { from, to, start: Instant::now() });
+        self.finish_anim();
+        let Some(cam0) = self.cam else { return };
+        let ovs0 = self.ovs_at(cam0);
+        let Some(b0) = self.locate(cam0, path, &ovs0) else { return };
+        // Any other reshaped folder fades out on the way.
+        let old: Option<Ov> = ovs0.iter().find(|o| o.path != path).cloned();
+        let Some(n0) = self.locate(cam0, path, old.as_slice()) else { return };
+
+        let (end_cam, end_fit) = if path.is_empty() {
+            (self.full_view(), None)
+        } else {
+            let Some((c, f)) = self.solve_fit(path) else { return };
+            (c, Some(f))
+        };
+        let Some(n1) = self.locate(end_cam, path, &[]) else { return };
+        let b1 = if path.is_empty() { end_cam } else { self.fill_box() };
+        if end_cam == cam0 && old.is_none() && (b0.x - b1.x).abs() < 0.5 && (b0.w - b1.w).abs() < 0.5 && (b0.h - b1.h).abs() < 0.5 {
+            self.fit = end_fit;
+            return;
+        }
+        self.anim = Some(Anim {
+            start: Instant::now(),
+            target: path.to_vec(),
+            from_cam: cam0,
+            n0: n0.center(),
+            n1: n1.center(),
+            ov0: Ov::between(path.to_vec(), n0, b0),
+            ov1: Ov::between(path.to_vec(), n1, b1),
+            old,
+            end_cam,
+            end_fit,
+        });
+    }
+
+    /// Camera and overrides partway through an animation.
+    fn anim_state(&self, a: &Anim) -> (R, Vec<Ov>) {
+        let (vw, vh) = self.view;
+        let t = (a.start.elapsed().as_secs_f32() / ANIM_DURATION).min(1.0) as f64;
+        let e = 1.0 - (1.0 - t).powi(3);
+        let lerp = |p: f64, q: f64| p + (q - p) * e;
+        let (c0, c1) = (a.from_cam, a.end_cam);
+
+        // Even zoom about the fixed point of the whole move (a plain pan if there's no zoom).
+        let k = c1.w / c0.w;
+        let fp = |q: (f64, f64), e: f64| move_point(c0, c1, q, e);
+        let (x, y) = fp((c0.x, c0.y), e);
+        let r = k.powf(e);
+        let mut cam = R::new(x, y, c0.w * r, c0.h * r);
+
+        // Another folder's reshape fades out; that moves things inside it, so keep the target's
+        // natural centre on its straight path regardless.
+        let mut ovs: Vec<Ov> = a.old.iter().map(|o| faded(o, 1.0 - e)).collect();
+        if !ovs.is_empty() {
+            let (end, want) = (fp(a.n0, 1.0), fp(a.n0, e));
+            let want = (want.0 + (a.n1.0 - end.0) * e, want.1 + (a.n1.1 - end.1) * e);
+            if let Some(n) = self.locate(cam, &a.target, &ovs) {
+                let nc = n.center();
+                cam.x = (cam.x + want.0 - nc.0).min(0.0).max(vw - cam.w);
+                cam.y = (cam.y + want.1 - nc.1).min(0.0).max(vh - cam.h);
+            }
+        }
+
+        // The target's box changes shape evenly between its start and end reshape.
+        if !a.target.is_empty() {
+            let geo = |p: f64, q: f64| p * (q / p).powf(e);
+            ovs.push(Ov {
+                path: a.target.clone(),
+                a: (geo(a.ov0.a.0, a.ov1.a.0), geo(a.ov0.a.1, a.ov1.a.1)),
+                d: (lerp(a.ov0.d.0, a.ov1.d.0), lerp(a.ov0.d.1, a.ov1.d.1)),
+            });
+        }
+        (cam, ovs)
+    }
+
+    fn finish_anim(&mut self) {
+        if let Some(a) = self.anim.take() {
+            self.cam = Some(a.end_cam);
+            self.fit = a.end_fit;
+            self.selected = None;
+        }
+    }
+
+    fn step_anim(&mut self) {
+        if self.anim.as_ref().is_some_and(|a| a.start.elapsed().as_secs_f32() >= ANIM_DURATION) {
+            self.finish_anim();
         }
     }
 
@@ -282,10 +487,14 @@ impl SpaceMonger {
 
     /// Zoom out: fit the current folder if it isn't already, otherwise its parent.
     fn zoom_out(&mut self) {
-        let (Some(tree), Some(cam)) = (&self.tree, self.cam) else { return };
+        let Some(cam) = self.cam else { return };
         let view = layout::root_content(self.full_view());
-        let fitted = layout::content_of(&tree.root, cam, &self.zoom, self.params())
-            .is_some_and(|c| (c.x - view.x).abs() < 0.5 && (c.y - view.y).abs() < 0.5 && (c.w - view.w).abs() < 0.5 && (c.h - view.h).abs() < 0.5);
+        let ovs = self.ovs_at(cam);
+        let fitted = match self.tree.as_ref() {
+            Some(t) => layout::content_of(&t.root, cam, &self.zoom, self.params(), &ovs)
+                .is_some_and(|c| (c.x - view.x).abs() < 0.5 && (c.y - view.y).abs() < 0.5 && (c.w - view.w).abs() < 0.5 && (c.h - view.h).abs() < 0.5),
+            None => return,
+        };
         let mut target = self.zoom.clone();
         if fitted {
             target.pop();
@@ -295,12 +504,11 @@ impl SpaceMonger {
 
     /// Scale the camera by `k` about a view point, keeping whatever is under it in place.
     fn zoom_at(&mut self, px: f64, py: f64, k: f64) {
-        let (Some(tree), Some(cam)) = (&self.tree, self.cam) else { return };
-        let p = self.params();
+        let Some(cam) = self.cam else { return };
         let (vw, vh) = self.view;
         let k = k.min(MAX_ZOOM * vw / cam.w).min(MAX_ZOOM * vh / cam.h);
 
-        // Deepest entry under the point (children come after parents).
+        // Deepest entry under the point (drawn last).
         let anchor = self
             .items
             .iter()
@@ -311,18 +519,27 @@ impl SpaceMonger {
                 path.extend(it.index);
                 path
             });
-        let before = anchor.and_then(|path| layout::locate(&tree.root, cam, &path, p).map(|b| (path, b)));
+        let before = anchor.and_then(|path| self.locate(cam, &path, &self.ovs_at(cam)).map(|b| (path, b)));
 
-        let mut c = R::new(px + (cam.x - px) * k, py + (cam.y - py) * k, cam.w * k, cam.h * k);
-        // Frames don't scale, so nested boxes drift slightly; pin the anchor to the pointer.
+        let mut c = Self::scaled(cam, (px, py), k);
+        // Frames don't scale (and a fitted folder's stretch fades), so pin the anchor.
         if let Some((path, b0)) = before.filter(|(_, b)| b.w > 1e-6 && b.h > 1e-6) {
-            if let Some(b1) = layout::locate(&tree.root, c, &path, p) {
+            if let Some(b1) = self.locate(c, &path, &self.ovs_at(c)) {
                 let (u, v) = ((px - b0.x) / b0.w, (py - b0.y) / b0.h);
                 c.x += px - (b1.x + u * b1.w);
                 c.y += py - (b1.y + v * b1.h);
             }
         }
         self.cam = Some(self.clamp_cam(c));
+        self.drop_faded_fit();
+    }
+
+    fn drop_faded_fit(&mut self) {
+        if let (Some(f), Some(c)) = (&self.fit, self.cam) {
+            if f.blend(self.scale_of(c)) <= 0.0 {
+                self.fit = None;
+            }
+        }
     }
 
     fn pan(&mut self, dx: f64, dy: f64) {
@@ -331,32 +548,76 @@ impl SpaceMonger {
         }
     }
 
-    /// Advance the camera animation. Each axis zooms geometrically about its fixed point,
-    /// so big zooms feel even rather than rushing at the start.
-    fn step_anim(&mut self) {
-        let Some(a) = &self.anim else { return };
-        let t = (a.start.elapsed().as_secs_f32() / ANIM_DURATION).min(1.0) as f64;
-        if t >= 1.0 {
-            self.cam = Some(a.to);
-            self.anim = None;
-            self.selected = None;
+    /// Deepest folder at the window centre that covers a good share of it.
+    fn pick_anchor(&self) -> Option<Anchor> {
+        let cam = self.cam?;
+        let (vw, vh) = self.view;
+        let (cx, cy) = (vw / 2.0, vh / 2.0);
+        let ovs = self.ovs_at(cam);
+        let it = self
+            .items
+            .iter()
+            .filter(|it| it.is_folder && it.labeled && it.index.is_some() && it.contains(cx as f32, cy as f32))
+            .filter(|it| {
+                let w = (it.x + it.w).min(vw as f32) - it.x.max(0.0);
+                let h = (it.y + it.h).min(vh as f32) - it.y.max(0.0);
+                (w.max(0.0) * h.max(0.0)) as f64 >= ANCHOR_MIN_SHARE * vw * vh
+            })
+            .max_by_key(|it| it.folder.len())?;
+        let mut path = it.folder.to_vec();
+        path.extend(it.index);
+        let b = self.locate(cam, &path, &ovs)?;
+        let (bx, by) = b.center();
+        Some(Anchor { path, share: b.area() / (vw * vh), u: bx / vw, v: by / vh })
+    }
+
+    /// The view changed size: refit, and hold the anchor folder's share and position.
+    fn resized(&mut self, vw: f64, vh: f64) {
+        self.finish_anim();
+        let (ow, oh) = self.view;
+        let Some(cam) = self.cam.filter(|_| ow > 0.0 && oh > 0.0) else {
+            self.view = (vw, vh);
+            self.cam = None;
+            return;
+        };
+        let was_zoomed = self.zoomed();
+        let anchor = match &self.resize_anchor {
+            Some((a, at)) if at.elapsed() < RESIZE_SETTLE => a.clone(),
+            _ => self.pick_anchor(),
+        };
+        self.resize_anchor = Some((anchor.clone(), Instant::now()));
+
+        // Same zoom, same relative spot.
+        let s = cam.w / ow;
+        let (rx, ry) = ((ow / 2.0 - cam.x) / cam.w, (oh / 2.0 - cam.y) / cam.h);
+        self.view = (vw, vh);
+        let (w, h) = (vw * s, vh * s);
+        let mut c = R::new(vw / 2.0 - rx * w, vh / 2.0 - ry * h, w, h);
+        if !was_zoomed {
+            self.cam = Some(self.full_view());
             return;
         }
-        let e = 1.0 - (1.0 - t).powi(3);
-        let axis = |a0: f64, s0: f64, a1: f64, s1: f64| -> (f64, f64) {
-            let k = s1 / s0;
-            if (k - 1.0).abs() < 1e-9 {
-                (a0 + (a1 - a0) * e, s0)
-            } else {
-                // a1 = f + k * (a0 - f)  =>  fixed point f
-                let f = (a1 - k * a0) / (1.0 - k);
-                let ke = k.powf(e);
-                (f + ke * (a0 - f), s0 * ke)
+        self.cam = Some(c);
+        // A fitted folder is refitted to the new window shape.
+        if let Some(f) = &self.fit {
+            let path = f.ov.path.clone();
+            self.fit = self.solve_fit(&path).map(|(_, f)| f);
+        }
+        if let Some(a) = anchor {
+            for _ in 0..12 {
+                let Some(b) = self.locate(c, &a.path, &self.ovs_at(c)) else { break };
+                if b.area() <= 0.0 {
+                    break;
+                }
+                let k = (a.share * vw * vh / b.area()).sqrt();
+                let bc = b.center();
+                c = Self::scaled(c, bc, k);
+                c.x += a.u * vw - bc.0;
+                c.y += a.v * vh - bc.1;
             }
-        };
-        let (x, w) = axis(a.from.x, a.from.w, a.to.x, a.to.w);
-        let (y, h) = axis(a.from.y, a.from.h, a.to.y, a.to.h);
-        self.cam = Some(R::new(x, y, w, h));
+        }
+        self.cam = Some(self.clamp_cam(c));
+        self.drop_faded_fit();
     }
 
     fn run(&mut self, action: Action, ctx: &egui::Context) {
@@ -567,19 +828,10 @@ impl SpaceMonger {
         let (w, h) = (resp.rect.width(), resp.rect.height());
         let local = |p: Pos2| (p.x - origin.x, p.y - origin.y);
 
-        // Camera: start fully zoomed out; on resize, stretch it with the view.
+        // Camera: start fully zoomed out; on resize, hold the folder in view steady.
         let (vw, vh) = (w as f64, h as f64);
         if (vw, vh) != self.view {
-            let (ow, oh) = self.view;
-            self.view = (vw, vh);
-            self.cam = match self.cam {
-                Some(c) if ow > 0.0 && oh > 0.0 => {
-                    let (sx, sy) = (vw / ow, vh / oh);
-                    Some(self.clamp_cam(R::new(c.x * sx, c.y * sy, c.w * sx, c.h * sy)))
-                }
-                _ => None,
-            };
-            self.anim = None;
+            self.resized(vw, vh);
         }
         if self.cam.is_none() {
             self.cam = Some(self.full_view());
@@ -599,22 +851,23 @@ impl SpaceMonger {
         }
         // Drag (left or middle button) to pan.
         if self.tree.is_some() && (resp.dragged_by(egui::PointerButton::Primary) || resp.dragged_by(egui::PointerButton::Middle)) {
-            self.anim = None;
+            self.finish_anim();
             let d = resp.drag_delta();
             self.pan(d.x as f64, d.y as f64);
             ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
         }
 
-        // Rebuild layout when the view, data or camera changes.
-        let cam = self.cam.unwrap_or(self.full_view());
-        let key = (w, h, self.generation, cam);
-        if self.layout_key != Some(key) {
-            self.layout_key = Some(key);
+        // Rebuild layout when the view, data, camera or reshaping changes.
+        let (cam, ovs) = self.view_state();
+        let key = (w, h, self.generation, cam, ovs);
+        if self.layout_key.as_ref() != Some(&key) {
             let p = self.params();
-            (self.items, self.zoom) = match &self.tree {
-                Some(t) => (layout::build(&t.root, cam, vw, vh, p), layout::covering(&t.root, cam, vw, vh, p)),
-                None => (Vec::new(), Vec::new()),
+            self.items = match &self.tree {
+                Some(t) => layout::build(&t.root, cam, vw, vh, p, &key.4),
+                None => Vec::new(),
             };
+            self.zoom = layout::covering(&self.items, vw, vh);
+            self.layout_key = Some(key);
             self.hovered = None;
         }
 
@@ -949,6 +1202,18 @@ impl eframe::App for SpaceMonger {
         storage.set_string("dark", self.dark.to_string());
         storage.set_string("show_free", self.show_free.to_string());
     }
+}
+
+/// Where point `q` is at progress `e` of a camera move from `c0` to `c1` (same aspect):
+/// an even zoom about the move's fixed point, or a plain pan when the scale doesn't change.
+fn move_point(c0: R, c1: R, q: (f64, f64), e: f64) -> (f64, f64) {
+    let k = c1.w / c0.w;
+    if (k - 1.0).abs() < 1e-9 {
+        return (q.0 + (c1.x - c0.x) * e, q.1 + (c1.y - c0.y) * e);
+    }
+    let p = ((c1.x - k * c0.x) / (1.0 - k), (c1.y - k * c0.y) / (1.0 - k));
+    let r = k.powf(e);
+    (p.0 + r * (q.0 - p.0), p.1 + r * (q.1 - p.1))
 }
 
 // ---------------------------------------------------------------------------

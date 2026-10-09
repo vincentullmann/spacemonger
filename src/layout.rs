@@ -9,6 +9,8 @@
 //!
 //! Geometry is f64 in view coordinates and always starts at the scan root, whose box is the
 //! camera. Zooming moves the camera; each frame only the part inside the view is laid out.
+//! An `Ov` reshapes one folder's box (used to make a zoomed-in folder fill the window);
+//! that folder is drawn after everything else so it sits on top of its neighbours.
 
 use crate::scan::{Entry, Folder, Kind};
 use std::rc::Rc;
@@ -52,9 +54,42 @@ impl R {
         Self { x, y, w, h }
     }
 
+    pub fn center(&self) -> (f64, f64) {
+        (self.x + self.w / 2.0, self.y + self.h / 2.0)
+    }
+
+    pub fn area(&self) -> f64 {
+        self.w.max(0.0) * self.h.max(0.0)
+    }
+
     /// Does `self` contain `o` (with half a point of slack)?
     pub fn covers(&self, o: &R) -> bool {
         self.x <= o.x + 0.5 && self.y <= o.y + 0.5 && self.x + self.w >= o.x + o.w - 0.5 && self.y + self.h >= o.y + o.h - 0.5
+    }
+}
+
+/// Reshapes the box of the entry at `path`: scaled per axis by `a` about its centre, with the
+/// centre moved by `d` (in units of the natural box size). Both are relative to the natural
+/// box, so the override zooms and pans with the camera.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Ov {
+    pub path: Vec<usize>,
+    pub a: (f64, f64),
+    pub d: (f64, f64),
+}
+
+impl Ov {
+    pub fn apply(&self, n: R) -> R {
+        let (w, h) = (n.w * self.a.0, n.h * self.a.1);
+        let cx = n.x + n.w * (0.5 + self.d.0);
+        let cy = n.y + n.h * (0.5 + self.d.1);
+        R::new(cx - w / 2.0, cy - h / 2.0, w, h)
+    }
+
+    /// The override that turns natural box `n` into box `t`.
+    pub fn between(path: Vec<usize>, n: R, t: R) -> Self {
+        let (nc, tc) = (n.center(), t.center());
+        Ov { path, a: (t.w / n.w, t.h / n.h), d: ((tc.0 - nc.0) / n.w, (tc.1 - nc.1) / n.h) }
     }
 }
 
@@ -97,8 +132,18 @@ impl Item {
     }
 }
 
+/// A reshaped folder, laid out after everything else so it draws on top.
+struct Deferred {
+    folder: Rc<[usize]>,
+    index: usize,
+    depth: i32,
+    r: R,
+}
+
 struct Ctx<'a> {
     out: &'a mut Vec<Item>,
+    ovs: &'a [Ov],
+    deferred: std::collections::VecDeque<Deferred>,
     p: Params,
     hmin: f64,
     vmin: f64,
@@ -109,6 +154,20 @@ struct Ctx<'a> {
 impl Ctx<'_> {
     fn on_screen(&self, r: R) -> bool {
         r.x < self.vw && r.y < self.vh && r.x + r.w > 0.0 && r.y + r.h > 0.0
+    }
+
+    /// Does one of `indices` in the folder at `path` lead to a reshaped folder? Its natural box
+    /// may be off-screen while the reshaped one isn't, so that branch is never culled.
+    fn leads_to_ov(&self, path: &[usize], indices: &[usize]) -> bool {
+        self.ovs
+            .iter()
+            .any(|o| o.path.len() > path.len() && o.path.starts_with(path) && indices.contains(&o.path[path.len()]))
+    }
+
+    fn ov_for(&self, path: &[usize], i: usize) -> Option<&Ov> {
+        self.ovs
+            .iter()
+            .find(|o| o.path.len() == path.len() + 1 && o.path.starts_with(path) && o.path[path.len()] == i)
     }
 
     fn push(&mut self, folder: &Rc<[usize]>, index: Option<usize>, depth: i32, kind: (bool, bool, bool), r: R) {
@@ -134,13 +193,36 @@ impl Ctx<'_> {
 }
 
 /// Lay out the tree from `root` with the root's box at `cam`, keeping only what falls
-/// inside the `vw` x `vh` view.
-pub fn build(root: &Folder, cam: R, vw: f64, vh: f64, p: Params) -> Vec<Item> {
+/// inside the `vw` x `vh` view. Folders named in `ovs` get reshaped boxes.
+pub fn build(root: &Folder, cam: R, vw: f64, vh: f64, p: Params, ovs: &[Ov]) -> Vec<Item> {
     let mut out = Vec::new();
     let (hmin, vmin) = MIN_SIZES[(p.density.clamp(-3, 3) + 3) as usize];
-    let mut cx = Ctx { out: &mut out, p, hmin, vmin, vw, vh };
+    let mut cx = Ctx { out: &mut out, ovs, deferred: Default::default(), p, hmin, vmin, vw, vh };
     layout_folder(&mut cx, root, Rc::from(Vec::new()), root_content(cam), 0);
+
+    // Reshaped folders (and any reshaped folders inside them) go on top.
+    while let Some(df) = cx.deferred.pop_front() {
+        let Some(folder) = entry_folder(root, &df.folder) else { continue };
+        let e = &folder.entries[df.index];
+        let labeled = df.r.w > cx.hmin && df.r.h > cx.vmin;
+        if cx.on_screen(df.r) {
+            cx.push(&df.folder, Some(df.index), df.depth, (e.child().is_some(), false, labeled), df.r);
+        }
+        if let (Some(child), true) = (e.child(), labeled) {
+            let mut cp = df.folder.to_vec();
+            cp.push(df.index);
+            layout_folder(&mut cx, child, Rc::from(cp), content(df.r), df.depth + 1);
+        }
+    }
     out
+}
+
+fn entry_folder<'a>(root: &'a Folder, path: &[usize]) -> Option<&'a Folder> {
+    let mut f = root;
+    for &i in path {
+        f = f.entries.get(i)?.child()?;
+    }
+    Some(f)
 }
 
 fn weight(e: &Entry, p: Params) -> u64 {
@@ -197,7 +279,7 @@ fn layout_folder(cx: &mut Ctx, folder: &Folder, path: Rc<[usize]>, r: R, depth: 
 }
 
 fn split(cx: &mut Ctx, folder: &Folder, path: &Rc<[usize]>, indices: &[usize], r: R, depth: i32) {
-    if !cx.on_screen(r) {
+    if !cx.on_screen(r) && !cx.leads_to_ov(path, indices) {
         return;
     }
     let Some([(l1, r1), (l2, r2)]) = halves(folder, indices, r, cx.p) else { return };
@@ -206,7 +288,7 @@ fn split(cx: &mut Ctx, folder: &Folder, path: &Rc<[usize]>, indices: &[usize], r
 }
 
 fn place(cx: &mut Ctx, folder: &Folder, path: &Rc<[usize]>, list: &[usize], r: R, depth: i32) {
-    if list.is_empty() || !cx.on_screen(r) {
+    if list.is_empty() || (!cx.on_screen(r) && !cx.leads_to_ov(path, list)) {
         return;
     }
     let labeled = r.w > cx.hmin && r.h > cx.vmin;
@@ -215,6 +297,14 @@ fn place(cx: &mut Ctx, folder: &Folder, path: &Rc<[usize]>, list: &[usize], r: R
         split(cx, folder, path, list, r, depth);
     } else if list.len() == 1 && visible {
         let i = list[0];
+        if let Some(ov) = cx.ov_for(path, i) {
+            let r = ov.apply(r);
+            cx.deferred.push_back(Deferred { folder: path.clone(), index: i, depth, r });
+            return;
+        }
+        if !cx.on_screen(r) {
+            return;
+        }
         let e = &folder.entries[i];
         let is_free = matches!(e.kind, Kind::Free);
         let d = if is_free { -1 } else { depth };
@@ -224,16 +314,16 @@ fn place(cx: &mut Ctx, folder: &Folder, path: &Rc<[usize]>, list: &[usize], r: R
             cp.push(i);
             layout_folder(cx, child, Rc::from(cp), content(r), depth + 1);
         }
-    } else {
+    } else if cx.on_screen(r) {
         // A few pixels across: merge into one anonymous block.
         cx.push(path, None, depth, (false, false, false), r);
     }
 }
 
-/// Unclipped box of the entry at `path` (from the scan root) with the root's box at `cam`.
-/// Pure geometry: ignores size thresholds, so it also works for boxes too small to draw.
-/// An empty path gives `cam` itself.
-pub fn locate(root: &Folder, cam: R, path: &[usize], p: Params) -> Option<R> {
+/// Unclipped box of the entry at `path` (from the scan root) with the root's box at `cam`,
+/// as drawn with overrides `ovs`. Pure geometry: ignores size thresholds, so it also works for
+/// boxes too small to draw. An empty path gives `cam` itself.
+pub fn locate(root: &Folder, cam: R, path: &[usize], p: Params, ovs: &[Ov]) -> Option<R> {
     let mut folder = root;
     let mut area = root_content(cam);
     let mut b = cam;
@@ -258,6 +348,9 @@ pub fn locate(root: &Folder, cam: R, path: &[usize], p: Params) -> Option<R> {
                 break;
             }
         }
+        if let Some(o) = ovs.iter().find(|o| o.path[..] == path[..=k]) {
+            r = o.apply(r);
+        }
         b = r;
         if k + 1 < path.len() {
             folder = folder.entries[target].child()?;
@@ -268,56 +361,38 @@ pub fn locate(root: &Folder, cam: R, path: &[usize], p: Params) -> Option<R> {
 }
 
 /// Content area of the folder at `path` with the root's box at `cam`.
-pub fn content_of(root: &Folder, cam: R, path: &[usize], p: Params) -> Option<R> {
+pub fn content_of(root: &Folder, cam: R, path: &[usize], p: Params, ovs: &[Ov]) -> Option<R> {
     if path.is_empty() {
         Some(root_content(cam))
     } else {
-        locate(root, cam, path, p).map(content)
+        locate(root, cam, path, p, ovs).map(content)
     }
 }
 
 /// Deepest folder whose content area covers the whole `vw` x `vh` view.
-pub fn covering(root: &Folder, cam: R, vw: f64, vh: f64, p: Params) -> Vec<usize> {
+pub fn covering(items: &[Item], vw: f64, vh: f64) -> Vec<usize> {
     let view = root_content(R::new(0.0, 0.0, vw, vh));
-    let mut path = Vec::new();
-    let mut folder = root;
-    let mut area = root_content(cam);
-    'outer: loop {
-        let mut list: Vec<usize> = (0..folder.entries.len()).collect();
-        let mut r = area;
-        loop {
-            let Some([(l1, r1), (l2, r2)]) = halves(folder, &list, r, p) else { break 'outer };
-            (list, r) = if r1.covers(&view) {
-                (l1, r1)
-            } else if r2.covers(&view) && !l2.is_empty() {
-                (l2, r2)
-            } else {
-                break 'outer;
-            };
-            if list.len() == 1 {
-                let i = list[0];
-                match folder.entries[i].child() {
-                    Some(c) if content(r).covers(&view) => {
-                        path.push(i);
-                        folder = c;
-                        area = content(r);
-                        continue 'outer;
-                    }
-                    _ => break 'outer,
-                }
-            }
-        }
-    }
-    path
+    items
+        .iter()
+        .filter(|it| it.is_folder && it.labeled && it.index.is_some())
+        .filter(|it| content(R::new(it.x as f64, it.y as f64, it.w as f64, it.h as f64)).covers(&view))
+        .max_by_key(|it| it.folder.len())
+        .map(|it| {
+            let mut p = it.folder.to_vec();
+            p.extend(it.index);
+            p
+        })
+        .unwrap_or_default()
 }
 
 /// Item under the point, ignoring folder content areas, anonymous blocks and free space.
+/// Searches from the end, so reshaped folders (drawn last, on top) win over what's beneath.
 pub fn hit_test(items: &[Item], px: f32, py: f32) -> Option<usize> {
-    let i = items
-        .iter()
-        .position(|it| it.contains(px, py) && (!it.is_folder || !it.labeled || it.on_frame(px, py)))?;
+    // The last item containing the point is the deepest one on top.
+    let i = items.iter().rposition(|it| it.contains(px, py))?;
     let it = &items[i];
-    (it.index.is_some() && !it.is_free).then_some(i)
+    let in_content = it.is_folder && it.labeled && !it.on_frame(px, py);
+    (it.index.is_some() && !it.is_free && !in_content).then_some(i)
 }
 
 #[cfg(test)]
@@ -339,7 +414,7 @@ mod tests {
             entries: vec![file("a", 600), file("b", 300), file("c", 100)],
             total: 1000,
         };
-        let items = build(&f, full(1001.0, 501.0), 1001.0, 501.0, Params::default());
+        let items = build(&f, full(1001.0, 501.0), 1001.0, 501.0, Params::default(), &[]);
         assert_eq!(items.len(), 3);
         let area = |n: usize| {
             let it = items.iter().find(|i| i.index == Some(n)).unwrap();
@@ -361,7 +436,7 @@ mod tests {
             entries: vec![file("big", 9000), file("s1", 300), file("s2", 200)],
             total: 9500,
         };
-        let items = build(&f, full(400.0, 300.0), 400.0, 300.0, Params::default());
+        let items = build(&f, full(400.0, 300.0), 400.0, 300.0, Params::default(), &[]);
         let s1 = items.iter().position(|i| i.index == Some(1)).expect("small file laid out");
         assert!(!items[s1].labeled);
         let it = &items[s1];
@@ -386,11 +461,11 @@ mod tests {
         let p = Params::default();
         // Zoomed in 3x around the middle: some boxes fall outside the view.
         let cam = R::new(-400.0, -300.0, 1200.0, 900.0);
-        let items = build(&f, cam, 400.0, 300.0, p);
+        let items = build(&f, cam, 400.0, 300.0, p, &[]);
         for it in items.iter().filter(|it| it.index.is_some()) {
             let mut path = it.folder.to_vec();
             path.push(it.index.unwrap());
-            let b = locate(&f, cam, &path, p).unwrap();
+            let b = locate(&f, cam, &path, p, &[]).unwrap();
             // Clipped boxes are inside the located (unclipped) one.
             assert!(b.x <= it.x as f64 + 0.01 && b.y <= it.y as f64 + 0.01);
             assert!(b.x + b.w >= (it.x + it.w) as f64 - 0.01);
@@ -399,21 +474,24 @@ mod tests {
     }
 
     #[test]
-    fn covering_finds_fitted_folder() {
+    fn override_fills_view_and_draws_on_top() {
         let f = nested();
         let p = Params::default();
         let (vw, vh) = (400.0, 300.0);
-        assert!(covering(&f, full(vw, vh), vw, vh, p).is_empty());
-        // Fit "sub"'s content to the view by solving for the camera.
-        let view = root_content(full(vw, vh));
-        let mut cam = full(vw, vh);
-        for _ in 0..20 {
-            let c = content_of(&f, cam, &[0], p).unwrap();
-            let (sx, sy) = (view.w / c.w, view.h / c.h);
-            cam = R::new(view.x + (cam.x - c.x) * sx, view.y + (cam.y - c.y) * sy, cam.w * sx, cam.h * sy);
-        }
-        let c = content_of(&f, cam, &[0], p).unwrap();
-        assert!((c.x - view.x).abs() < 1e-6 && (c.w - view.w).abs() < 1e-6);
-        assert_eq!(covering(&f, cam, vw, vh, p), vec![0]);
+        let cam = full(vw, vh);
+        assert!(covering(&build(&f, cam, vw, vh, p, &[]), vw, vh).is_empty());
+        // Reshape "sub" so its content exactly fills the view.
+        let n = locate(&f, cam, &[0], p, &[]).unwrap();
+        let t = R::new(-3.0, -12.0, vw + 5.0, vh + 14.0);
+        let ov = Ov::between(vec![0], n, t);
+        let b = locate(&f, cam, &[0], p, std::slice::from_ref(&ov)).unwrap();
+        assert!((b.x - t.x).abs() < 1e-9 && (b.w - t.w).abs() < 1e-9 && (b.h - t.h).abs() < 1e-9);
+        let items = build(&f, cam, vw, vh, p, std::slice::from_ref(&ov));
+        assert_eq!(covering(&items, vw, vh), vec![0]);
+        // The reshaped folder and its children come last and win hit tests.
+        let x = items.iter().position(|it| it.index == Some(0) && it.folder.len() == 1).unwrap();
+        assert_eq!(hit_test(&items, 200.0, 150.0), Some(x));
+        let sub = items.iter().position(|it| it.index == Some(0) && it.folder.is_empty()).unwrap();
+        assert!(sub > items.iter().position(|it| it.index == Some(1) && it.folder.is_empty()).unwrap());
     }
 }
