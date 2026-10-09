@@ -7,6 +7,7 @@ use crate::scan::{self, Drive, ScanControl, Tree};
 use eframe::egui::{
     self, Align2, Color32, FontId, Id, Order, Painter, Pos2, Rect, Sense, Stroke, Vec2,
 };
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::atomic::Ordering;
@@ -40,6 +41,7 @@ enum Action {
     Hide,
     UnhideAll,
     ToggleDark,
+    ClearSelection,
 }
 
 struct ScanJob {
@@ -113,6 +115,31 @@ struct Anchor {
 /// A selected entry, identified by its folder path and index.
 type Sel = (Rc<[usize]>, usize);
 
+/// Full index path of a selected entry.
+fn sel_path(s: &Sel) -> Vec<usize> {
+    let mut p = s.0.to_vec();
+    p.push(s.1);
+    p
+}
+
+/// Ctrl+click: add an entry to the selection, or take it out if it's already in.
+fn toggle(selected: &mut Vec<Sel>, s: Sel) {
+    match selected.iter().position(|x| *x == s) {
+        Some(k) => {
+            selected.remove(k);
+        }
+        None => selected.push(s),
+    }
+}
+
+/// Shift+drag rectangle selection in progress (view coordinates).
+struct Marquee {
+    start: (f32, f32),
+    end: (f32, f32),
+    /// Selection to add to (Ctrl+Shift+drag), empty for a fresh selection.
+    base: Vec<Sel>,
+}
+
 pub struct SpaceMonger {
     tree: Option<Tree>,
     drive: Option<Drive>,
@@ -132,7 +159,9 @@ pub struct SpaceMonger {
     layout_key: Option<(f32, f32, u64, R, Vec<Ov>)>,
     generation: u64,
 
-    selected: Option<Sel>,
+    /// Selected entries; the last one is the primary (used by Zoom In and the title).
+    selected: Vec<Sel>,
+    marquee: Option<Marquee>,
     hovered: Option<usize>,
     hover_since: Instant,
     anim: Option<Anim>,
@@ -144,7 +173,7 @@ pub struct SpaceMonger {
 
     dialog: Option<DriveDialog>,
     scan: Option<ScanJob>,
-    confirm_delete: Option<(Sel, PathBuf)>,
+    confirm_delete: Option<Vec<(Sel, PathBuf)>>,
     error: Option<String>,
     title: String,
     font: FontId,
@@ -164,7 +193,8 @@ impl SpaceMonger {
             items: Vec::new(),
             layout_key: None,
             generation: 0,
-            selected: None,
+            selected: Vec::new(),
+            marquee: None,
             hovered: None,
             hover_since: Instant::now(),
             anim: None,
@@ -200,17 +230,17 @@ impl SpaceMonger {
     // -- selection helpers ---------------------------------------------------
 
     fn selected_entry(&self) -> Option<&scan::Entry> {
-        let (f, i) = self.selected.as_ref()?;
+        let (f, i) = self.selected.last()?;
         self.tree.as_ref()?.entry_at(f, *i)
     }
 
     fn selected_path(&self) -> Option<PathBuf> {
-        let (f, i) = self.selected.as_ref()?;
+        let (f, i) = self.selected.last()?;
         Some(self.tree.as_ref()?.full_path(f, Some(*i)))
     }
 
     fn selected_item(&self) -> Option<usize> {
-        let (f, i) = self.selected.as_ref()?;
+        let (f, i) = self.selected.last()?;
         self.items.iter().position(|it| it.index == Some(*i) && it.folder == *f)
     }
 
@@ -219,8 +249,43 @@ impl SpaceMonger {
         (it.folder.clone(), it.index.unwrap_or(0))
     }
 
-    fn is_selected(&self, it: &Item) -> bool {
-        matches!(&self.selected, Some((f, i)) if it.index == Some(*i) && it.folder == *f)
+    /// The selection without duplicates or entries inside another selected folder (they go
+    /// with it), sorted by path, last first: removing one then never shifts the indices of
+    /// those still to come.
+    fn selection_roots(&self) -> Vec<Sel> {
+        let all: HashSet<Vec<usize>> = self.selected.iter().map(sel_path).collect();
+        let mut roots: Vec<Sel> = self
+            .selected
+            .iter()
+            .filter(|(f, _)| !(1..=f.len()).any(|k| all.contains(&f[..k])))
+            .cloned()
+            .collect();
+        roots.sort_by_key(|s| std::cmp::Reverse(sel_path(s)));
+        roots.dedup();
+        roots
+    }
+
+    /// Entries whose box lies fully inside the rectangle, skipping those inside a folder that
+    /// is itself picked.
+    fn marquee_hits(&self, a: (f32, f32), b: (f32, f32)) -> Vec<Sel> {
+        let (x0, x1) = (a.0.min(b.0), a.0.max(b.0));
+        let (y0, y1) = (a.1.min(b.1), a.1.max(b.1));
+        let mut picked: HashSet<Vec<usize>> = HashSet::new();
+        let mut out = Vec::new();
+        // Parents come before children in `items`.
+        for it in &self.items {
+            let Some(i) = it.index else { continue };
+            if it.is_free || it.x < x0 || it.y < y0 || it.x + it.w > x1 || it.y + it.h > y1 {
+                continue;
+            }
+            if (1..=it.folder.len()).any(|k| picked.contains(&it.folder[..k])) {
+                continue;
+            }
+            let s = (it.folder.clone(), i);
+            picked.insert(sel_path(&s));
+            out.push(s);
+        }
+        out
     }
 
     // -- commands ------------------------------------------------------------
@@ -240,7 +305,8 @@ impl SpaceMonger {
         self.zoom.clear();
         self.cam = None;
         self.fit = None;
-        self.selected = None;
+        self.selected.clear();
+        self.marquee = None;
         self.anim = None;
         self.invalidate();
 
@@ -464,7 +530,7 @@ impl SpaceMonger {
         if let Some(a) = self.anim.take() {
             self.cam = Some(a.end_cam);
             self.fit = a.end_fit;
-            self.selected = None;
+            self.selected.clear();
         }
     }
 
@@ -642,20 +708,38 @@ impl SpaceMonger {
                 self.invalidate();
             }
             Action::RunOpen => {
-                if let Some(p) = self.selected_path() {
+                let Some(t) = &self.tree else { return };
+                let mut roots = self.selection_roots();
+                roots.reverse();
+                for (f, i) in roots {
+                    let p = t.full_path(&f, Some(i));
                     if let Err(e) = open::that_detached(&p) {
                         self.error = Some(format!("Cannot open {}:\n{e}", p.display()));
+                        break;
                     }
                 }
             }
             Action::Delete => {
-                if let (Some(sel), Some(p)) = (self.selected.clone(), self.selected_path()) {
-                    self.confirm_delete = Some((sel, p));
+                let Some(t) = &self.tree else { return };
+                let list: Vec<(Sel, PathBuf)> = self
+                    .selection_roots()
+                    .into_iter()
+                    .map(|s| {
+                        let p = t.full_path(&s.0, Some(s.1));
+                        (s, p)
+                    })
+                    .collect();
+                if !list.is_empty() {
+                    self.confirm_delete = Some(list);
                 }
             }
             Action::Hide => {
-                if let (Some(sel), Some(t)) = (self.selected.take(), &mut self.tree) {
-                    t.hide(&sel.0, sel.1);
+                let roots = self.selection_roots();
+                if let (false, Some(t)) = (roots.is_empty(), &mut self.tree) {
+                    for (f, i) in &roots {
+                        t.hide(f, *i);
+                    }
+                    self.selected.clear();
                     self.invalidate();
                 }
             }
@@ -666,19 +750,27 @@ impl SpaceMonger {
                 }
             }
             Action::ToggleDark => self.dark = !self.dark,
+            Action::ClearSelection => self.selected.clear(),
         }
     }
 
-    fn delete_confirmed(&mut self, sel: Sel, path: PathBuf) {
-        match trash::delete(&path) {
-            Ok(()) => {
-                if let Some(t) = &mut self.tree {
-                    t.remove(&sel.0, sel.1);
+    /// `list` comes from `selection_roots`, so removing in order never shifts a later entry.
+    fn delete_confirmed(&mut self, list: Vec<(Sel, PathBuf)>) {
+        let mut errors = Vec::new();
+        for (sel, path) in list {
+            match trash::delete(&path) {
+                Ok(()) => {
+                    if let Some(t) = &mut self.tree {
+                        t.remove(&sel.0, sel.1);
+                    }
                 }
-                self.selected = None;
-                self.invalidate();
+                Err(e) => errors.push(format!("{}:\n{e}", path.display())),
             }
-            Err(e) => self.error = Some(format!("Failed to move {} to trash:\n{e}", path.display())),
+        }
+        self.selected.clear();
+        self.invalidate();
+        if !errors.is_empty() {
+            self.error = Some(format!("Failed to move to trash:\n\n{}", errors.join("\n\n")));
         }
     }
 
@@ -686,6 +778,16 @@ impl SpaceMonger {
 
     fn compute_title(&self) -> String {
         let Some(t) = &self.tree else { return APP_NAME.to_string() };
+        if self.selected.len() > 1 {
+            let roots = self.selection_roots();
+            let size: u64 = roots.iter().filter_map(|(f, i)| t.entry_at(f, *i)).map(|e| e.size).sum();
+            return format!(
+                "{} items selected  -  {}  -  {}  -  {APP_NAME}",
+                roots.len(),
+                format::size_string(size, t.total_space, true),
+                format::size_string(size, t.total_space, false),
+            );
+        }
         if let (Some(e), Some(p)) = (self.selected_entry(), self.selected_path()) {
             return format!(
                 "{}  -  {}  -  {}  -  {APP_NAME}",
@@ -713,7 +815,7 @@ impl SpaceMonger {
         let has_tree = self.tree.is_some();
         let zoomed = self.zoomed();
         let sel_folder = self.selected_entry().is_some_and(|e| e.child().is_some());
-        let has_sel = self.selected.is_some();
+        let has_sel = !self.selected.is_empty();
         let show_free = self.show_free;
         let hidden = self.tree.as_ref().map_or(0, |t| t.hidden_count);
         let dark = self.dark;
@@ -839,7 +941,7 @@ impl SpaceMonger {
         self.step_anim();
 
         // Wheel / pinch: zoom about the pointer, like an infinite canvas.
-        if resp.hovered() && self.anim.is_none() && self.tree.is_some() {
+        if resp.hovered() && self.anim.is_none() && self.marquee.is_none() && self.tree.is_some() {
             let (dy, pinch) = ui.input(|i| (i.smooth_scroll_delta.y, i.zoom_delta()));
             let k = pinch as f64 * (dy as f64 * WHEEL_ZOOM).exp();
             if (k - 1.0).abs() > 1e-6 {
@@ -849,8 +951,24 @@ impl SpaceMonger {
                 }
             }
         }
+        let mods = ui.input(|i| i.modifiers);
+        // Shift+drag (left button): rectangle select; with Ctrl too, add to the selection.
+        if self.tree.is_some() && resp.drag_started_by(egui::PointerButton::Primary) && mods.shift {
+            if let Some(p) = ui.input(|i| i.pointer.press_origin()) {
+                self.finish_anim();
+                let start = local(p);
+                let base = if mods.command { self.selected.clone() } else { Vec::new() };
+                self.marquee = Some(Marquee { start, end: start, base });
+            }
+        }
+        if self.marquee.is_some() && !resp.dragged_by(egui::PointerButton::Primary) && !resp.drag_stopped() {
+            self.marquee = None;
+        }
         // Drag (left or middle button) to pan.
-        if self.tree.is_some() && (resp.dragged_by(egui::PointerButton::Primary) || resp.dragged_by(egui::PointerButton::Middle)) {
+        if self.tree.is_some()
+            && self.marquee.is_none()
+            && (resp.dragged_by(egui::PointerButton::Primary) || resp.dragged_by(egui::PointerButton::Middle))
+        {
             self.finish_anim();
             let d = resp.drag_delta();
             self.pan(d.x as f64, d.y as f64);
@@ -869,6 +987,24 @@ impl SpaceMonger {
             self.zoom = layout::covering(&self.items, vw, vh);
             self.layout_key = Some(key);
             self.hovered = None;
+        }
+
+        // Live rectangle selection against this frame's layout.
+        if let Some(m) = &self.marquee {
+            let end = resp.interact_pointer_pos().map(local).unwrap_or(m.end);
+            let mut sel = m.base.clone();
+            for s in self.marquee_hits(m.start, end) {
+                if !sel.contains(&s) {
+                    sel.push(s);
+                }
+            }
+            self.selected = sel;
+            if let Some(m) = &mut self.marquee {
+                m.end = end;
+            }
+            if resp.drag_stopped() {
+                self.marquee = None;
+            }
         }
 
         let mut act = None;
@@ -891,10 +1027,19 @@ impl SpaceMonger {
 
         d.fill(pal.background, 0.0, 0.0, w, h);
         if let Some(tree) = &self.tree {
+            let sel: HashSet<&Sel> = self.selected.iter().collect();
             // Parents come before children, so a selected folder's children stay visible.
             for (i, it) in self.items.iter().enumerate() {
-                d.item(tree, it, self.is_selected(it), self.hovered == Some(i));
+                let is_sel = it.index.is_some_and(|k| sel.contains(&(it.folder.clone(), k)));
+                d.item(tree, it, is_sel, self.hovered == Some(i));
             }
+        }
+        if let Some(m) = &self.marquee {
+            let (x, y) = (m.start.0.min(m.end.0), m.start.1.min(m.end.1));
+            let r = d.rect(x, y, (m.start.0 - m.end.0).abs(), (m.start.1 - m.end.1).abs());
+            let c = pal.text;
+            painter.rect_filled(r, 0.0, c.gamma_multiply(0.12));
+            painter.rect_stroke(r, 0.0, Stroke::new(1.0, c), egui::StrokeKind::Inside);
         }
 
         let pointer_hit = || {
@@ -903,17 +1048,37 @@ impl SpaceMonger {
                 layout::hit_test(&self.items, x, y)
             })
         };
-        if resp.clicked() || resp.secondary_clicked() {
-            self.selected = pointer_hit().map(|i| self.item_sel(i));
+        if resp.clicked() {
+            let hit = pointer_hit().map(|i| self.item_sel(i));
+            match hit {
+                // Ctrl+click toggles, Shift+click adds.
+                Some(s) if mods.command => toggle(&mut self.selected, s),
+                Some(s) if mods.shift => {
+                    if !self.selected.contains(&s) {
+                        self.selected.push(s);
+                    }
+                }
+                None if mods.command || mods.shift => {}
+                // Plain click on the only selected item deselects it.
+                Some(s) if self.selected.len() == 1 && self.selected[0] == s => self.selected.clear(),
+                s => self.selected = s.into_iter().collect(),
+            }
         }
-        if resp.double_clicked() {
+        if resp.secondary_clicked() {
+            // Right-clicking inside the selection keeps it, so the menu acts on all of it.
+            let s = pointer_hit().map(|i| self.item_sel(i));
+            if !s.as_ref().is_some_and(|s| self.selected.contains(s)) {
+                self.selected = s.into_iter().collect();
+            }
+        }
+        if resp.double_clicked() && !mods.command {
             if let Some(i) = pointer_hit() {
-                self.selected = Some(self.item_sel(i));
+                self.selected = vec![self.item_sel(i)];
                 act = Some(if self.items[i].is_folder { Action::ZoomIn } else { Action::RunOpen });
             }
         }
 
-        let has_sel = self.selected.is_some();
+        let has_sel = !self.selected.is_empty();
         let sel_folder = self.selected_entry().is_some_and(|e| e.child().is_some());
         let zoomed = self.zoomed();
         let show_free = self.show_free;
@@ -1096,12 +1261,22 @@ impl SpaceMonger {
     }
 
     fn message_dialogs(&mut self, ctx: &egui::Context) {
-        if let Some((sel, path)) = self.confirm_delete.clone() {
+        if let Some(list) = &self.confirm_delete {
             let mut answer = None;
             egui::Modal::new(Id::new("confirm_delete")).show(ctx, |ui| {
                 ui.set_max_width(460.0);
                 ui.heading("Delete");
-                ui.label(format!("Move to trash?\n\n{}", path.display()));
+                if let [(_, path)] = list.as_slice() {
+                    ui.label(format!("Move to trash?\n\n{}", path.display()));
+                } else {
+                    ui.label(format!("Move {} items to trash?", list.len()));
+                    ui.add_space(4.0);
+                    egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
+                        for (_, path) in list.iter().rev() {
+                            ui.label(path.display().to_string());
+                        }
+                    });
+                }
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
                     if ui.button("Move to Trash").clicked() {
@@ -1113,9 +1288,9 @@ impl SpaceMonger {
                 });
             });
             if let Some(yes) = answer {
-                self.confirm_delete = None;
+                let list = self.confirm_delete.take().unwrap_or_default();
                 if yes {
-                    self.delete_confirmed(sel, path);
+                    self.delete_confirmed(list);
                 }
             }
         }
@@ -1173,6 +1348,8 @@ impl eframe::App for SpaceMonger {
                     Some(Action::Hide)
                 } else if i.key_pressed(egui::Key::F5) {
                     Some(Action::Reload)
+                } else if i.key_pressed(egui::Key::Escape) {
+                    Some(Action::ClearSelection)
                 } else {
                     None
                 }

@@ -19,6 +19,11 @@ cargo build --release
 
 - **Open** — pick a mounted volume, or type / browse to a folder.
 - Click to select, double-click a folder to zoom in so it exactly fills the view, double-click a file to open it.
+- Clicking the only selected item deselects it.
+- Multi-select: `Ctrl+click` adds or removes one item, `Shift+click` adds one; `Shift+drag` draws a rectangle and selects
+  everything fully inside it (`Ctrl+Shift+drag` adds to the selection). Items inside a selected
+  folder go with it. `Esc` clears the selection. Delete, Hide and Run or Open act on the whole
+  selection; right-clicking a selected item keeps the selection for the context menu.
 - The bar above the map shows the path from the scan root to the current folder, each folder in
   its treemap colour. Click any parent to zoom back to it.
 - Mouse wheel (or trackpad pinch): smooth zoom in/out around the pointer, like an infinite canvas.
@@ -34,7 +39,7 @@ cargo build --release
 - Right-click for the same commands as a context menu.
 - **Free Space** toggles the free-space block (off by default when scanning a folder).
 - Hovering shows the full name (when truncated) and a size/date tip.
-- Keys: Enter = zoom in, Backspace = zoom out, H = hide, Shift+H = unhide all, Delete = delete, F5 = rescan.
+- Keys: Enter = zoom in, Backspace = zoom out, H = hide, Shift+H = unhide all, Delete = delete, F5 = rescan, Esc = clear selection.
 - Dark mode toggle at the right of the toolbar. Dark mode and free-space state persist.
 
 ## Scope vs. the Java version
