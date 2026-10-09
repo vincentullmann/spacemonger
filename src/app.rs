@@ -5,7 +5,7 @@ use crate::format;
 use crate::layout::{self, Item, Params};
 use crate::scan::{self, Drive, ScanControl, Tree};
 use eframe::egui::{
-    self, Align2, Color32, FontId, Id, LayerId, Order, Painter, Pos2, Rect, Sense, Stroke, Vec2,
+    self, Align2, Color32, FontId, Id, Order, Painter, Pos2, Rect, Sense, Stroke, Vec2,
 };
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -14,7 +14,6 @@ use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
 
 const APP_NAME: &str = "SpaceMonger One";
-const NAMETIP_DELAY: Duration = Duration::from_millis(125);
 const INFOTIP_DELAY: Duration = Duration::from_millis(250);
 const ANIM_DURATION: f32 = 0.18; // seconds
 
@@ -494,11 +493,6 @@ impl SpaceMonger {
         if let (Some(hi), Some(tree), false) = (self.hovered, &self.tree, resp.context_menu_opened()) {
             let held = self.hover_since.elapsed();
             let it = &self.items[hi];
-            if held >= NAMETIP_DELAY {
-                d.name_tip(ui.ctx(), tree, it, self.is_selected(it));
-            } else {
-                ui.ctx().request_repaint_after(NAMETIP_DELAY - held);
-            }
             if held >= INFOTIP_DELAY {
                 if let Some(e) = it.index.and_then(|i| tree.entry_at(&it.folder, i)) {
                     if let Some(pp) = resp.hover_pos() {
@@ -824,6 +818,9 @@ impl Draw<'_> {
             }
         }
 
+        if !it.labeled {
+            return;
+        }
         let Some(entry) = it.index.and_then(|i| tree.entry_at(&it.folder, i)) else { return };
         let p = self.painter.with_clip_rect(self.rect(x, y, w, h).intersect(self.painter.clip_rect()));
         let fg = if sel { pal.background } else { pal.text };
@@ -861,39 +858,4 @@ impl Draw<'_> {
         self.text(&p, &entry.name, tx, ty, fg);
     }
 
-    /// Full name drawn over a box whose label doesn't fit (port of SetupNameTip).
-    fn name_tip(&self, ctx: &egui::Context, tree: &Tree, it: &Item, sel: bool) {
-        if it.is_folder {
-            return; // the info tooltip is enough for folders
-        }
-        let Some(entry) = it.index.and_then(|i| tree.entry_at(&it.folder, i)) else { return };
-        let (tw, th) = self.text_width(&entry.name);
-        let (x, y, w, h) = (it.x, it.y, it.w + 1, it.h + 1);
-        let fits_w = tw <= w - 2;
-        let fits_h = th <= h - 2;
-        if fits_w && fits_h {
-            return;
-        }
-        let tx = if !fits_w || it.is_folder { x + 3 } else { x + (w - tw) / 2 };
-        let mut ty = if !fits_h || it.is_folder { y + 2 } else { y + (h - th) / 2 };
-        if !it.is_folder && h >= 36 && w >= 48 {
-            ty -= 12;
-        }
-        let (bg, fg) = if sel { (self.pal.text, self.pal.background) } else { (self.pal.depth(it.depth), self.pal.text) };
-
-        let screen = ctx.content_rect();
-        let mut r = self.rect(tx - 2, ty - 1, tw + 4, th + 2);
-        // push on screen
-        if r.max.x > screen.max.x {
-            r = r.translate(Vec2::new(screen.max.x - r.max.x, 0.0));
-        }
-        if r.max.y > screen.max.y {
-            r = r.translate(Vec2::new(0.0, screen.max.y - r.max.y));
-        }
-        r = r.translate(Vec2::new((screen.min.x - r.min.x).max(0.0), (screen.min.y - r.min.y).max(0.0)));
-
-        let p = ctx.layer_painter(LayerId::new(Order::Tooltip, Id::new("nametip")));
-        p.rect_filled(r, 0.0, bg);
-        p.text(r.min + Vec2::new(2.0, 1.0), Align2::LEFT_TOP, &entry.name, self.font.clone(), fg);
-    }
 }

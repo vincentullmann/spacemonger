@@ -3,12 +3,17 @@
 //! Greedy binary split: entries (sorted largest first) are dealt into two
 //! lists, keeping their sums as even as possible, and the rectangle is split
 //! along its longer side in proportion. Recurse until a list holds one entry
-//! or the rectangle is too small to label.
+//! or the rectangle is a few pixels wide. Boxes smaller than the density's
+//! minimum label size are still real, hoverable items; they just get no label
+//! and their folder contents aren't drawn.
 
 use crate::scan::{Folder, Kind};
 use std::rc::Rc;
 
 /// Minimum (w, h) for a labelled box, by density (-3..=3).
+/// Below this (w or h, in points) entries are merged into one anonymous block.
+const MIN_BOX: i32 = 5;
+
 const MIN_SIZES: [(i32, i32); 7] = [(96, 64), (64, 48), (48, 32), (32, 24), (24, 16), (16, 12), (8, 6)];
 
 #[derive(Clone, Copy)]
@@ -34,6 +39,8 @@ pub struct Item {
     pub depth: i32,
     pub is_folder: bool,
     pub is_free: bool,
+    /// Big enough to carry a label (and, for folders, to show their contents).
+    pub labeled: bool,
     pub x: i32,
     pub y: i32,
     pub w: i32,
@@ -116,43 +123,45 @@ fn split(cx: &mut Ctx, folder: &Folder, path: &Rc<[usize]>, indices: &[usize], x
 
 fn place(cx: &mut Ctx, folder: &Folder, path: &Rc<[usize]>, list: &[usize], r: (i32, i32, i32, i32), depth: i32) {
     let (x, y, w, h) = r;
-    let big_enough = w > cx.hmin && h > cx.vmin;
-    if list.len() > 1 && big_enough {
+    let labeled = w > cx.hmin && h > cx.vmin;
+    let visible = w > MIN_BOX && h > MIN_BOX;
+    if list.len() > 1 && visible {
         split(cx, folder, path, list, x, y, w, h, depth);
-    } else if let Some(&i) = list.first() {
-        if big_enough {
-            let e = &folder.entries[i];
-            let is_free = matches!(e.kind, Kind::Free);
-            cx.out.push(Item {
-                folder: path.clone(),
-                index: Some(i),
-                depth: if is_free { -1 } else { depth },
-                is_folder: e.child().is_some(),
-                is_free,
-                x,
-                y,
-                w,
-                h,
-            });
-            if let Some(child) = e.child() {
-                let mut cp = path.to_vec();
-                cp.push(i);
-                layout_folder(cx, child, Rc::from(cp), x + 3, y + 12, w - 6, h - 15, depth + 1);
-            }
-        } else {
-            // Too small to label: draw an anonymous block.
-            cx.out.push(Item {
-                folder: path.clone(),
-                index: None,
-                depth,
-                is_folder: false,
-                is_free: false,
-                x,
-                y,
-                w,
-                h,
-            });
+    } else if list.len() == 1 && visible {
+        let i = list[0];
+        let e = &folder.entries[i];
+        let is_free = matches!(e.kind, Kind::Free);
+        cx.out.push(Item {
+            folder: path.clone(),
+            index: Some(i),
+            depth: if is_free { -1 } else { depth },
+            is_folder: e.child().is_some(),
+            is_free,
+            labeled,
+            x,
+            y,
+            w,
+            h,
+        });
+        if let (Some(child), true) = (e.child(), labeled) {
+            let mut cp = path.to_vec();
+            cp.push(i);
+            layout_folder(cx, child, Rc::from(cp), x + 3, y + 12, w - 6, h - 15, depth + 1);
         }
+    } else if !list.is_empty() {
+        // A few pixels across: merge into one anonymous block.
+        cx.out.push(Item {
+            folder: path.clone(),
+            index: None,
+            depth,
+            is_folder: false,
+            is_free: false,
+            labeled: false,
+            x,
+            y,
+            w,
+            h,
+        });
     }
 }
 
@@ -160,7 +169,7 @@ fn place(cx: &mut Ctx, folder: &Folder, path: &Rc<[usize]>, list: &[usize], r: (
 pub fn hit_test(items: &[Item], px: i32, py: i32) -> Option<usize> {
     let i = items
         .iter()
-        .position(|it| it.contains(px, py) && (!it.is_folder || it.on_frame(px, py)))?;
+        .position(|it| it.contains(px, py) && (!it.is_folder || !it.labeled || it.on_frame(px, py)))?;
     let it = &items[i];
     (it.index.is_some() && !it.is_free).then_some(i)
 }
@@ -194,5 +203,18 @@ mod tests {
         let a = items.iter().position(|i| i.index == Some(0)).unwrap();
         let it = &items[a];
         assert_eq!(hit_test(&items, it.x + it.w / 2, it.y + it.h / 2), Some(a));
+    }
+
+    #[test]
+    fn small_boxes_are_items_without_labels() {
+        let f = Folder {
+            entries: vec![file("big", 9000), file("s1", 300), file("s2", 200)],
+            total: 9500,
+        };
+        let items = build(&f, vec![], 400, 300, Params::default());
+        let s1 = items.iter().position(|i| i.index == Some(1)).expect("small file laid out");
+        assert!(!items[s1].labeled);
+        let it = &items[s1];
+        assert_eq!(hit_test(&items, it.x + it.w / 2, it.y + it.h / 2), Some(s1));
     }
 }
