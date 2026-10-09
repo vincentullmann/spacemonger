@@ -16,6 +16,8 @@ use std::time::{Duration, Instant};
 const APP_NAME: &str = "SpaceMonger One";
 const INFOTIP_DELAY: Duration = Duration::from_millis(250);
 const ANIM_DURATION: f32 = 0.18; // seconds
+/// Height of the path (breadcrumb) bar above the treemap.
+const BAR_H: i32 = 18;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Action {
@@ -390,6 +392,78 @@ impl SpaceMonger {
 
     // -- treemap -------------------------------------------------------------
 
+    /// Path bar: one treemap-style box per folder from the scan root down to the current view.
+    /// Returns the zoom path to go to when a parent is clicked.
+    fn path_bar(&mut self, ui: &mut egui::Ui) -> Option<Vec<usize>> {
+        let tree = self.tree.as_ref()?;
+        let pal = self.palette();
+
+        // (label, zoom path, colour). Folders keep the colour they have in the treemap.
+        let mut segs = vec![(tree.root_path.display().to_string(), Vec::new(), pal.background)];
+        let mut f = &tree.root;
+        for (k, &i) in self.zoom.iter().enumerate() {
+            let Some(e) = f.entries.get(i) else { break };
+            segs.push((e.name.clone(), self.zoom[..=k].to_vec(), pal.depth(k as i32)));
+            match e.child() {
+                Some(c) => f = c,
+                None => break,
+            }
+        }
+
+        let (resp, painter) = ui.allocate_painter(Vec2::new(ui.available_width(), BAR_H as f32), Sense::click());
+        let ppp = ui.ctx().pixels_per_point();
+        let origin = Pos2::new((resp.rect.min.x * ppp).round() / ppp, (resp.rect.min.y * ppp).round() / ppp);
+        let d = Draw { painter: &painter, origin, ppp, pal, font: self.font.clone() };
+        let w = resp.rect.width() as i32;
+        d.fill(pal.background, 0, 0, w, BAR_H);
+
+        let pad = 12;
+        let widths: Vec<i32> = segs.iter().map(|(l, _, _)| d.text_width(l).0 + pad).collect();
+        let ellipsis_w = d.text_width("…").0 + pad;
+        // Too long? Drop parents from the left (behind a "…" box), always keeping the current folder.
+        let mut first = 0;
+        while first + 1 < segs.len() {
+            let used: i32 = widths[first..].iter().sum::<i32>() + if first > 0 { ellipsis_w } else { 0 };
+            if used <= w {
+                break;
+            }
+            first += 1;
+        }
+
+        // Lay out boxes: (x, width, segment index or None for the ellipsis).
+        let mut boxes = Vec::new();
+        let mut x = 0;
+        if first > 0 {
+            boxes.push((x, ellipsis_w, None));
+            x += ellipsis_w;
+        }
+        for (i, &sw) in widths.iter().enumerate().skip(first) {
+            // The current folder takes the rest of the bar, like a treemap row.
+            let sw = if i + 1 == segs.len() { (w - x).max(sw) } else { sw };
+            boxes.push((x, sw, Some(i)));
+            x += sw;
+        }
+
+        let pointer = resp.hover_pos().map(|p| (p.x - origin.x) as i32);
+        let last = segs.len() - 1;
+        let mut clicked = None;
+        for &(bx, bw, seg) in &boxes {
+            let hovered = seg.is_some_and(|i| i < last) && pointer.is_some_and(|px| px >= bx && px < bx + bw);
+            let (label, color) = match seg {
+                Some(i) => (segs[i].0.as_str(), segs[i].2),
+                None => ("…", pal.background),
+            };
+            d.cell(bx, 0, bw, BAR_H, color, hovered, label);
+            if hovered && resp.clicked() {
+                clicked = seg.map(|i| segs[i].1.clone());
+            }
+        }
+        if boxes.iter().any(|&(bx, bw, seg)| seg.is_some_and(|i| i < last) && pointer.is_some_and(|px| px >= bx && px < bx + bw)) {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
+        clicked
+    }
+
     fn treemap(&mut self, ui: &mut egui::Ui) -> Option<Action> {
         let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click());
         let ppp = ui.ctx().pixels_per_point();
@@ -721,7 +795,13 @@ impl eframe::App for SpaceMonger {
         let pal = self.palette();
         let tm = egui::CentralPanel::no_frame()
             .frame(egui::Frame::NONE.fill(pal.background))
-            .show(ui, |ui| self.treemap(ui))
+            .show(ui, |ui| {
+                ui.spacing_mut().item_spacing = Vec2::ZERO;
+                if let Some(target) = self.path_bar(ui) {
+                    self.zoom_out_to(target);
+                }
+                self.treemap(ui)
+            })
             .inner;
         act = act.or(tm);
 
@@ -809,6 +889,23 @@ impl Draw<'_> {
     fn text(&self, p: &Painter, s: &str, x: i32, y: i32, c: Color32) {
         let pos = self.snap(self.origin + Vec2::new(x as f32, y as f32));
         p.text(pos, Align2::LEFT_TOP, s, self.font.clone(), c);
+    }
+
+    /// A path-bar box in the treemap's style: fill, thin border (2px black on hover), label on the left.
+    #[allow(clippy::too_many_arguments)]
+    fn cell(&self, x: i32, y: i32, w: i32, h: i32, color: Color32, hover: bool, label: &str) {
+        let fill = if hover { color.lerp_to_gamma(Color32::WHITE, 0.2) } else { color };
+        self.fill(fill, x + 1, y + 1, w - 1, h - 1);
+        let (bc, bw) = if hover { (Color32::BLACK, 2.0) } else { (self.pal.border, 1.0) };
+        self.painter.rect_stroke(
+            self.rect(x + 1, y + 1, w - 1, h - 1),
+            0.0,
+            Stroke::new(bw / self.ppp, bc),
+            egui::StrokeKind::Inside,
+        );
+        let (_, th) = self.text_width(label);
+        let p = self.painter.with_clip_rect(self.rect(x, y, w, h).intersect(self.painter.clip_rect()));
+        self.text(&p, label, x + 6, y + 1 + (h - 1 - th) / 2, self.pal.text);
     }
 
     /// Flat box: a single fill with a 1px gap to its neighbours, plus its label.

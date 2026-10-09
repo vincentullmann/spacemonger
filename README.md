@@ -19,6 +19,8 @@ cargo build --release
 
 - **Open** — pick a mounted volume, or type / browse to a folder.
 - Click to select, double-click a folder to zoom in, double-click a file to open it.
+- The bar above the map shows the path from the scan root to the current folder, each folder in
+  its treemap colour. Click any parent to zoom back to it.
 - Mouse wheel: scroll up to zoom one level towards the pointer, down to zoom out.
 - **Zoom In / Out / Full**, **Run or Open**, **Delete** (moves to trash, after confirmation).
 - **Hide** (or `H`) removes the selected item from the view only — nothing on disk changes.
