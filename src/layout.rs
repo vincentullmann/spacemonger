@@ -89,7 +89,7 @@ fn split(cx: &mut Ctx, folder: &Folder, path: &Rc<[usize]>, indices: &[usize], x
     let (mut s1, mut s2) = (0u128, 0u128);
     for &i in indices {
         let e = &folder.entries[i];
-        let size = if matches!(e.kind, Kind::Free) && !cx.p.show_free { 0 } else { e.size };
+        let size = if e.hidden || (matches!(e.kind, Kind::Free) && !cx.p.show_free) { 0 } else { e.size };
         if size == 0 {
             continue;
         }
@@ -182,7 +182,7 @@ mod tests {
     use crate::scan::Entry;
 
     fn file(name: &str, size: u64) -> Entry {
-        Entry { name: name.into(), size, actual: size, mtime: 0, kind: Kind::File }
+        Entry { name: name.into(), size, actual: size, mtime: 0, kind: Kind::File, hidden: false }
     }
 
     #[test]

@@ -28,6 +28,7 @@ enum Action {
     RunOpen,
     Delete,
     Hide,
+    UnhideAll,
     ToggleDark,
 }
 
@@ -295,7 +296,13 @@ impl SpaceMonger {
             }
             Action::Hide => {
                 if let (Some(sel), Some(t)) = (self.selected.take(), &mut self.tree) {
-                    t.remove(&sel.0, sel.1);
+                    t.hide(&sel.0, sel.1);
+                    self.invalidate();
+                }
+            }
+            Action::UnhideAll => {
+                if let Some(t) = &mut self.tree {
+                    t.unhide_all();
                     self.invalidate();
                 }
             }
@@ -349,6 +356,7 @@ impl SpaceMonger {
         let sel_folder = self.selected_entry().is_some_and(|e| e.child().is_some());
         let has_sel = self.selected.is_some();
         let show_free = self.show_free;
+        let hidden = self.tree.as_ref().map_or(0, |t| t.hidden_count);
         let dark = self.dark;
         ui.horizontal(|ui| {
             let mut act = None;
@@ -370,6 +378,8 @@ impl SpaceMonger {
             btn(ui, has_sel, b("▶ Run or Open"), Action::RunOpen);
             btn(ui, has_sel, b("🗑 Delete"), Action::Delete);
             btn(ui, has_sel, b("Hide"), Action::Hide);
+            let unhide = if hidden > 0 { format!("Unhide All ({hidden})") } else { "Unhide All".to_string() };
+            btn(ui, hidden > 0, egui::Button::new(unhide), Action::UnhideAll);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 btn(ui, true, b(if dark { "☀" } else { "🌙" }), Action::ToggleDark);
             });
@@ -468,6 +478,7 @@ impl SpaceMonger {
         let sel_folder = self.selected_entry().is_some_and(|e| e.child().is_some());
         let zoomed = !self.zoom.is_empty();
         let show_free = self.show_free;
+        let hidden = self.tree.as_ref().map_or(0, |t| t.hidden_count);
         resp.context_menu(|ui| {
             let mut item = |ui: &mut egui::Ui, enabled: bool, label: &str, a: Action| {
                 if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
@@ -482,6 +493,7 @@ impl SpaceMonger {
             item(ui, has_sel, "Run / Open", Action::RunOpen);
             item(ui, has_sel, "Delete", Action::Delete);
             item(ui, has_sel, "Hide (H)", Action::Hide);
+            item(ui, hidden > 0, "Unhide All (Shift+H)", Action::UnhideAll);
             ui.separator();
             item(ui, true, "Open Drive...", Action::Open);
             item(ui, true, "Rescan Drive", Action::Reload);
@@ -721,6 +733,8 @@ impl eframe::App for SpaceMonger {
                     Some(Action::ZoomIn)
                 } else if i.key_pressed(egui::Key::Delete) {
                     Some(Action::Delete)
+                } else if i.key_pressed(egui::Key::H) && i.modifiers.shift {
+                    Some(Action::UnhideAll)
                 } else if i.key_pressed(egui::Key::H) {
                     Some(Action::Hide)
                 } else if i.key_pressed(egui::Key::F5) {

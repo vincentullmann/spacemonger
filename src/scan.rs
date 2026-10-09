@@ -24,6 +24,8 @@ pub struct Entry {
     /// Modification time, seconds since the Unix epoch.
     pub mtime: i64,
     pub kind: Kind,
+    /// Hidden from the view by the user (its size is already subtracted from ancestors).
+    pub hidden: bool,
 }
 
 impl Entry {
@@ -67,6 +69,8 @@ pub struct Tree {
     pub free_space: u64,
     pub num_files: u64,
     pub num_folders: u64,
+    /// Number of entries currently hidden from the view.
+    pub hidden_count: usize,
 }
 
 impl Tree {
@@ -100,6 +104,70 @@ impl Tree {
             }
         }
         p
+    }
+
+    /// Hide an entry from the view: ancestors shrink by its size; `unhide_all` restores it.
+    pub fn hide(&mut self, folder: &[usize], index: usize) {
+        let Some(size) = self.entry_at(folder, index).filter(|e| !e.hidden).map(|e| e.size) else {
+            return;
+        };
+        self.shrink_ancestors(folder, size);
+        if let Some(f) = self.folder_at_mut(folder) {
+            f.entries[index].hidden = true;
+        }
+        self.hidden_count += 1;
+    }
+
+    /// Bring back every hidden entry and restore ancestor sizes.
+    pub fn unhide_all(&mut self) {
+        fn walk(f: &mut Folder) -> u64 {
+            let mut restored = 0;
+            for e in &mut f.entries {
+                let inner = match &mut e.kind {
+                    Kind::Dir(c) => walk(c),
+                    _ => 0,
+                };
+                e.size += inner;
+                e.actual += inner;
+                if e.hidden {
+                    e.hidden = false;
+                    restored += e.size;
+                } else {
+                    restored += inner;
+                }
+            }
+            f.total += restored;
+            restored
+        }
+        walk(&mut self.root);
+        self.hidden_count = 0;
+    }
+
+    fn folder_at_mut(&mut self, path: &[usize]) -> Option<&mut Folder> {
+        let mut f = &mut self.root;
+        for &i in path {
+            f = match &mut f.entries.get_mut(i)?.kind {
+                Kind::Dir(c) => c,
+                _ => return None,
+            };
+        }
+        Some(f)
+    }
+
+    /// Subtract `size` from the folder at `folder` and all its ancestors.
+    fn shrink_ancestors(&mut self, folder: &[usize], size: u64) {
+        let mut f = &mut self.root;
+        for &i in folder {
+            f.total = f.total.saturating_sub(size);
+            let e = &mut f.entries[i];
+            e.size = e.size.saturating_sub(size);
+            e.actual = e.actual.saturating_sub(size);
+            f = match &mut e.kind {
+                Kind::Dir(c) => c,
+                _ => return,
+            };
+        }
+        f.total = f.total.saturating_sub(size);
     }
 
     /// Remove an entry after it has been deleted on disk, updating ancestor sizes.
@@ -317,6 +385,7 @@ fn scan_dir(path: &Path, dev: u64, ctl: &ScanControl) -> Folder {
                 actual: m.len,
                 mtime: m.mtime,
                 kind: Kind::File,
+                hidden: false,
             });
             ctl.files.fetch_add(1, Ordering::Relaxed);
             ctl.bytes.fetch_add(m.alloc, Ordering::Relaxed);
@@ -339,6 +408,7 @@ fn scan_dir(path: &Path, dev: u64, ctl: &ScanControl) -> Folder {
             actual: size,
             mtime,
             kind: Kind::Dir(Box::new(sub)),
+            hidden: false,
         });
     }
 
@@ -363,6 +433,7 @@ pub fn scan(drive: &Drive, ctl: &ScanControl) -> Option<Tree> {
         actual: drive.free,
         mtime: 0,
         kind: Kind::Free,
+        hidden: false,
     });
     root.finalize();
     Some(Tree {
@@ -372,6 +443,7 @@ pub fn scan(drive: &Drive, ctl: &ScanControl) -> Option<Tree> {
         free_space: drive.free,
         num_files: ctl.files.load(Ordering::Relaxed),
         num_folders: ctl.folders.load(Ordering::Relaxed),
+        hidden_count: 0,
     })
 }
 
@@ -412,5 +484,40 @@ mod tests {
         assert_eq!(tree.folder_at(&[ai]).unwrap().entries.len(), 1);
 
         fs::remove_dir_all(&dir).unwrap();
+    }
+
+    fn file(name: &str, size: u64) -> Entry {
+        Entry { name: name.into(), size, actual: size, mtime: 0, kind: Kind::File, hidden: false }
+    }
+
+    #[test]
+    fn hide_and_unhide_restore_sizes() {
+        let sub = Folder { entries: vec![file("f", 10), file("g", 5)], total: 15 };
+        let root = Folder {
+            entries: vec![
+                Entry { name: "d".into(), size: 15, actual: 15, mtime: 0, kind: Kind::Dir(Box::new(sub)), hidden: false },
+                file("x", 7),
+            ],
+            total: 22,
+        };
+        let mut t = Tree {
+            root,
+            root_path: PathBuf::from("/"),
+            total_space: 0,
+            free_space: 0,
+            num_files: 3,
+            num_folders: 1,
+            hidden_count: 0,
+        };
+        t.hide(&[0], 0); // d/f
+        assert_eq!((t.root.total, t.root.entries[0].size), (12, 5));
+        t.hide(&[], 0); // d
+        assert_eq!(t.root.total, 7);
+        assert_eq!(t.hidden_count, 2);
+        t.unhide_all();
+        assert_eq!((t.root.total, t.root.entries[0].size), (22, 15));
+        assert_eq!(t.folder_at(&[0]).unwrap().total, 15);
+        assert_eq!(t.hidden_count, 0);
+        assert!(!t.root.entries[0].hidden);
     }
 }

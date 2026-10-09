@@ -21,11 +21,12 @@ cargo build --release
 - Click to select, double-click a folder to zoom in, double-click a file to open it.
 - Mouse wheel: scroll up to zoom one level towards the pointer, down to zoom out.
 - **Zoom In / Out / Full**, **Run or Open**, **Delete** (moves to trash, after confirmation).
-- **Hide** (or `H`) removes the selected item from the view only — nothing on disk changes; Reload brings it back.
+- **Hide** (or `H`) removes the selected item from the view only — nothing on disk changes.
+  **Unhide All** (or `Shift+H`) brings every hidden item back; the button shows how many are hidden.
 - Right-click for the same commands as a context menu.
 - **Free Space** toggles the free-space block (off by default when scanning a folder).
 - Hovering shows the full name (when truncated) and a size/date tip.
-- Keys: Enter = zoom in, Backspace = zoom out, H = hide, Delete = delete, F5 = rescan.
+- Keys: Enter = zoom in, Backspace = zoom out, H = hide, Shift+H = unhide all, Delete = delete, F5 = rescan.
 - Dark mode toggle at the right of the toolbar. Dark mode and free-space state persist.
 
 ## Scope vs. the Java version
