@@ -42,6 +42,9 @@ cargo build --release
 - Keys: Enter = zoom in, Backspace = zoom out, H = hide, Shift+H = unhide all, Delete = delete, F5 = rescan, Esc = clear selection,
   F = frame selection (a single folder fills the view; several items are framed by their bounding
   box; nothing selected = Zoom Full; the selection is kept).
+- Arrow keys move the selection (every selected item at once): Up = parent folder, Down = first
+  child, Left / Right = previous / next sibling, wrapping around — all in layout order (the order
+  boxes are placed, starting top-left with the largest).
 - Dark mode toggle at the right of the toolbar. Dark mode and free-space state persist.
 
 ## Scope vs. the Java version

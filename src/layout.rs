@@ -320,6 +320,26 @@ fn place(cx: &mut Ctx, folder: &Folder, path: &Rc<[usize]>, list: &[usize], r: R
     }
 }
 
+/// Entries of `folder` in the order the layout places them (the first is the top-left box),
+/// skipping those not laid out (hidden, empty). Doesn't depend on the folder's box: only the
+/// split directions do, not which entries go first.
+pub fn order(folder: &Folder, p: Params) -> Vec<usize> {
+    fn walk(folder: &Folder, list: &[usize], p: Params, out: &mut Vec<usize>) {
+        let Some([(l1, _), (l2, _)]) = halves(folder, list, R::new(0.0, 0.0, 1.0, 1.0), p) else { return };
+        for l in [l1, l2] {
+            match l.len() {
+                0 => {}
+                1 => out.push(l[0]),
+                _ => walk(folder, &l, p, out),
+            }
+        }
+    }
+    let mut out = Vec::new();
+    let all: Vec<usize> = (0..folder.entries.len()).collect();
+    walk(folder, &all, p, &mut out);
+    out
+}
+
 /// Unclipped box of the entry at `path` (from the scan root) with the root's box at `cam`,
 /// as drawn with overrides `ovs`. Pure geometry: ignores size thresholds, so it also works for
 /// boxes too small to draw. An empty path gives `cam` itself.
@@ -406,6 +426,18 @@ mod tests {
 
     fn full(w: f64, h: f64) -> R {
         R::new(0.0, 0.0, w, h)
+    }
+
+    #[test]
+    fn order_matches_layout() {
+        let mut entries: Vec<Entry> = (0..9).map(|i| file(&format!("f{i}"), 900 - i * 90)).collect();
+        entries[4].hidden = true;
+        let f = Folder { entries, total: 0 };
+        let p = Params::default();
+        let items = build(&f, full(2001.0, 1201.0), 2001.0, 1201.0, p, &[]);
+        let drawn: Vec<usize> = items.iter().filter_map(|it| it.index).collect();
+        assert_eq!(order(&f, p), drawn);
+        assert!(!order(&f, p).contains(&4));
     }
 
     #[test]

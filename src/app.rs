@@ -45,6 +45,16 @@ enum Action {
     ToggleDark,
     ClearSelection,
     Frame,
+    Nav(Nav),
+}
+
+/// Arrow-key selection moves.
+#[derive(Clone, Copy, PartialEq)]
+enum Nav {
+    Parent,
+    FirstChild,
+    Prev,
+    Next,
 }
 
 struct ScanJob {
@@ -268,6 +278,44 @@ impl SpaceMonger {
         roots.sort_by_key(|s| std::cmp::Reverse(sel_path(s)));
         roots.dedup();
         roots
+    }
+
+    /// The folder's entries in layout order (as `layout::order`), without free space.
+    fn layout_order(&self, folder: &[usize]) -> Vec<usize> {
+        let Some(f) = self.tree.as_ref().and_then(|t| t.folder_at(folder)) else { return Vec::new() };
+        layout::order(f, self.params())
+            .into_iter()
+            .filter(|&i| !matches!(f.entries[i].kind, scan::Kind::Free))
+            .collect()
+    }
+
+    /// Arrow keys: move every selected entry to its parent folder, its first child, or its
+    /// previous / next sibling, in layout order (wrapping). Entries with nowhere to go stay.
+    fn navigate(&mut self, nav: Nav) {
+        let mut out: Vec<Sel> = Vec::new();
+        for s in &self.selected {
+            let (f, i) = s;
+            let moved = match nav {
+                Nav::Parent => f.split_last().map(|(&last, up)| (Rc::from(up), last)),
+                Nav::FirstChild => {
+                    let p: Rc<[usize]> = sel_path(s).into();
+                    self.layout_order(&p).first().map(|&c| (p, c))
+                }
+                Nav::Prev | Nav::Next => {
+                    let sib = self.layout_order(f);
+                    sib.iter().position(|x| x == i).map(|k| {
+                        let n = sib.len();
+                        let k = if nav == Nav::Next { (k + 1) % n } else { (k + n - 1) % n };
+                        (f.clone(), sib[k])
+                    })
+                }
+            };
+            let m = moved.unwrap_or_else(|| s.clone());
+            if !out.contains(&m) {
+                out.push(m);
+            }
+        }
+        self.selected = out;
     }
 
     /// Entries whose box lies fully inside the rectangle, skipping those inside a folder that
@@ -827,6 +875,7 @@ impl SpaceMonger {
             Action::ToggleDark => self.dark = !self.dark,
             Action::ClearSelection => self.selected.clear(),
             Action::Frame => self.frame_selection(),
+            Action::Nav(n) => self.navigate(n),
         }
     }
 
@@ -1426,6 +1475,14 @@ impl eframe::App for SpaceMonger {
                     Some(Action::Reload)
                 } else if i.key_pressed(egui::Key::F) && !i.modifiers.any() {
                     Some(Action::Frame)
+                } else if i.key_pressed(egui::Key::ArrowUp) {
+                    Some(Action::Nav(Nav::Parent))
+                } else if i.key_pressed(egui::Key::ArrowDown) {
+                    Some(Action::Nav(Nav::FirstChild))
+                } else if i.key_pressed(egui::Key::ArrowLeft) {
+                    Some(Action::Nav(Nav::Prev))
+                } else if i.key_pressed(egui::Key::ArrowRight) {
+                    Some(Action::Nav(Nav::Next))
                 } else if i.key_pressed(egui::Key::Escape) {
                     Some(Action::ClearSelection)
                 } else {
