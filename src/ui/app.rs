@@ -6,7 +6,8 @@ use crate::utils::format;
 use crate::utils::math::{ease_out_cubic, geo_lerp, lerp};
 use crate::utils::text::elide_start;
 use crate::layout::{self, Item, Ov, Params, R};
-use crate::scan::{self, Drive, ScanControl, Tree};
+use crate::core::fs::{self as scan, Drive, ScanControl};
+use crate::core::model::{self, Tree};
 use eframe::egui::{
     self, Align2, Color32, FontId, Id, Order, Painter, Pos2, Rect, Sense, Stroke, Vec2,
 };
@@ -232,7 +233,7 @@ impl SpaceMonger {
 
     // -- selection helpers ---------------------------------------------------
 
-    fn selected_entry(&self) -> Option<&scan::Entry> {
+    fn selected_entry(&self) -> Option<&model::Entry> {
         let (f, i) = self.selected.last()?;
         self.tree.as_ref()?.entry_at(f, *i)
     }
@@ -277,7 +278,7 @@ impl SpaceMonger {
         let Some(area) = layout::content_of(&t.root, cam, folder, p, &self.ovs_at(cam)) else { return Vec::new() };
         layout::child_boxes(f, area, p)
             .into_iter()
-            .filter(|&(i, _)| !matches!(f.entries[i].kind, scan::Kind::Free))
+            .filter(|&(i, _)| !matches!(f.entries[i].kind, model::Kind::Free))
             .collect()
     }
 

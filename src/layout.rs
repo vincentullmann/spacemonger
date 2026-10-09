@@ -12,7 +12,7 @@
 //! An `Ov` reshapes one folder's box (used to make a zoomed-in folder fill the window);
 //! that folder is drawn after everything else so it sits on top of its neighbours.
 
-use crate::scan::{Entry, Folder, Kind};
+use crate::core::model::{Entry, Folder, Kind};
 use std::rc::Rc;
 
 /// Below this (w or h, in points) entries are merged into one anonymous block.
@@ -454,7 +454,6 @@ pub fn hit_test(items: &[Item], px: f32, py: f32) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scan::Entry;
 
     fn file(name: &str, size: u64) -> Entry {
         Entry { name: name.into(), size, actual: size, mtime: 0, kind: Kind::File, hidden: false }
