@@ -39,7 +39,9 @@ cargo build --release
 - Right-click for the same commands as a context menu.
 - **Free Space** toggles the free-space block (off by default when scanning a folder).
 - Hovering shows the full name (when truncated) and a size/date tip.
-- Keys: Enter = zoom in, Backspace = zoom out, H = hide, Shift+H = unhide all, Delete = delete, F5 = rescan, Esc = clear selection.
+- Keys: Enter = zoom in, Backspace = zoom out, H = hide, Shift+H = unhide all, Delete = delete, F5 = rescan, Esc = clear selection,
+  F = frame selection (a single folder fills the view; several items are framed by their bounding
+  box; nothing selected = Zoom Full; the selection is kept).
 - Dark mode toggle at the right of the toolbar. Dark mode and free-space state persist.
 
 ## Scope vs. the Java version

@@ -27,6 +27,8 @@ const RESIZE_SETTLE: Duration = Duration::from_millis(400);
 const ANCHOR_MIN_SHARE: f64 = 0.25;
 /// Height of the path (breadcrumb) bar above the treemap.
 const BAR_H: i32 = 18;
+/// Framing the selection (F): share of the view its bounding box may take up.
+const FRAME_FILL: f64 = 0.9;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Action {
@@ -42,6 +44,7 @@ enum Action {
     UnhideAll,
     ToggleDark,
     ClearSelection,
+    Frame,
 }
 
 struct ScanJob {
@@ -99,6 +102,8 @@ struct Anim {
     old: Option<Ov>,
     end_cam: R,
     end_fit: Option<Fit>,
+    /// Keep the selection when the move ends (framing), rather than clearing it (zooming in).
+    keep_sel: bool,
 }
 
 /// What to hold steady while the window is resized.
@@ -415,6 +420,82 @@ impl SpaceMonger {
         c
     }
 
+    /// Keep the root covering the view (ignoring any fitted folder).
+    fn cover_root(&self, mut c: R) -> R {
+        let (vw, vh) = self.view;
+        if c.w < vw || c.h < vh {
+            return self.full_view();
+        }
+        c.x = c.x.min(0.0).max(vw - c.w);
+        c.y = c.y.min(0.0).max(vh - c.h);
+        c
+    }
+
+    /// Even-zoom camera that centres the bounding box of the entries at `paths` (natural boxes)
+    /// and fits it in the view with a margin, as far as the root allows.
+    fn solve_frame(&self, paths: &[Vec<usize>]) -> Option<R> {
+        let (vw, vh) = self.view;
+        let bbox = |cam: R| {
+            let mut bb: Option<(f64, f64, f64, f64)> = None;
+            for r in paths.iter().filter_map(|p| self.locate(cam, p, &[])) {
+                let (x0, y0, x1, y1) = bb.unwrap_or((r.x, r.y, r.x + r.w, r.y + r.h));
+                bb = Some((x0.min(r.x), y0.min(r.y), x1.max(r.x + r.w), y1.max(r.y + r.h)));
+            }
+            bb.map(|(x0, y0, x1, y1)| R::new(x0, y0, x1 - x0, y1 - y0)).filter(|b| b.w > 1e-9 && b.h > 1e-9)
+        };
+        // Folder frames don't scale with the camera, so converge on it.
+        let mut cam = self.cam?;
+        for _ in 0..40 {
+            let b = bbox(cam)?;
+            let k = (FRAME_FILL * vw / b.w).min(FRAME_FILL * vh / b.h).min(MAX_ZOOM * vw / cam.w);
+            let bc = b.center();
+            cam = Self::scaled(cam, bc, k);
+            cam.x += vw / 2.0 - bc.0;
+            cam.y += vh / 2.0 - bc.1;
+            if (k - 1.0).abs() < 1e-9 && (vw / 2.0 - bc.0).abs() < 1e-6 && (vh / 2.0 - bc.1).abs() < 1e-6 {
+                break;
+            }
+        }
+        Some(self.cover_root(cam))
+    }
+
+    /// Frame the selection (F): a single folder fills the view as with Zoom In; anything else
+    /// is framed by its bounding box. Nothing selected frames the whole map. The selection stays.
+    fn frame_selection(&mut self) {
+        let roots = self.selection_roots();
+        let folder = |s: &Sel| self.tree.as_ref().and_then(|t| t.entry_at(&s.0, s.1)).is_some_and(|e| e.child().is_some());
+        match roots.as_slice() {
+            [] => self.zoom_to(&[]),
+            [s] if folder(s) => self.zoom_to(&sel_path(s)),
+            _ => {
+                self.finish_anim();
+                let paths: Vec<Vec<usize>> = roots.iter().map(sel_path).collect();
+                let (Some(cam0), Some(end_cam)) = (self.cam, self.solve_frame(&paths)) else { return };
+                let old = self.ovs_at(cam0).into_iter().next();
+                if end_cam == cam0 && old.is_none() {
+                    self.fit = None;
+                    return;
+                }
+                self.anim = Some(Anim {
+                    start: Instant::now(),
+                    target: Vec::new(),
+                    from_cam: cam0,
+                    n0: cam0.center(),
+                    n1: end_cam.center(),
+                    ov0: Ov::between(Vec::new(), cam0, cam0),
+                    ov1: Ov::between(Vec::new(), end_cam, end_cam),
+                    old,
+                    end_cam,
+                    end_fit: None,
+                    keep_sel: true,
+                });
+            }
+        }
+        if let Some(a) = &mut self.anim {
+            a.keep_sel = true;
+        }
+    }
+
     /// Even-zoom camera at which the folder's natural box has the window's area and sits in
     /// the middle (as far as the root allows), plus the reshape that makes it fill the window.
     fn solve_fit(&self, path: &[usize]) -> Option<(R, Fit)> {
@@ -435,16 +516,7 @@ impl SpaceMonger {
             }
         }
         // Root coverage only (the fit itself isn't active yet).
-        let cam = {
-            let (vw, vh) = self.view;
-            let mut c = cam;
-            if c.w < vw || c.h < vh {
-                c = self.full_view();
-            }
-            c.x = c.x.min(0.0).max(vw - c.w);
-            c.y = c.y.min(0.0).max(vh - c.h);
-            c
-        };
+        let cam = self.cover_root(cam);
         let n = self.locate(cam, path, &[])?;
         let ov = Ov::between(path.to_vec(), n, t);
         Some((cam, Fit { ov, scale: self.scale_of(cam) }))
@@ -483,6 +555,7 @@ impl SpaceMonger {
             old,
             end_cam,
             end_fit,
+            keep_sel: false,
         });
     }
 
@@ -530,7 +603,9 @@ impl SpaceMonger {
         if let Some(a) = self.anim.take() {
             self.cam = Some(a.end_cam);
             self.fit = a.end_fit;
-            self.selected.clear();
+            if !a.keep_sel {
+                self.selected.clear();
+            }
         }
     }
 
@@ -751,6 +826,7 @@ impl SpaceMonger {
             }
             Action::ToggleDark => self.dark = !self.dark,
             Action::ClearSelection => self.selected.clear(),
+            Action::Frame => self.frame_selection(),
         }
     }
 
@@ -1348,6 +1424,8 @@ impl eframe::App for SpaceMonger {
                     Some(Action::Hide)
                 } else if i.key_pressed(egui::Key::F5) {
                     Some(Action::Reload)
+                } else if i.key_pressed(egui::Key::F) && !i.modifiers.any() {
+                    Some(Action::Frame)
                 } else if i.key_pressed(egui::Key::Escape) {
                     Some(Action::ClearSelection)
                 } else {
