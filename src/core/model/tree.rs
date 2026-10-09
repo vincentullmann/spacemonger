@@ -1,6 +1,6 @@
 //! A scanned tree with lookup by index path, hide / unhide and removal.
 
-use super::{Entry, Folder, Kind};
+use super::{Entry, EntryRef, Folder, Kind};
 use std::path::PathBuf;
 
 pub struct Tree {
@@ -21,6 +21,15 @@ impl Tree {
 
     pub fn entry_at(&self, folder: &[usize], index: usize) -> Option<&Entry> {
         self.folder_at(folder)?.entries.get(index)
+    }
+
+    pub fn entry(&self, r: &EntryRef) -> Option<&Entry> {
+        self.entry_at(&r.folder, r.index)
+    }
+
+    /// Absolute filesystem path of a referenced entry.
+    pub fn path_of(&self, r: &EntryRef) -> PathBuf {
+        self.full_path(&r.folder, Some(r.index))
     }
 
     /// Absolute filesystem path of a folder (and optionally one of its entries).
