@@ -1,7 +1,10 @@
 //! Main window: toolbar, treemap view, dialogs (port of AppController + FolderView).
 
-use crate::colors::Palette;
-use crate::format;
+use crate::constants::*;
+use crate::ui::palette::Palette;
+use crate::utils::format;
+use crate::utils::math::{ease_out_cubic, geo_lerp, lerp};
+use crate::utils::text::elide_start;
 use crate::layout::{self, Item, Ov, Params, R};
 use crate::scan::{self, Drive, ScanControl, Tree};
 use eframe::egui::{
@@ -13,22 +16,6 @@ use std::rc::Rc;
 use std::sync::atomic::Ordering;
 use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
-
-const APP_NAME: &str = "SpaceMonger One";
-const INFOTIP_DELAY: Duration = Duration::from_millis(250);
-const ANIM_DURATION: f32 = 0.25; // seconds
-/// Zoom factor per point of wheel scroll (a mouse notch is ~50 points, about 1.2x).
-const WHEEL_ZOOM: f64 = 0.004;
-/// Deepest zoom, as a multiple of the view size.
-const MAX_ZOOM: f64 = 1e8;
-/// A resize step within this long of the previous one keeps the same anchor.
-const RESIZE_SETTLE: Duration = Duration::from_millis(400);
-/// Resize anchor: deepest folder at the window centre covering at least this share of it.
-const ANCHOR_MIN_SHARE: f64 = 0.25;
-/// Height of the path (breadcrumb) bar above the treemap.
-const BAR_H: i32 = 18;
-/// Framing the selection (F): share of the view its bounding box may take up.
-const FRAME_FILL: f64 = 0.9;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Action {
@@ -673,8 +660,7 @@ impl SpaceMonger {
     fn anim_state(&self, a: &Anim) -> (R, Vec<Ov>) {
         let (vw, vh) = self.view;
         let t = (a.start.elapsed().as_secs_f32() / ANIM_DURATION).min(1.0) as f64;
-        let e = 1.0 - (1.0 - t).powi(3);
-        let lerp = |p: f64, q: f64| p + (q - p) * e;
+        let e = ease_out_cubic(t);
         let (c0, c1) = (a.from_cam, a.end_cam);
 
         // Even zoom about the fixed point of the whole move (a plain pan if there's no zoom).
@@ -699,11 +685,10 @@ impl SpaceMonger {
 
         // The target's box changes shape evenly between its start and end reshape.
         if !a.target.is_empty() {
-            let geo = |p: f64, q: f64| p * (q / p).powf(e);
             ovs.push(Ov {
                 path: a.target.clone(),
-                a: (geo(a.ov0.a.0, a.ov1.a.0), geo(a.ov0.a.1, a.ov1.a.1)),
-                d: (lerp(a.ov0.d.0, a.ov1.d.0), lerp(a.ov0.d.1, a.ov1.d.1)),
+                a: (geo_lerp(a.ov0.a.0, a.ov1.a.0, e), geo_lerp(a.ov0.a.1, a.ov1.a.1, e)),
+                d: (lerp(a.ov0.d.0, a.ov1.d.0, e), lerp(a.ov0.d.1, a.ov1.d.1, e)),
             });
         }
         (cam, ovs)
@@ -1425,12 +1410,8 @@ impl SpaceMonger {
         egui::Modal::new(Id::new("scan_dialog")).show(ctx, |ui| {
             ui.set_width(460.0);
             ui.heading("Scanning Disk...");
-            let mut cur = ctl.current.lock().map(|s| s.clone()).unwrap_or_default();
-            if cur.chars().count() > 70 {
-                let tail: String = cur.chars().rev().take(67).collect::<Vec<_>>().into_iter().rev().collect();
-                cur = format!("...{tail}");
-            }
-            ui.label(cur);
+            let cur = ctl.current.lock().map(|s| s.clone()).unwrap_or_default();
+            ui.label(elide_start(&cur, 70));
             ui.label(format!("Files Found:  {}", ctl.files.load(Ordering::Relaxed)));
             ui.label(format!("Folders Found:  {}", ctl.folders.load(Ordering::Relaxed)));
             let frac = if used > 0 { (bytes as f32 / used as f32).min(1.0) } else { 0.0 };
