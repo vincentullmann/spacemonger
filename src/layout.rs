@@ -70,7 +70,9 @@ pub fn build(folder: &Folder, path: Vec<usize>, w: i32, h: i32, p: Params) -> Ve
     let mut out = Vec::new();
     let (hmin, vmin) = MIN_SIZES[(p.density.clamp(-3, 3) + 3) as usize];
     let mut cx = Ctx { out: &mut out, p, hmin, vmin };
-    layout_folder(&mut cx, folder, Rc::from(path), 0, 0, w - 1, h - 1, 0);
+
+    let depth = path.len() as i32;
+    layout_folder(&mut cx, folder, Rc::from(path), 0, 0, w - 1, h - 1, depth);
     out
 }
 
