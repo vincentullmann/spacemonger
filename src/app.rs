@@ -53,8 +53,9 @@ enum Action {
 enum Nav {
     Parent,
     FirstChild,
-    Prev,
-    Next,
+    Sibling(layout::Dir),
+    /// Ctrl / Shift + arrow: add the primary's neighbour to the selection.
+    Extend(layout::Dir),
 }
 
 struct ScanJob {
@@ -280,18 +281,29 @@ impl SpaceMonger {
         roots
     }
 
-    /// The folder's entries in layout order (as `layout::order`), without free space.
-    fn layout_order(&self, folder: &[usize]) -> Vec<usize> {
-        let Some(f) = self.tree.as_ref().and_then(|t| t.folder_at(folder)) else { return Vec::new() };
-        layout::order(f, self.params())
+    /// Boxes of the folder's entries as drawn now (natural split of its content area at the
+    /// current camera), without free space.
+    fn sibling_boxes(&self, folder: &[usize]) -> Vec<(usize, R)> {
+        let (Some(t), Some(cam)) = (&self.tree, self.cam) else { return Vec::new() };
+        let p = self.params();
+        let Some(f) = t.folder_at(folder) else { return Vec::new() };
+        let Some(area) = layout::content_of(&t.root, cam, folder, p, &self.ovs_at(cam)) else { return Vec::new() };
+        layout::child_boxes(f, area, p)
             .into_iter()
-            .filter(|&i| !matches!(f.entries[i].kind, scan::Kind::Free))
+            .filter(|&(i, _)| !matches!(f.entries[i].kind, scan::Kind::Free))
             .collect()
     }
 
-    /// Arrow keys: move every selected entry to its parent folder, its first child, or its
-    /// previous / next sibling, in layout order (wrapping). Entries with nowhere to go stay.
+    /// Arrow keys: move every selected entry to the neighbouring box in that direction, or
+    /// (Alt+Up / Alt+Down) to its parent folder or its first (top-left) child. Entries with
+    /// nowhere to go stay. Then pan so the primary selection is in view.
     fn navigate(&mut self, nav: Nav) {
+        self.finish_anim();
+        if let Nav::Extend(d) = nav {
+            self.extend_selection(d);
+            self.reveal_primary();
+            return;
+        }
         let mut out: Vec<Sel> = Vec::new();
         for s in &self.selected {
             let (f, i) = s;
@@ -299,15 +311,16 @@ impl SpaceMonger {
                 Nav::Parent => f.split_last().map(|(&last, up)| (Rc::from(up), last)),
                 Nav::FirstChild => {
                     let p: Rc<[usize]> = sel_path(s).into();
-                    self.layout_order(&p).first().map(|&c| (p, c))
+                    self.sibling_boxes(&p).first().map(|&(c, _)| (p, c))
                 }
-                Nav::Prev | Nav::Next => {
-                    let sib = self.layout_order(f);
-                    sib.iter().position(|x| x == i).map(|k| {
-                        let n = sib.len();
-                        let k = if nav == Nav::Next { (k + 1) % n } else { (k + n - 1) % n };
-                        (f.clone(), sib[k])
-                    })
+                Nav::Extend(_) => None,
+                Nav::Sibling(d) => {
+                    let boxes = self.sibling_boxes(f);
+                    boxes
+                        .iter()
+                        .find(|b| b.0 == *i)
+                        .and_then(|&(_, from)| layout::neighbour(&boxes, from, d))
+                        .map(|n| (f.clone(), n))
                 }
             };
             let m = moved.unwrap_or_else(|| s.clone());
@@ -316,6 +329,55 @@ impl SpaceMonger {
             }
         }
         self.selected = out;
+        self.reveal_primary();
+    }
+
+    /// Grow the selection from the primary (last selected) entry to its neighbour in
+    /// direction `d`, which becomes the new primary. Stepping back onto the entry added just
+    /// before undoes the last step, so the selection shrinks again like in a list.
+    fn extend_selection(&mut self, d: layout::Dir) {
+        let Some((f, i)) = self.selected.last().cloned() else { return };
+        let boxes = self.sibling_boxes(&f);
+        let Some(n) = boxes.iter().find(|b| b.0 == i).and_then(|&(_, from)| layout::neighbour(&boxes, from, d)) else {
+            return;
+        };
+        let target = (f, n);
+        let len = self.selected.len();
+        if len >= 2 && self.selected[len - 2] == target {
+            self.selected.pop();
+        } else {
+            self.selected.retain(|x| *x != target);
+            self.selected.push(target);
+        }
+    }
+
+    /// Pan the least amount that brings the primary selection's box fully into view (or, if
+    /// it's bigger than the view, lines its top / left edge up with the view's).
+    fn reveal_primary(&mut self) {
+        let (Some(s), Some(cam)) = (self.selected.last(), self.cam) else { return };
+        let Some(b) = self.locate(cam, &sel_path(s), &self.ovs_at(cam)) else { return };
+        let shift = |lo: f64, len: f64, view: f64| -> f64 {
+            let hi = lo + len;
+            if lo <= 0.0 && hi >= view && len > view {
+                0.0 // already covers the view
+            } else if len >= view {
+                -lo
+            } else {
+                let m = 8f64.min((view - len) / 2.0);
+                if lo < m {
+                    m - lo
+                } else if hi > view - m {
+                    view - m - hi
+                } else {
+                    0.0
+                }
+            }
+        };
+        let (vw, vh) = self.view;
+        let (dx, dy) = (shift(b.x, b.w, vw), shift(b.y, b.h, vh));
+        if dx != 0.0 || dy != 0.0 {
+            self.pan(dx, dy);
+        }
     }
 
     /// Entries whose box lies fully inside the rectangle, skipping those inside a folder that
@@ -1461,6 +1523,8 @@ impl eframe::App for SpaceMonger {
 
         if self.dialog.is_none() && self.scan.is_none() && self.error.is_none() && self.confirm_delete.is_none() {
             let keys = ctx.input(|i| {
+                let extend = i.modifiers.shift || i.modifiers.command;
+                let arrow = |d| if extend { Nav::Extend(d) } else { Nav::Sibling(d) };
                 if i.key_pressed(egui::Key::Backspace) {
                     Some(Action::ZoomOut)
                 } else if i.key_pressed(egui::Key::Enter) {
@@ -1475,14 +1539,18 @@ impl eframe::App for SpaceMonger {
                     Some(Action::Reload)
                 } else if i.key_pressed(egui::Key::F) && !i.modifiers.any() {
                     Some(Action::Frame)
-                } else if i.key_pressed(egui::Key::ArrowUp) {
+                } else if i.key_pressed(egui::Key::ArrowUp) && i.modifiers.alt {
                     Some(Action::Nav(Nav::Parent))
-                } else if i.key_pressed(egui::Key::ArrowDown) {
+                } else if i.key_pressed(egui::Key::ArrowDown) && i.modifiers.alt {
                     Some(Action::Nav(Nav::FirstChild))
+                } else if i.key_pressed(egui::Key::ArrowUp) {
+                    Some(Action::Nav(arrow(layout::Dir::Up)))
+                } else if i.key_pressed(egui::Key::ArrowDown) {
+                    Some(Action::Nav(arrow(layout::Dir::Down)))
                 } else if i.key_pressed(egui::Key::ArrowLeft) {
-                    Some(Action::Nav(Nav::Prev))
+                    Some(Action::Nav(arrow(layout::Dir::Left)))
                 } else if i.key_pressed(egui::Key::ArrowRight) {
-                    Some(Action::Nav(Nav::Next))
+                    Some(Action::Nav(arrow(layout::Dir::Right)))
                 } else if i.key_pressed(egui::Key::Escape) {
                     Some(Action::ClearSelection)
                 } else {

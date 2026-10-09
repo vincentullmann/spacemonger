@@ -320,24 +320,60 @@ fn place(cx: &mut Ctx, folder: &Folder, path: &Rc<[usize]>, list: &[usize], r: R
     }
 }
 
-/// Entries of `folder` in the order the layout places them (the first is the top-left box),
-/// skipping those not laid out (hidden, empty). Doesn't depend on the folder's box: only the
-/// split directions do, not which entries go first.
-pub fn order(folder: &Folder, p: Params) -> Vec<usize> {
-    fn walk(folder: &Folder, list: &[usize], p: Params, out: &mut Vec<usize>) {
-        let Some([(l1, _), (l2, _)]) = halves(folder, list, R::new(0.0, 0.0, 1.0, 1.0), p) else { return };
-        for l in [l1, l2] {
+/// Direction of an arrow-key move.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Dir {
+    Left,
+    Right,
+    Up,
+    Down,
+}
+
+/// Boxes of the folder's laid-out entries (not hidden or empty) when its content area is
+/// `area`: the plain split, with no clipping or size limits.
+pub fn child_boxes(folder: &Folder, area: R, p: Params) -> Vec<(usize, R)> {
+    fn walk(folder: &Folder, list: &[usize], r: R, p: Params, out: &mut Vec<(usize, R)>) {
+        let Some(halves) = halves(folder, list, r, p) else { return };
+        for (l, r) in halves {
             match l.len() {
                 0 => {}
-                1 => out.push(l[0]),
-                _ => walk(folder, &l, p, out),
+                1 => out.push((l[0], r)),
+                _ => walk(folder, &l, r, p, out),
             }
         }
     }
     let mut out = Vec::new();
     let all: Vec<usize> = (0..folder.entries.len()).collect();
-    walk(folder, &all, p, &mut out);
+    walk(folder, &all, area, p, &mut out);
     out
+}
+
+/// The box next to `from` in direction `d`: among boxes entirely on that side and overlapping
+/// it across the direction, the closest; on a tie (several smaller neighbours along one edge)
+/// the top-most for left/right moves, the left-most for up/down.
+pub fn neighbour(boxes: &[(usize, R)], from: R, d: Dir) -> Option<usize> {
+    let eps = 1e-6 * (from.w + from.h);
+    let overlap = |a0: f64, a1: f64, b0: f64, b1: f64| a1.min(b1) - a0.max(b0);
+    let mut best: Option<(f64, f64, usize)> = None;
+    for &(i, c) in boxes {
+        let (gap, across, pos) = match d {
+            Dir::Right => (c.x - (from.x + from.w), overlap(from.y, from.y + from.h, c.y, c.y + c.h), c.y),
+            Dir::Left => (from.x - (c.x + c.w), overlap(from.y, from.y + from.h, c.y, c.y + c.h), c.y),
+            Dir::Down => (c.y - (from.y + from.h), overlap(from.x, from.x + from.w, c.x, c.x + c.w), c.x),
+            Dir::Up => (from.y - (c.y + c.h), overlap(from.x, from.x + from.w, c.x, c.x + c.w), c.x),
+        };
+        if gap < -eps || across <= eps {
+            continue;
+        }
+        let better = match best {
+            None => true,
+            Some((g, q, _)) => gap < g - eps || (gap <= g + eps && pos < q),
+        };
+        if better {
+            best = Some((gap, pos, i));
+        }
+    }
+    best.map(|b| b.2)
 }
 
 /// Unclipped box of the entry at `path` (from the scan root) with the root's box at `cam`,
@@ -429,15 +465,38 @@ mod tests {
     }
 
     #[test]
-    fn order_matches_layout() {
+    fn child_boxes_match_layout() {
         let mut entries: Vec<Entry> = (0..9).map(|i| file(&format!("f{i}"), 900 - i * 90)).collect();
         entries[4].hidden = true;
         let f = Folder { entries, total: 0 };
         let p = Params::default();
-        let items = build(&f, full(2001.0, 1201.0), 2001.0, 1201.0, p, &[]);
-        let drawn: Vec<usize> = items.iter().filter_map(|it| it.index).collect();
-        assert_eq!(order(&f, p), drawn);
-        assert!(!order(&f, p).contains(&4));
+        let view = full(2001.0, 1201.0);
+        let items = build(&f, view, 2001.0, 1201.0, p, &[]);
+        let boxes = child_boxes(&f, root_content(view), p);
+        assert_eq!(boxes.iter().map(|b| b.0).collect::<Vec<_>>(), items.iter().filter_map(|it| it.index).collect::<Vec<_>>());
+        assert!(!boxes.iter().any(|b| b.0 == 4));
+    }
+
+    #[test]
+    fn neighbour_picks_adjacent_top_left_aligned() {
+        // A tall box on the left, two stacked on the right, one wide box below those.
+        //  0 | 1
+        //    | 2
+        //    |----
+        //    |  3
+        let b = [
+            (0, R::new(0.0, 0.0, 10.0, 30.0)),
+            (1, R::new(10.0, 0.0, 10.0, 10.0)),
+            (2, R::new(10.0, 10.0, 10.0, 10.0)),
+            (3, R::new(10.0, 20.0, 10.0, 10.0)),
+        ];
+        let at = |i: usize| b[i].1;
+        assert_eq!(neighbour(&b, at(0), Dir::Right), Some(1)); // larger -> smaller: top-aligned
+        assert_eq!(neighbour(&b, at(2), Dir::Left), Some(0));
+        assert_eq!(neighbour(&b, at(1), Dir::Down), Some(2));
+        assert_eq!(neighbour(&b, at(3), Dir::Up), Some(2));
+        assert_eq!(neighbour(&b, at(0), Dir::Left), None);
+        assert_eq!(neighbour(&b, at(1), Dir::Up), None);
     }
 
     #[test]
