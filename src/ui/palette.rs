@@ -161,8 +161,10 @@ pub struct Palette {
     pub hover: f32,
     /// Drop shadow behind labels.
     pub shadow: bool,
-    /// Size and date lines in file boxes.
-    pub details: bool,
+    /// Size line in file boxes.
+    pub show_size: bool,
+    /// Date line in file boxes.
+    pub show_date: bool,
     /// Label font size relative to the original 10 pt (spaces the label lines).
     pub text_scale: f32,
 }
@@ -200,7 +202,8 @@ impl Palette {
             gap: gap as f32,
             hover: hover as f32 / 100.0,
             shadow,
-            details: s.labels.file_details,
+            show_size: s.labels.show_size,
+            show_date: s.labels.show_date,
             text_scale: size / 10.0,
         }
     }

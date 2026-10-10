@@ -254,12 +254,17 @@ impl<'a> MapPainter<'a> {
             y + (h - th) / 2.0
         };
 
+        // Size and / or date lines under a file's name, where the box is tall enough.
         let k = pal.text_scale;
-        if pal.details && !it.is_folder && h >= 36.0 * k && w >= 48.0 {
-            for (s, dy) in [
-                (format::file_size(entry.actual), 1.0),
-                (format::date(entry.mtime), 11.0 * k),
-            ] {
+        let size = pal.show_size.then(|| format::file_size(entry.actual));
+        let date = pal.show_date.then(|| format::date(entry.mtime));
+        let (lines, name_dy): (Vec<(String, f32)>, f32) = match (size, date) {
+            (Some(s), Some(d)) if h >= 36.0 * k => (vec![(s, 1.0), (d, 11.0 * k)], -12.0 * k),
+            (Some(l), None) | (None, Some(l)) if h >= 24.0 * k => (vec![(l, 6.0 * k)], -6.0 * k),
+            _ => (Vec::new(), 0.0),
+        };
+        if !it.is_folder && w >= 48.0 && !lines.is_empty() {
+            for (s, dy) in lines {
                 let (sw, _) = self.text_width(&s);
                 let sx = if sw > w - 2.0 {
                     x + 3.0
@@ -268,7 +273,7 @@ impl<'a> MapPainter<'a> {
                 };
                 self.text(&p, &s, sx, ty + dy, fg);
             }
-            ty -= 12.0 * k;
+            ty += name_dy;
         }
         self.text(&p, &entry.name, tx, ty, fg);
     }

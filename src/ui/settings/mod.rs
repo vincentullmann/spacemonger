@@ -104,7 +104,8 @@ impl Default for Layout {
 pub struct Labels {
     /// Minimum box size for a label: -3 sparse .. +3 dense.
     pub density: i32,
-    pub file_details: bool,
+    pub show_size: bool,
+    pub show_date: bool,
     pub decimal_units: bool,
     pub date_format: String,
 }
@@ -113,7 +114,8 @@ impl Default for Labels {
     fn default() -> Self {
         Self {
             density: 0,
-            file_details: true,
+            show_size: true,
+            show_date: true,
             decimal_units: false,
             date_format: DEFAULT_DATE_FORMAT.to_string(),
         }

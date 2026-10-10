@@ -187,10 +187,17 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
             |ui, v| form::number(ui, v, -3..=3, 1.0, ""),
         );
         r.row(
-            "File size & date",
-            "Show the size and modification date under file names, where the box is big enough.",
-            &mut lb.file_details,
-            &d.file_details,
+            "File size",
+            "Show the size under file names, where the box is big enough.",
+            &mut lb.show_size,
+            &d.show_size,
+            form::check,
+        );
+        r.row(
+            "Date",
+            "Show the modification date under file names, where the box is big enough.",
+            &mut lb.show_date,
+            &d.show_date,
             form::check,
         );
         r.row(
