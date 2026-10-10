@@ -1,7 +1,7 @@
 //! The contents of the General, Scan and Display tabs.
 
 use super::form::{self, group};
-use super::{Settings, Theme};
+use super::{Font, General, Layout, PathBar, Scan, Settings, Theme, Tiles};
 use crate::ui::palette::Scheme;
 use eframe::egui::Ui;
 
@@ -25,123 +25,129 @@ const SCHEMES: [(Scheme, &str); 10] = [
 ];
 
 pub fn general(ui: &mut Ui, s: &mut Settings) {
-    let g = &mut s.general;
+    let (g, d) = (&mut s.general, General::default());
     group(ui, "General", |r| {
         r.row(
             "Theme",
             "Light or dark colours, or follow the desktop's preference.",
-            |ui| {
-                form::choice(ui, "theme", &mut g.theme, &THEMES);
-            },
+            &mut g.theme,
+            &d.theme,
+            |ui, v| form::choice(ui, "theme", v, &THEMES),
         );
         r.row(
             "Animation",
             "Length of zoom and frame moves. 0 jumps straight there.",
-            |ui| {
-                form::number(ui, &mut g.anim_ms, 0..=2000, 10.0, "ms");
-            },
+            &mut g.anim_ms,
+            &d.anim_ms,
+            |ui, v| form::number(ui, v, 0..=2000, 10.0, "ms"),
         );
         r.row(
             "Scroll zoom speed",
             "How far one mouse-wheel step zooms, relative to the default.",
-            |ui| {
-                form::number(ui, &mut g.zoom_speed, 10..=500, 5.0, "%");
-            },
+            &mut g.zoom_speed,
+            &d.zoom_speed,
+            |ui, v| form::number(ui, v, 10..=500, 5.0, "%"),
         );
         r.row(
             "Info tip delay",
             "How long to hover over a box before its name, size and date pop up.",
-            |ui| {
-                form::number(ui, &mut g.infotip_ms, 0..=5000, 10.0, "ms");
-            },
+            &mut g.infotip_ms,
+            &d.infotip_ms,
+            |ui, v| form::number(ui, v, 0..=5000, 10.0, "ms"),
         );
         r.row(
             "Frame selection fill",
             "Framing the selection (F) zooms until its bounding box fills this much of the view.",
-            |ui| {
-                form::number(ui, &mut g.frame_fill, 10..=100, 1.0, "%");
-            },
+            &mut g.frame_fill,
+            &d.frame_fill,
+            |ui, v| form::number(ui, v, 10..=100, 1.0, "%"),
         );
         r.row(
             "Confirm before delete",
             "Ask before moving the selection to the trash.",
-            |ui| {
-                ui.checkbox(&mut g.confirm_delete, "");
-            },
+            &mut g.confirm_delete,
+            &d.confirm_delete,
+            form::check,
         );
     });
-    let l = &mut s.layout;
+
+    let (l, d) = (&mut s.layout, Layout::default());
     group(ui, "Layout & labels", |r| {
         r.row(
             "Label density",
             "Smallest box that gets a label (and shows a folder's contents): higher shows more, smaller labels.",
-            |ui| {
-            form::number(ui, &mut l.density, -3..=3, 1.0, "");
-        });
+            &mut l.density,
+            &d.density,
+            |ui, v| form::number(ui, v, -3..=3, 1.0, ""),
+        );
         r.row(
             "Split bias",
             "Negative prefers side-by-side boxes, positive prefers stacked ones.",
-            |ui| {
-                form::number(ui, &mut l.bias, -20..=20, 1.0, "");
-            },
+            &mut l.bias,
+            &d.bias,
+            |ui, v| form::number(ui, v, -20..=20, 1.0, ""),
         );
         r.row(
             "Show free space",
             "Show the drive's free space as a box of its own (also the Free Space button).",
-            |ui| {
-                ui.checkbox(&mut l.show_free, "");
-            },
+            &mut l.show_free,
+            &d.show_free,
+            form::check,
         );
         r.row(
             "File size & date",
             "Show the size and modification date under file names, where the box is big enough.",
-            |ui| {
-                ui.checkbox(&mut l.file_details, "");
-            },
+            &mut l.file_details,
+            &d.file_details,
+            form::check,
         );
         r.row(
             "Decimal units (kB, MB)",
             "Sizes in powers of 1000 (kB, MB) instead of 1024 (KiB, MiB).",
-            |ui| {
-                ui.checkbox(&mut l.decimal_units, "");
-            },
+            &mut l.decimal_units,
+            &d.decimal_units,
+            form::check,
         );
         r.row(
             "Date format",
             "strftime pattern for dates, e.g. %Y-%m-%d %H:%M. An invalid pattern falls back to the default.",
-            |ui| {
-            ui.text_edit_singleline(&mut l.date_format);
-        });
+            &mut l.date_format,
+            &d.date_format,
+            |ui, v| ui.text_edit_singleline(v),
+        );
     });
 }
 
 pub fn scan(ui: &mut Ui, s: &mut Settings) {
-    let sc = &mut s.scan;
+    let (sc, d) = (&mut s.scan, Scan::default());
     group(ui, "Scan", |r| {
         r.row(
             "Ignore hidden files",
             "Leave out files and folders whose name starts with a dot. Applies at once, no rescan needed.",
-            |ui| {
-            ui.checkbox(&mut sc.ignore_hidden, "");
-        });
+            &mut sc.ignore_hidden,
+            &d.ignore_hidden,
+            form::check,
+        );
         r.row(
             "Stay on one filesystem",
             "Don't descend into other drives mounted inside the scanned folder.",
-            |ui| {
-                ui.checkbox(&mut sc.one_filesystem, "");
-            },
+            &mut sc.one_filesystem,
+            &d.one_filesystem,
+            form::check,
         );
         r.row(
             "Count hard links once",
             "A file with several hard links counts once, at the first place it's found.",
-            |ui| {
-                ui.checkbox(&mut sc.hardlinks_once, "");
-            },
+            &mut sc.hardlinks_once,
+            &d.hardlinks_once,
+            form::check,
         );
         r.row(
             "Exclude patterns",
             "Files and folders to skip while scanning (not available yet).",
-            |ui| form::excludes(ui, &mut sc.excludes),
+            &mut sc.excludes,
+            &d.excludes,
+            |ui, v| form::excludes(ui, v),
         );
     });
     ui.add_space(6.0);
@@ -150,67 +156,95 @@ pub fn scan(ui: &mut Ui, s: &mut Settings) {
 
 pub fn display(ui: &mut Ui, s: &mut Settings) {
     let before = s.tiles.clone();
-    let t = &mut s.tiles;
+    let (t, d) = (&mut s.tiles, Tiles::default());
+    // The colours' default is the scheme's own set (Classic's for Custom).
+    let scheme_colors = t
+        .scheme
+        .native_count()
+        .and_then(|n| t.scheme.colors(n))
+        .unwrap_or_else(|| d.colors.clone());
     group(ui, "Tiles", |r| {
         r.row(
             "Colour scheme",
             "Where the depth colours come from. Picking one resets the colour list; editing a colour makes the scheme Custom.",
-            |ui| {
-            form::choice(ui, "scheme", &mut t.scheme, &SCHEMES);
-        });
+            &mut t.scheme,
+            &d.scheme,
+            |ui, v| form::choice(ui, "scheme", v, &SCHEMES),
+        );
         r.row(
             "Colours",
             "One colour per nesting level, repeating. Click a swatch to edit it.",
-            |ui| form::colors(ui, &mut t.colors),
+            &mut t.colors,
+            &scheme_colors,
+            form::colors,
         );
         r.row(
             "Borders",
             "Thin outline around every box. With a gap of 0, neighbours share one line.",
-            |ui| {
-                ui.checkbox(&mut t.borders, "");
-            },
+            &mut t.borders,
+            &d.borders,
+            form::check,
         );
-        r.row("Gap", "Space between neighbouring boxes.", |ui| {
-            form::number(ui, &mut t.gap, 0..=8, 1.0, "px");
-        });
+        r.row(
+            "Gap",
+            "Space between neighbouring boxes.",
+            &mut t.gap,
+            &d.gap,
+            |ui, v| form::number(ui, v, 0..=8, 1.0, "px"),
+        );
         r.row(
             "Hover highlight",
             "How much the box under the mouse lightens.",
-            |ui| {
-                form::number(ui, &mut t.hover, 0..=100, 1.0, "%");
-            },
+            &mut t.hover,
+            &d.hover,
+            |ui, v| form::number(ui, v, 0..=100, 1.0, "%"),
         );
     });
-    s.tiles.reconcile(&before);
+    // A colour list reset to the scheme's own stays with that scheme.
+    if !(s.tiles.scheme == before.scheme && s.tiles.colors == scheme_colors) {
+        s.tiles.reconcile(&before);
+    }
 
-    let f = &mut s.font;
+    let (f, d) = (&mut s.font, Font::default());
     group(ui, "Font", |r| {
         r.row(
             "Family",
             "Font for box labels and the path bar. Default is the built-in font.",
-            |ui| {
-                form::font_family(ui, &mut f.family);
-            },
+            &mut f.family,
+            &d.family,
+            form::font_family,
         );
-        r.row("Size", "Label text size in boxes.", |ui| {
-            form::number(ui, &mut f.size, 6.0..=32.0, 0.5, "px");
-        });
+        r.row(
+            "Size",
+            "Label text size in boxes.",
+            &mut f.size,
+            &d.size,
+            |ui, v| form::number(ui, v, 6.0..=32.0, 0.5, "px"),
+        );
         r.row(
             "Drop shadow",
             "Draw a soft shadow behind label text.",
-            |ui| {
-                ui.checkbox(&mut f.shadow, "");
-            },
+            &mut f.shadow,
+            &d.shadow,
+            form::check,
         );
     });
 
-    let p = &mut s.path_bar;
+    let (p, d) = (&mut s.path_bar, PathBar::default());
     group(ui, "Path bar", |r| {
-        r.row("Height", "Height of the path bar above the map.", |ui| {
-            form::number(ui, &mut p.height, 12.0..=48.0, 1.0, "px");
-        });
-        r.row("Font size", "Text size in the path bar.", |ui| {
-            form::number(ui, &mut p.font_size, 6.0..=32.0, 0.5, "px");
-        });
+        r.row(
+            "Height",
+            "Height of the path bar above the map.",
+            &mut p.height,
+            &d.height,
+            |ui, v| form::number(ui, v, 12.0..=48.0, 1.0, "px"),
+        );
+        r.row(
+            "Font size",
+            "Text size in the path bar.",
+            &mut p.font_size,
+            &d.font_size,
+            |ui, v| form::number(ui, v, 6.0..=32.0, 0.5, "px"),
+        );
     });
 }
