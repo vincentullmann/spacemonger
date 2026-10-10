@@ -9,14 +9,33 @@ const VW: f64 = 400.0;
 const VH: f64 = 300.0;
 
 fn file(name: &str, size: u64) -> Entry {
-    Entry { name: name.into(), size, actual: size, mtime: 0, created: 0, kind: Kind::File, hidden: false }
+    Entry {
+        name: name.into(),
+        size,
+        actual: size,
+        mtime: 0,
+        created: 0,
+        kind: Kind::File,
+        hidden: false,
+    }
 }
 
 fn tree() -> Folder {
-    let sub = Folder { entries: vec![file("x", 700), file("y", 300)], total: 1000 };
+    let sub = Folder {
+        entries: vec![file("x", 700), file("y", 300)],
+        total: 1000,
+    };
     Folder {
         entries: vec![
-            Entry { name: "sub".into(), size: 1000, actual: 1000, mtime: 0, created: 0, kind: Kind::Dir(Box::new(sub)), hidden: false },
+            Entry {
+                name: "sub".into(),
+                size: 1000,
+                actual: 1000,
+                mtime: 0,
+                created: 0,
+                kind: Kind::Dir(Box::new(sub)),
+                hidden: false,
+            },
             file("b", 500),
             file("c", 250),
         ],
@@ -25,18 +44,31 @@ fn tree() -> Folder {
 }
 
 fn camera() -> Camera {
-    let mut c = Camera { view: Size::new(VW, VH), ..Default::default() };
+    let mut c = Camera {
+        view: Size::new(VW, VH),
+        ..Default::default()
+    };
     c.ensure();
     c
 }
 
 fn close(a: Rect, b: Rect) -> bool {
-    (a.x0 - b.x0).abs() < 0.5 && (a.y0 - b.y0).abs() < 0.5 && (a.x1 - b.x1).abs() < 0.5 && (a.y1 - b.y1).abs() < 0.5
+    (a.x0 - b.x0).abs() < 0.5
+        && (a.y0 - b.y0).abs() < 0.5
+        && (a.x1 - b.x1).abs() < 0.5
+        && (a.y1 - b.y1).abs() < 0.5
 }
 
 #[test]
 fn fit_blend_fades_between_half_and_full_scale() {
-    let f = Fit { reshape: crate::core::layout::Reshape { path: vec![0], a: Vec2::new(1.0, 1.0), d: Vec2::ZERO }, scale: 4.0 };
+    let f = Fit {
+        reshape: crate::core::layout::Reshape {
+            path: vec![0],
+            a: Vec2::new(1.0, 1.0),
+            d: Vec2::ZERO,
+        },
+        scale: 4.0,
+    };
     assert_eq!(f.blend(4.0), 1.0);
     assert_eq!(f.blend(8.0), 1.0);
     assert_eq!(f.blend(2.0), 0.0);
@@ -46,7 +78,10 @@ fn fit_blend_fades_between_half_and_full_scale() {
 #[test]
 fn zoom_to_folder_fills_view_and_clears_selection() {
     let root = tree();
-    let scene = Scene { root: Some(&root), params: LayoutParams::default() };
+    let scene = Scene {
+        root: Some(&root),
+        params: LayoutParams::default(),
+    };
     let mut c = camera();
     assert!(!c.zoomed());
     c.zoom_to(&scene, &[0]);
@@ -55,7 +90,10 @@ fn zoom_to_folder_fills_view_and_clears_selection() {
     assert!(c.zoomed());
     let cam = c.cam.unwrap();
     let b = scene.locate(cam, &[0], &c.ovs_at(cam)).unwrap();
-    assert!(close(content(b, 12.0), root_content(c.full_view())), "folder content fills the view");
+    assert!(
+        close(content(b, 12.0), root_content(c.full_view())),
+        "folder content fills the view"
+    );
 
     // Fitted, so Zoom Out goes to the parent; zooming there is back to the full view.
     assert_eq!(c.zoom_out_target(&scene, &[0]), Some(vec![]));
@@ -69,7 +107,10 @@ fn zoom_to_folder_fills_view_and_clears_selection() {
 #[test]
 fn framing_keeps_selection() {
     let root = tree();
-    let scene = Scene { root: Some(&root), params: LayoutParams::default() };
+    let scene = Scene {
+        root: Some(&root),
+        params: LayoutParams::default(),
+    };
     let mut c = camera();
     c.frame(&scene, &[vec![2]]);
     assert!(!c.finish_anim(), "framing keeps the selection");
@@ -80,7 +121,10 @@ fn framing_keeps_selection() {
 #[test]
 fn pan_and_zoom_keep_root_covering_view() {
     let root = tree();
-    let scene = Scene { root: Some(&root), params: LayoutParams::default() };
+    let scene = Scene {
+        root: Some(&root),
+        params: LayoutParams::default(),
+    };
     let mut c = camera();
     // Can't pan or zoom out past the root.
     c.pan(&scene, Vec2::new(50.0, 50.0));
@@ -100,10 +144,16 @@ fn pan_and_zoom_keep_root_covering_view() {
 #[test]
 fn reveal_pans_box_into_view() {
     let root = tree();
-    let scene = Scene { root: Some(&root), params: LayoutParams::default() };
+    let scene = Scene {
+        root: Some(&root),
+        params: LayoutParams::default(),
+    };
     let on_screen = |c: &Camera| {
         let b = scene.locate(c.cam.unwrap(), &[2], &[]).unwrap();
-        (b, b.x0 >= 0.0 && b.y0 >= 0.0 && b.x1 <= VW + 1e-9 && b.y1 <= VH + 1e-9)
+        (
+            b,
+            b.x0 >= 0.0 && b.y0 >= 0.0 && b.x1 <= VW + 1e-9 && b.y1 <= VH + 1e-9,
+        )
     };
     // Fits in the view: pan it fully in.
     let mut c = camera();
@@ -122,7 +172,10 @@ fn reveal_pans_box_into_view() {
 #[test]
 fn resize_when_not_zoomed_stays_full_view() {
     let root = tree();
-    let scene = Scene { root: Some(&root), params: LayoutParams::default() };
+    let scene = Scene {
+        root: Some(&root),
+        params: LayoutParams::default(),
+    };
     let mut c = camera();
     c.resized(&scene, &[], Size::new(800.0, 500.0));
     assert_eq!(c.cam, Some(Rect::new(0.0, 0.0, 800.0, 500.0)));
@@ -131,11 +184,24 @@ fn resize_when_not_zoomed_stays_full_view() {
 #[test]
 fn child_boxes_skip_free_space() {
     let mut root = tree();
-    root.entries.push(Entry { name: String::new(), size: 100, actual: 100, mtime: 0, created: 0, kind: Kind::Free, hidden: false });
-    let scene = Scene { root: Some(&root), params: LayoutParams::default() };
+    root.entries.push(Entry {
+        name: String::new(),
+        size: 100,
+        actual: 100,
+        mtime: 0,
+        created: 0,
+        kind: Kind::Free,
+        hidden: false,
+    });
+    let scene = Scene {
+        root: Some(&root),
+        params: LayoutParams::default(),
+    };
     let c = camera();
     let boxes = c.child_boxes(&scene, &[]);
     assert_eq!(boxes.len(), 3);
-    assert!(boxes.iter().all(|b| !matches!(root.entries[b.0].kind, Kind::Free)));
+    assert!(boxes
+        .iter()
+        .all(|b| !matches!(root.entries[b.0].kind, Kind::Free)));
     assert_eq!(c.child_boxes(&scene, &[0]).len(), 2);
 }

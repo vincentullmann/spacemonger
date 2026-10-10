@@ -14,7 +14,10 @@ pub struct Scene<'a> {
 
 impl<'a> Scene<'a> {
     pub fn new(tree: Option<&'a Tree>, params: LayoutParams) -> Self {
-        Self { root: tree.map(|t| &t.root), params }
+        Self {
+            root: tree.map(|t| &t.root),
+            params,
+        }
     }
 
     /// See [`locate`].

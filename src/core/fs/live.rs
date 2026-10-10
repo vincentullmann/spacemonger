@@ -39,7 +39,13 @@ impl Chain<'_> {
 
 impl LiveDir {
     pub fn new(name: String, mtime: i64, created: i64) -> Self {
-        Self { name, mtime, created, bytes: AtomicU64::new(0), contents: OnceLock::new() }
+        Self {
+            name,
+            mtime,
+            created,
+            bytes: AtomicU64::new(0),
+            contents: OnceLock::new(),
+        }
     }
 
     pub fn bytes(&self) -> u64 {
@@ -57,13 +63,22 @@ impl LiveDir {
         let mut f = Folder::default();
         if let Some(c) = self.contents.get() {
             for e in c.files.iter().take_while(|e| e.size >= min) {
-                f.entries.push(Entry { name: e.name.clone(), kind: Kind::File, ..*e });
+                f.entries.push(Entry {
+                    name: e.name.clone(),
+                    kind: Kind::File,
+                    ..*e
+                });
             }
             for d in &c.dirs {
                 let size = d.bytes();
                 if size >= min && size > 0 {
                     // Sized by everything found so far, including what the snapshot leaves out.
-                    f.entries.push(dir_entry(d.name.clone(), (d.mtime, d.created), size, d.snapshot(min)));
+                    f.entries.push(dir_entry(
+                        d.name.clone(),
+                        (d.mtime, d.created),
+                        size,
+                        d.snapshot(min),
+                    ));
                 }
             }
         }
@@ -88,7 +103,15 @@ impl LiveDir {
 }
 
 fn dir_entry(name: String, (mtime, created): (i64, i64), size: u64, folder: Folder) -> Entry {
-    Entry { name, size, actual: size, mtime, created, kind: Kind::Dir(Box::new(folder)), hidden: false }
+    Entry {
+        name,
+        size,
+        actual: size,
+        mtime,
+        created,
+        kind: Kind::Dir(Box::new(folder)),
+        hidden: false,
+    }
 }
 
 #[cfg(test)]
@@ -96,32 +119,67 @@ mod tests {
     use super::*;
 
     fn file(name: &str, size: u64) -> Entry {
-        Entry { name: name.into(), size, actual: size, mtime: 0, created: 0, kind: Kind::File, hidden: false }
+        Entry {
+            name: name.into(),
+            size,
+            actual: size,
+            mtime: 0,
+            created: 0,
+            kind: Kind::File,
+            hidden: false,
+        }
     }
 
     #[test]
     fn snapshot_while_filling_in() {
         let root = LiveDir::new(String::new(), 0, 0);
-        let root_chain = Chain { dir: &root, parent: None };
-        let dirs = root.set_contents(vec![file("big", 1000), file("tiny", 1)], vec![LiveDir::new("d".into(), 0, 0)]);
+        let root_chain = Chain {
+            dir: &root,
+            parent: None,
+        };
+        let dirs = root.set_contents(
+            vec![file("big", 1000), file("tiny", 1)],
+            vec![LiveDir::new("d".into(), 0, 0)],
+        );
         root_chain.add_bytes(1001);
 
         // "d" hasn't been listed yet: it has no bytes, so it's left out.
         let s = root.snapshot(0);
-        assert_eq!(s.entries.iter().map(|e| e.name.as_str()).collect::<Vec<_>>(), ["big", "tiny"]);
+        assert_eq!(
+            s.entries
+                .iter()
+                .map(|e| e.name.as_str())
+                .collect::<Vec<_>>(),
+            ["big", "tiny"]
+        );
 
-        let d_chain = Chain { dir: &dirs[0], parent: Some(&root_chain) };
+        let d_chain = Chain {
+            dir: &dirs[0],
+            parent: Some(&root_chain),
+        };
         dirs[0].set_contents(vec![file("f", 5000)], Vec::new());
         d_chain.add_bytes(5000);
         assert_eq!(root.bytes(), 6001);
 
         // Small entries are dropped from snapshots, but still counted in their folder's size.
         let s = root.snapshot(10);
-        assert_eq!(s.entries.iter().map(|e| (e.name.as_str(), e.size)).collect::<Vec<_>>(), [("d", 5000), ("big", 1000)]);
+        assert_eq!(
+            s.entries
+                .iter()
+                .map(|e| (e.name.as_str(), e.size))
+                .collect::<Vec<_>>(),
+            [("d", 5000), ("big", 1000)]
+        );
         assert_eq!(s.entries[0].child().unwrap().entries.len(), 1);
 
         let f = root.into_folder();
         assert_eq!(f.total, 6001);
-        assert_eq!(f.entries.iter().map(|e| e.name.as_str()).collect::<Vec<_>>(), ["d", "big", "tiny"]);
+        assert_eq!(
+            f.entries
+                .iter()
+                .map(|e| e.name.as_str())
+                .collect::<Vec<_>>(),
+            ["d", "big", "tiny"]
+        );
     }
 }

@@ -40,18 +40,27 @@ impl Ctx<'_> {
     /// Does one of `indices` in the folder at `path` lead to a reshaped folder? Its natural box
     /// may be off-screen while the reshaped one isn't, so that branch is never culled.
     fn leads_to_ov(&self, path: &[usize], indices: &[usize]) -> bool {
-        self.ovs
-            .iter()
-            .any(|o| o.path.len() > path.len() && o.path.starts_with(path) && indices.contains(&o.path[path.len()]))
+        self.ovs.iter().any(|o| {
+            o.path.len() > path.len()
+                && o.path.starts_with(path)
+                && indices.contains(&o.path[path.len()])
+        })
     }
 
     fn ov_for(&self, path: &[usize], i: usize) -> Option<&Reshape> {
-        self.ovs
-            .iter()
-            .find(|o| o.path.len() == path.len() + 1 && o.path.starts_with(path) && o.path[path.len()] == i)
+        self.ovs.iter().find(|o| {
+            o.path.len() == path.len() + 1 && o.path.starts_with(path) && o.path[path.len()] == i
+        })
     }
 
-    fn push(&mut self, folder: &Rc<[usize]>, index: Option<usize>, depth: i32, kind: (bool, bool, bool), r: Rect) {
+    fn push(
+        &mut self,
+        folder: &Rc<[usize]>,
+        index: Option<usize>,
+        depth: i32,
+        kind: (bool, bool, bool),
+        r: Rect,
+    ) {
         let m = CLIP_MARGIN;
         let x0 = r.x0.max(-m);
         let y0 = r.y0.max(-m);
@@ -79,16 +88,33 @@ pub fn build(root: &Folder, cam: Rect, view: Size, p: LayoutParams, ovs: &[Resha
     let (vw, vh) = (view.width, view.height);
     let mut out = Vec::new();
     let (hmin, vmin) = p.label_min();
-    let mut cx = Ctx { out: &mut out, ovs, deferred: Default::default(), p, hmin, vmin, vw, vh };
+    let mut cx = Ctx {
+        out: &mut out,
+        ovs,
+        deferred: Default::default(),
+        p,
+        hmin,
+        vmin,
+        vw,
+        vh,
+    };
     layout_folder(&mut cx, root, Rc::from(Vec::new()), root_content(cam), 0);
 
     // Reshaped folders (and any reshaped folders inside them) go on top.
     while let Some(df) = cx.deferred.pop_front() {
-        let Some(folder) = root.descendant(&df.folder) else { continue };
+        let Some(folder) = root.descendant(&df.folder) else {
+            continue;
+        };
         let e = &folder.entries[df.index];
         let labeled = df.r.width() > cx.hmin && df.r.height() > cx.vmin;
         if cx.on_screen(df.r) {
-            cx.push(&df.folder, Some(df.index), df.depth, (e.child().is_some(), false, labeled), df.r);
+            cx.push(
+                &df.folder,
+                Some(df.index),
+                df.depth,
+                (e.child().is_some(), false, labeled),
+                df.r,
+            );
         }
         if let (Some(child), true) = (e.child(), labeled) {
             let mut cp = df.folder.to_vec();
@@ -105,11 +131,20 @@ fn layout_folder(cx: &mut Ctx, folder: &Folder, path: Rc<[usize]>, r: Rect, dept
     split(cx, folder, &path, &indices, r, depth);
 }
 
-fn split(cx: &mut Ctx, folder: &Folder, path: &Rc<[usize]>, indices: &[usize], r: Rect, depth: i32) {
+fn split(
+    cx: &mut Ctx,
+    folder: &Folder,
+    path: &Rc<[usize]>,
+    indices: &[usize],
+    r: Rect,
+    depth: i32,
+) {
     if !cx.on_screen(r) && !cx.leads_to_ov(path, indices) {
         return;
     }
-    let Some([(l1, r1), (l2, r2)]) = halves(folder, indices, r, cx.p) else { return };
+    let Some([(l1, r1), (l2, r2)]) = halves(folder, indices, r, cx.p) else {
+        return;
+    };
     place(cx, folder, path, &l1, r1, depth);
     place(cx, folder, path, &l2, r2, depth);
 }
@@ -126,7 +161,12 @@ fn place(cx: &mut Ctx, folder: &Folder, path: &Rc<[usize]>, list: &[usize], r: R
         let i = list[0];
         if let Some(ov) = cx.ov_for(path, i) {
             let r = ov.apply(r);
-            cx.deferred.push_back(Deferred { folder: path.clone(), index: i, depth, r });
+            cx.deferred.push_back(Deferred {
+                folder: path.clone(),
+                index: i,
+                depth,
+                r,
+            });
             return;
         }
         if !cx.on_screen(r) {

@@ -23,7 +23,9 @@ impl Camera {
         let mut cam = self.cam?;
         for _ in 0..40 {
             let b = bbox(cam)?;
-            let k = (fill * vw / b.width()).min(fill * vh / b.height()).min(MAX_ZOOM * vw / cam.width());
+            let k = (fill * vw / b.width())
+                .min(fill * vh / b.height())
+                .min(MAX_ZOOM * vw / cam.width());
             let bc = b.center();
             let off = self.view.to_rect().center() - bc;
             cam = Self::scaled(cam, bc, k) + off;
@@ -55,28 +57,51 @@ impl Camera {
         let cam = self.cover_root(cam);
         let n = scene.locate(cam, path, &[])?;
         let reshape = Reshape::between(path.to_vec(), n, t);
-        Some((cam, Fit { reshape, scale: self.scale_of(cam) }))
+        Some((
+            cam,
+            Fit {
+                reshape,
+                scale: self.scale_of(cam),
+            },
+        ))
     }
 
     /// Animate to the folder at `path`, filling the view. Call `finish_anim` first.
     pub fn zoom_to(&mut self, scene: &Scene, path: &[usize]) {
         let Some(cam0) = self.cam else { return };
         let ovs0 = self.ovs_at(cam0);
-        let Some(b0) = scene.locate(cam0, path, &ovs0) else { return };
+        let Some(b0) = scene.locate(cam0, path, &ovs0) else {
+            return;
+        };
         // Any other reshaped folder fades out on the way.
         let old: Option<Reshape> = ovs0.iter().find(|o| o.path != path).cloned();
-        let Some(n0) = scene.locate(cam0, path, old.as_slice()) else { return };
+        let Some(n0) = scene.locate(cam0, path, old.as_slice()) else {
+            return;
+        };
 
         let (end_cam, end_fit) = if path.is_empty() {
             (self.full_view(), None)
         } else {
-            let Some((c, f)) = self.solve_fit(scene, path) else { return };
+            let Some((c, f)) = self.solve_fit(scene, path) else {
+                return;
+            };
             (c, Some(f))
         };
-        let Some(n1) = scene.locate(end_cam, path, &[]) else { return };
-        let b1 = if path.is_empty() { end_cam } else { self.fill_box(scene.params.title_h) };
+        let Some(n1) = scene.locate(end_cam, path, &[]) else {
+            return;
+        };
+        let b1 = if path.is_empty() {
+            end_cam
+        } else {
+            self.fill_box(scene.params.title_h)
+        };
         let same = |a: f64, b: f64| (a - b).abs() < 0.5;
-        if end_cam == cam0 && old.is_none() && same(b0.x0, b1.x0) && same(b0.width(), b1.width()) && same(b0.height(), b1.height()) {
+        if end_cam == cam0
+            && old.is_none()
+            && same(b0.x0, b1.x0)
+            && same(b0.width(), b1.width())
+            && same(b0.height(), b1.height())
+        {
             self.fit = end_fit;
             return;
         }
@@ -98,7 +123,9 @@ impl Camera {
 
     /// Animate to frame the bounding box of the entries at `paths`. Call `finish_anim` first.
     pub fn frame(&mut self, scene: &Scene, paths: &[Vec<usize>]) {
-        let (Some(cam0), Some(end_cam)) = (self.cam, self.solve_frame(scene, paths)) else { return };
+        let (Some(cam0), Some(end_cam)) = (self.cam, self.solve_frame(scene, paths)) else {
+            return;
+        };
         let old = self.ovs_at(cam0).into_iter().next();
         if end_cam == cam0 && old.is_none() {
             self.fit = None;
@@ -136,7 +163,10 @@ impl Camera {
         let ovs = self.ovs_at(cam);
         let same = |a: f64, b: f64| (a - b).abs() < 0.5;
         let fitted = scene.content_of(cam, zoom, &ovs).is_some_and(|c| {
-            same(c.x0, view.x0) && same(c.y0, view.y0) && same(c.width(), view.width()) && same(c.height(), view.height())
+            same(c.x0, view.x0)
+                && same(c.y0, view.y0)
+                && same(c.width(), view.width())
+                && same(c.height(), view.height())
         });
         let mut target = zoom.to_vec();
         if fitted {

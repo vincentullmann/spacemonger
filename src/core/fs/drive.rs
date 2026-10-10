@@ -37,7 +37,13 @@ pub fn volumes() -> Vec<Drive> {
         .filter(|m| is_storage(m) && seen.insert(m.info.mount_point.clone()))
         .map(|m| {
             let root = m.info.mount_point.clone();
-            Drive { name: root.display().to_string(), root, total: total(m), free: free(m), fs: m.info.fs_type.clone() }
+            Drive {
+                name: root.display().to_string(),
+                root,
+                total: total(m),
+                free: free(m),
+                fs: m.info.fs_type.clone(),
+            }
         })
         .collect();
     out.sort_by(|a, b| a.root.cmp(&b.root));
@@ -54,7 +60,10 @@ fn free(m: &Mount) -> u64 {
 
 /// Build a `Drive` for an arbitrary folder, using the stats of the volume it lives on.
 pub fn drive_for_path(path: &Path) -> Result<Drive, FsError> {
-    let path = fs::canonicalize(path).map_err(|source| FsError::Io { path: path.to_path_buf(), source })?;
+    let path = fs::canonicalize(path).map_err(|source| FsError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
     if !path.is_dir() {
         return Err(FsError::NotAFolder(path));
     }

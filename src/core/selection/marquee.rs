@@ -15,7 +15,11 @@ pub struct Marquee {
 
 impl Marquee {
     pub fn new(start: (f32, f32), base: Selection) -> Self {
-        Self { start, end: start, base }
+        Self {
+            start,
+            end: start,
+            base,
+        }
     }
 
     /// The selection with the rectangle dragged to `end`: the base plus every entry inside it.
@@ -78,8 +82,14 @@ mod tests {
             item(&[0], 0, 5.0, 15.0, 20.0, 20.0),
             item(&[], 1, 50.0, 0.0, 50.0, 50.0),
         ];
-        assert_eq!(hits(&items, (-1.0, -1.0), (60.0, 60.0)), vec![EntryRef::new(Rc::from(&[][..]), 0)]);
-        assert_eq!(hits(&items, (1.0, 1.0), (60.0, 60.0)), vec![EntryRef::new(Rc::from(&[0][..]), 0)]);
+        assert_eq!(
+            hits(&items, (-1.0, -1.0), (60.0, 60.0)),
+            vec![EntryRef::new(Rc::from(&[][..]), 0)]
+        );
+        assert_eq!(
+            hits(&items, (1.0, 1.0), (60.0, 60.0)),
+            vec![EntryRef::new(Rc::from(&[0][..]), 0)]
+        );
         let m = Marquee::new((40.0, -1.0), Selection::default());
         assert_eq!(m.selection(&items, (101.0, 51.0)).len(), 1);
     }

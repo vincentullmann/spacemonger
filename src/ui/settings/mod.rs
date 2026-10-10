@@ -1,19 +1,20 @@
 //! Settings kept between runs (eframe storage) and edited live in the settings window.
 
+mod defaults;
 mod form;
 mod pages;
 mod window;
 
 pub use window::SettingsWindow;
 
-use crate::constants::{ANIM_DURATION, BAR_H, BAR_H_PER_PX, FRAME_FILL, INFOTIP_DELAY};
+use crate::constants::{BAR_H, WHEEL_ZOOM};
 use crate::core::camera::CameraParams;
 use crate::core::fs::ScanOptions;
 use crate::core::layout::LayoutParams;
 use crate::ui::fonts;
 use crate::ui::keymap::Keymap;
 use crate::ui::palette::Scheme;
-use crate::utils::format::{FormatOptions, SizeFormat, DEFAULT_DATE_FORMAT};
+use crate::utils::format::{FormatOptions, SizeFormat};
 use eframe::egui::{self, Color32};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -69,33 +70,12 @@ pub struct General {
     pub confirm_delete: bool,
 }
 
-impl Default for General {
-    fn default() -> Self {
-        Self {
-            theme: Theme::Light,
-            anim_ms: (ANIM_DURATION * 1000.0) as u32,
-            zoom_speed: 100,
-            frame_fill: (FRAME_FILL * 100.0) as u32,
-            confirm_delete: true,
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct Layout {
     /// -20 prefers vertical splits, +20 horizontal.
     pub bias: i32,
     pub show_free: bool,
-}
-
-impl Default for Layout {
-    fn default() -> Self {
-        Self {
-            bias: 0,
-            show_free: true,
-        }
-    }
 }
 
 /// Text inside the tiles.
@@ -110,17 +90,6 @@ pub struct Labels {
     pub shown: Shown,
 }
 
-impl Default for Labels {
-    fn default() -> Self {
-        Self {
-            font_size: 10.0,
-            shadow: false,
-            density: 0,
-            shown: Shown::default(),
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct Scan {
@@ -130,17 +99,6 @@ pub struct Scan {
     pub hardlinks_once: bool,
     /// Not used by the scanner yet.
     pub excludes: Vec<String>,
-}
-
-impl Default for Scan {
-    fn default() -> Self {
-        Self {
-            ignore_hidden: false,
-            one_filesystem: true,
-            hardlinks_once: true,
-            excludes: Vec::new(),
-        }
-    }
 }
 
 /// An outline: its colour (`None` = automatic) and width in physical pixels.
@@ -164,27 +122,6 @@ pub struct Tiles {
     pub selection_color: Option<Color32>,
     pub gap: u8,
     pub hover: u8,
-}
-
-impl Default for Tiles {
-    fn default() -> Self {
-        Self {
-            scheme: Scheme::Classic,
-            colors: Scheme::Classic.colors(8).unwrap_or_default(),
-            borders: true,
-            border: Line {
-                color: None,
-                width: 1.0,
-            },
-            hover_border: Line {
-                color: None,
-                width: 2.0,
-            },
-            selection_color: None,
-            gap: 1,
-            hover: 20,
-        }
-    }
 }
 
 impl Tiles {
@@ -220,19 +157,9 @@ pub struct Text {
     pub date_format: String,
 }
 
-impl Default for Text {
-    fn default() -> Self {
-        Self {
-            family: String::new(),
-            size_format: SizeFormat::Bytes,
-            date_format: DEFAULT_DATE_FORMAT.to_string(),
-        }
-    }
-}
-
 /// Which details a file label or the tooltip shows.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
-#[serde(default)]
+#[derive(Default)]
 pub struct Shown {
     pub name: bool,
     /// Full path on disk.
@@ -240,18 +167,6 @@ pub struct Shown {
     pub size: bool,
     pub modified: bool,
     pub created: bool,
-}
-
-impl Default for Shown {
-    fn default() -> Self {
-        Self {
-            name: true,
-            path: false,
-            size: true,
-            modified: true,
-            created: false,
-        }
-    }
 }
 
 impl Shown {
@@ -276,27 +191,11 @@ pub struct Tooltips {
     pub delay_ms: u32,
 }
 
-impl Default for Tooltips {
-    fn default() -> Self {
-        Self {
-            shown: Shown::default(),
-            font_size: 13.0,
-            delay_ms: INFOTIP_DELAY.as_millis() as u32,
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct PathBar {
     /// The bar's height follows it (see [`Settings::bar_height`]).
     pub font_size: f32,
-}
-
-impl Default for PathBar {
-    fn default() -> Self {
-        Self { font_size: 10.0 }
-    }
 }
 
 impl Settings {
@@ -347,9 +246,10 @@ impl Settings {
         }
     }
 
-    /// Path bar height: 18px for the default 10px font, in proportion otherwise.
+    /// Path bar height: [`BAR_H`] at the default font size, in proportion otherwise.
     pub fn bar_height(&self) -> f32 {
-        (self.path_bar.font_size * BAR_H_PER_PX)
+        let base = PathBar::default().font_size;
+        (self.path_bar.font_size * BAR_H as f32 / base)
             .round()
             .max(BAR_H as f32 / 2.0)
     }
@@ -381,7 +281,7 @@ impl Settings {
 
     /// Zoom factor exponent per point of wheel scroll.
     pub fn wheel_zoom(&self) -> f64 {
-        crate::constants::WHEEL_ZOOM * self.general.zoom_speed as f64 / 100.0
+        WHEEL_ZOOM * self.general.zoom_speed as f64 / 100.0
     }
 
     /// Label font for the treemap.

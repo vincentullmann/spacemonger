@@ -32,7 +32,8 @@ use x11rb::protocol::xproto::{
 use x11rb::rust_connection::RustConnection;
 use x11rb::wrapper::ConnectionExt as _;
 
-type WireToEvent = unsafe extern "C" fn(*mut xlib::Display, *mut xlib::XEvent, *mut xlib::xEvent) -> c_int;
+type WireToEvent =
+    unsafe extern "C" fn(*mut xlib::Display, *mut xlib::XEvent, *mut xlib::xEvent) -> c_int;
 
 /// Our window and the atoms the hook matches on. Written once in [`install`], before the hook.
 static WINDOW: AtomicU32 = AtomicU32::new(0);
@@ -67,7 +68,8 @@ pub fn install(frame: &eframe::Frame, ctx: &Context, background: Color32) {
     let (Ok(win), Ok(disp)) = (frame.window_handle(), frame.display_handle()) else {
         return; // not created yet
     };
-    let (RawWindowHandle::Xlib(win), RawDisplayHandle::Xlib(disp)) = (win.as_raw(), disp.as_raw()) else {
+    let (RawWindowHandle::Xlib(win), RawDisplayHandle::Xlib(disp)) = (win.as_raw(), disp.as_raw())
+    else {
         GAVE_UP.store(true, Ordering::Relaxed); // Wayland, or not Xlib-backed
         return;
     };
@@ -103,16 +105,23 @@ pub fn set_background(color: Color32) {
 /// End of `ui`: this frame shows every request received so far. Ask for one more frame,
 /// which acknowledges them once this one is on screen.
 pub fn frame_drawn(ctx: &Context) {
-    let Some(v) = RECEIVED.lock().expect("x11 sync").take() else { return };
+    let Some(v) = RECEIVED.lock().expect("x11 sync").take() else {
+        return;
+    };
     *DRAWN.lock().expect("x11 sync") = Some(v);
     ctx.request_repaint();
 }
 
 /// Start of a frame (`logic`): the previous frame is presented, so release the WM.
 pub fn acknowledge() {
-    let Some(v) = DRAWN.lock().expect("x11 sync").take() else { return };
+    let Some(v) = DRAWN.lock().expect("x11 sync").take() else {
+        return;
+    };
     let Some(x) = X11.get() else { return };
-    let value = Int64 { hi: (v >> 32) as i32, lo: v as u32 };
+    let value = Int64 {
+        hi: (v >> 32) as i32,
+        lo: v as u32,
+    };
     let _ = x.conn.sync_set_counter(x.counter, value);
     let _ = x.conn.flush();
 }
@@ -120,10 +129,18 @@ pub fn acknowledge() {
 fn setup(window: Window, display: *mut xlib::Display, background: Color32) -> Result<X11, String> {
     let err = |e: &dyn std::fmt::Display| e.to_string();
     let (conn, _) = x11rb::connect(None).map_err(|e| err(&e))?;
-    conn.sync_initialize(3, 1).map_err(|e| err(&e))?.reply().map_err(|e| err(&e))?;
+    conn.sync_initialize(3, 1)
+        .map_err(|e| err(&e))?
+        .reply()
+        .map_err(|e| err(&e))?;
 
     let atom = |name: &[u8]| -> Result<u32, String> {
-        Ok(conn.intern_atom(false, name).map_err(|e| err(&e))?.reply().map_err(|e| err(&e))?.atom)
+        Ok(conn
+            .intern_atom(false, name)
+            .map_err(|e| err(&e))?
+            .reply()
+            .map_err(|e| err(&e))?
+            .atom)
     };
     let wm_protocols = atom(b"WM_PROTOCOLS")?;
     let sync_request = atom(b"_NET_WM_SYNC_REQUEST")?;
@@ -147,16 +164,36 @@ fn setup(window: Window, display: *mut xlib::Display, background: Color32) -> Re
     if !protocols.contains(&sync_request) {
         protocols.push(sync_request);
     }
-    conn.change_property32(PropMode::REPLACE, window, wm_protocols, AtomEnum::ATOM, &protocols)
-        .map_err(|e| err(&e))?;
-    conn.change_property32(PropMode::REPLACE, window, sync_counter, AtomEnum::CARDINAL, &[counter])
-        .map_err(|e| err(&e))?;
+    conn.change_property32(
+        PropMode::REPLACE,
+        window,
+        wm_protocols,
+        AtomEnum::ATOM,
+        &protocols,
+    )
+    .map_err(|e| err(&e))?;
+    conn.change_property32(
+        PropMode::REPLACE,
+        window,
+        sync_counter,
+        AtomEnum::CARDINAL,
+        &[counter],
+    )
+    .map_err(|e| err(&e))?;
 
-    let depth = conn.get_geometry(window).map_err(|e| err(&e))?.reply().map_err(|e| err(&e))?.depth;
+    let depth = conn
+        .get_geometry(window)
+        .map_err(|e| err(&e))?
+        .reply()
+        .map_err(|e| err(&e))?
+        .depth;
     let aux = ChangeWindowAttributesAux::new()
         .background_pixel(pixel(background, depth))
         .bit_gravity(Gravity::NORTH_WEST);
-    conn.change_window_attributes(window, &aux).map_err(|e| err(&e))?.check().map_err(|e| err(&e))?;
+    conn.change_window_attributes(window, &aux)
+        .map_err(|e| err(&e))?
+        .check()
+        .map_err(|e| err(&e))?;
 
     // Hook winit's connection. Store the atoms first: the hook may run on the next event.
     WINDOW.store(window, Ordering::Relaxed);
@@ -168,12 +205,24 @@ fn setup(window: Window, display: *mut xlib::Display, background: Color32) -> Re
     let prev = unsafe { (xlib.XESetWireToEvent)(display, xlib::ClientMessage, Some(hook)) };
     let _ = PREV_HOOK.set(prev);
 
-    Ok(X11 { conn, window, counter, depth, background: Mutex::new(Some(background)) })
+    Ok(X11 {
+        conn,
+        window,
+        counter,
+        depth,
+        background: Mutex::new(Some(background)),
+    })
 }
 
 /// Wraps Xlib's ClientMessage converter and notes `_NET_WM_SYNC_REQUEST` values for our window.
-unsafe extern "C" fn hook(dpy: *mut xlib::Display, ev: *mut xlib::XEvent, wire: *mut xlib::xEvent) -> c_int {
-    let Some(Some(prev)) = PREV_HOOK.get().copied() else { return 0 };
+unsafe extern "C" fn hook(
+    dpy: *mut xlib::Display,
+    ev: *mut xlib::XEvent,
+    wire: *mut xlib::xEvent,
+) -> c_int {
+    let Some(Some(prev)) = PREV_HOOK.get().copied() else {
+        return 0;
+    };
     // SAFETY: same arguments Xlib passed us.
     let keep = unsafe { prev(dpy, ev, wire) };
     if keep != 0 {
@@ -199,5 +248,9 @@ unsafe extern "C" fn hook(dpy: *mut xlib::Display, ev: *mut xlib::XEvent, wire: 
 /// Pixel value for a TrueColor visual of `depth` bits (32 carries alpha).
 fn pixel(c: Color32, depth: u8) -> u32 {
     let rgb = (c.r() as u32) << 16 | (c.g() as u32) << 8 | c.b() as u32;
-    if depth == 32 { 0xFF00_0000 | rgb } else { rgb }
+    if depth == 32 {
+        0xFF00_0000 | rgb
+    } else {
+        rgb
+    }
 }

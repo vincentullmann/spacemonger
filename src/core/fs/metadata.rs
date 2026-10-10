@@ -23,7 +23,9 @@ pub(super) fn meta(path: &Path) -> Option<Meta> {
     let m = fs::symlink_metadata(path).ok()?;
     let ft = m.file_type();
     let secs = |t: std::io::Result<std::time::SystemTime>| {
-        t.ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs() as i64)
+        t.ok()
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .map_or(0, |d| d.as_secs() as i64)
     };
     let (mtime, created) = (secs(m.modified()), secs(m.created()));
     let alloc = filesize::file_real_size_fast(path, &m).unwrap_or(m.len());

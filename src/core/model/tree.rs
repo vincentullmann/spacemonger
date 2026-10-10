@@ -60,7 +60,11 @@ impl Tree {
 
     /// Hide an entry from the view: ancestors shrink by its size; `unhide_all` restores it.
     pub fn hide(&mut self, folder: &[usize], index: usize) {
-        let Some(size) = self.entry_at(folder, index).filter(|e| !e.hidden).map(|e| e.size) else {
+        let Some(size) = self
+            .entry_at(folder, index)
+            .filter(|e| !e.hidden)
+            .map(|e| e.size)
+        else {
             return;
         };
         self.shrink_ancestors(folder, size);
@@ -172,15 +176,34 @@ mod tests {
     use super::*;
 
     fn file(name: &str, size: u64) -> Entry {
-        Entry { name: name.into(), size, actual: size, mtime: 0, created: 0, kind: Kind::File, hidden: false }
+        Entry {
+            name: name.into(),
+            size,
+            actual: size,
+            mtime: 0,
+            created: 0,
+            kind: Kind::File,
+            hidden: false,
+        }
     }
 
     #[test]
     fn hide_and_unhide_restore_sizes() {
-        let sub = Folder { entries: vec![file("f", 10), file("g", 5)], total: 15 };
+        let sub = Folder {
+            entries: vec![file("f", 10), file("g", 5)],
+            total: 15,
+        };
         let root = Folder {
             entries: vec![
-                Entry { name: "d".into(), size: 15, actual: 15, mtime: 0, created: 0, kind: Kind::Dir(Box::new(sub)), hidden: false },
+                Entry {
+                    name: "d".into(),
+                    size: 15,
+                    actual: 15,
+                    mtime: 0,
+                    created: 0,
+                    kind: Kind::Dir(Box::new(sub)),
+                    hidden: false,
+                },
                 file("x", 7),
             ],
             total: 22,
@@ -209,10 +232,21 @@ mod tests {
 
     #[test]
     fn dotfiles_leave_and_come_back() {
-        let sub = Folder { entries: vec![file(".git", 10), file("g", 5)], total: 15 };
+        let sub = Folder {
+            entries: vec![file(".git", 10), file("g", 5)],
+            total: 15,
+        };
         let root = Folder {
             entries: vec![
-                Entry { name: "d".into(), size: 15, actual: 15, mtime: 0, created: 0, kind: Kind::Dir(Box::new(sub)), hidden: false },
+                Entry {
+                    name: "d".into(),
+                    size: 15,
+                    actual: 15,
+                    mtime: 0,
+                    created: 0,
+                    kind: Kind::Dir(Box::new(sub)),
+                    hidden: false,
+                },
                 file(".x", 7),
             ],
             total: 22,

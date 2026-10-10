@@ -32,7 +32,10 @@ impl Item {
 
     /// The (clipped) box as an f64 rect.
     pub fn rect(&self) -> Rect {
-        Rect::from_origin_size((self.x as f64, self.y as f64), (self.w as f64, self.h as f64))
+        Rect::from_origin_size(
+            (self.x as f64, self.y as f64),
+            (self.w as f64, self.h as f64),
+        )
     }
 
     pub fn contains(&self, px: f32, py: f32) -> bool {
@@ -41,6 +44,9 @@ impl Item {
 
     /// For folders: is the point on the frame / title bar (not the content area)?
     pub fn on_frame(&self, px: f32, py: f32, title_h: f32) -> bool {
-        px < self.x + 3.0 || py < self.y + title_h || px > self.x + self.w - 3.0 || py > self.y + self.h - 3.0
+        px < self.x + 3.0
+            || py < self.y + title_h
+            || px > self.x + self.w - 3.0
+            || py > self.y + self.h - 3.0
     }
 }

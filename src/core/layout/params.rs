@@ -1,8 +1,15 @@
 //! Layout settings (density, split bias, free space).
 
 /// Minimum (w, h) for a labelled box, by density (-3..=3).
-const MIN_SIZES: [(f64, f64); 7] =
-    [(96.0, 64.0), (64.0, 48.0), (48.0, 32.0), (32.0, 24.0), (24.0, 16.0), (16.0, 12.0), (8.0, 6.0)];
+const MIN_SIZES: [(f64, f64); 7] = [
+    (96.0, 64.0),
+    (64.0, 48.0),
+    (48.0, 32.0),
+    (32.0, 24.0),
+    (24.0, 16.0),
+    (16.0, 12.0),
+    (8.0, 6.0),
+];
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct LayoutParams {
@@ -18,7 +25,13 @@ pub struct LayoutParams {
 
 impl Default for LayoutParams {
     fn default() -> Self {
-        Self { density: 0, bias: 0, show_free: true, hide_dotfiles: false, title_h: super::content::TITLE_H }
+        Self {
+            density: 0,
+            bias: 0,
+            show_free: true,
+            hide_dotfiles: false,
+            title_h: super::content::TITLE_H,
+        }
     }
 }
 

@@ -8,8 +8,16 @@ use crate::core::model::Folder;
 /// Boxes of the folder's laid-out entries (not hidden or empty) when its content area is
 /// `area`: the plain split, with no clipping or size limits.
 pub fn child_boxes(folder: &Folder, area: Rect, p: LayoutParams) -> Vec<(usize, Rect)> {
-    fn walk(folder: &Folder, list: &[usize], r: Rect, p: LayoutParams, out: &mut Vec<(usize, Rect)>) {
-        let Some(halves) = halves(folder, list, r, p) else { return };
+    fn walk(
+        folder: &Folder,
+        list: &[usize],
+        r: Rect,
+        p: LayoutParams,
+        out: &mut Vec<(usize, Rect)>,
+    ) {
+        let Some(halves) = halves(folder, list, r, p) else {
+            return;
+        };
         for (l, r) in halves {
             match l.len() {
                 0 => {}
@@ -27,7 +35,13 @@ pub fn child_boxes(folder: &Folder, area: Rect, p: LayoutParams) -> Vec<(usize, 
 /// Unclipped box of the entry at `path` (from the scan root) with the root's box at `cam`,
 /// as drawn with overrides `ovs`. Pure geometry: ignores size thresholds, so it also works for
 /// boxes too small to draw. An empty path gives `cam` itself.
-pub fn locate(root: &Folder, cam: Rect, path: &[usize], p: LayoutParams, ovs: &[Reshape]) -> Option<Rect> {
+pub fn locate(
+    root: &Folder,
+    cam: Rect,
+    path: &[usize],
+    p: LayoutParams,
+    ovs: &[Reshape],
+) -> Option<Rect> {
     let mut folder = root;
     let mut area = root_content(cam);
     let mut b = cam;
@@ -65,7 +79,13 @@ pub fn locate(root: &Folder, cam: Rect, path: &[usize], p: LayoutParams, ovs: &[
 }
 
 /// Content area of the folder at `path` with the root's box at `cam`.
-pub fn content_of(root: &Folder, cam: Rect, path: &[usize], p: LayoutParams, ovs: &[Reshape]) -> Option<Rect> {
+pub fn content_of(
+    root: &Folder,
+    cam: Rect,
+    path: &[usize],
+    p: LayoutParams,
+    ovs: &[Reshape],
+) -> Option<Rect> {
     if path.is_empty() {
         Some(root_content(cam))
     } else {

@@ -39,7 +39,10 @@ impl Selection {
         let mut out = Selection::default();
         for r in self.iter() {
             let moved = match nav {
-                Nav::Parent => r.folder.split_last().map(|(&last, up)| EntryRef::new(Rc::from(up), last)),
+                Nav::Parent => r
+                    .folder
+                    .split_last()
+                    .map(|(&last, up)| EntryRef::new(Rc::from(up), last)),
                 Nav::FirstChild => {
                     let p: Rc<[usize]> = r.path().into();
                     boxes(&p).first().map(|&(c, _)| EntryRef::new(p, c))

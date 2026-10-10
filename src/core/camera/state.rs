@@ -1,7 +1,7 @@
 //! Camera state and the direct manipulations: pan, wheel zoom, reveal.
 
 use super::{Anchor, Anim, Fit};
-use crate::constants::{ANIM_DURATION, FRAME_FILL, MAX_ZOOM};
+use crate::constants::MAX_ZOOM;
 use crate::core::geometry::{Point, Rect, Size, TranslateScale, Vec2};
 use crate::core::layout::{self, child_boxes, Item, Reshape, Scene};
 use crate::core::model::Kind;
@@ -34,7 +34,11 @@ pub struct CameraParams {
 
 impl Default for CameraParams {
     fn default() -> Self {
-        Self { anim_duration: ANIM_DURATION, frame_fill: FRAME_FILL }
+        // Same as the settings defaults: 250 ms, 90% of the view.
+        Self {
+            anim_duration: 0.25,
+            frame_fill: 0.9,
+        }
     }
 }
 
@@ -59,7 +63,12 @@ impl Camera {
 
     /// Box a folder (with a `title_h` title bar) needs so its content exactly fills the view.
     pub fn fill_box(&self, title_h: f64) -> Rect {
-        Rect::new(-3.0, -title_h, self.view.width + 2.0, self.view.height + 2.0)
+        Rect::new(
+            -3.0,
+            -title_h,
+            self.view.width + 2.0,
+            self.view.height + 2.0,
+        )
     }
 
     pub fn scale_of(&self, c: Rect) -> f64 {
@@ -75,7 +84,11 @@ impl Camera {
         match &self.fit {
             Some(f) => {
                 let b = f.blend(self.scale_of(c));
-                if b > 0.0 { vec![f.reshape.faded(b)] } else { Vec::new() }
+                if b > 0.0 {
+                    vec![f.reshape.faded(b)]
+                } else {
+                    Vec::new()
+                }
             }
             None => Vec::new(),
         }
@@ -112,7 +125,10 @@ impl Camera {
     /// Keep the root covering the view (no zooming out past the scan root), and while a
     /// folder is fully fitted, keep it covering the view too.
     pub(super) fn clamp_cam(&self, scene: &Scene, c: Rect) -> Rect {
-        let Size { width: vw, height: vh } = self.view;
+        let Size {
+            width: vw,
+            height: vh,
+        } = self.view;
         if c.width() < vw || c.height() < vh {
             return self.full_view();
         }
@@ -120,7 +136,11 @@ impl Camera {
         let (mut xlo, mut xhi) = (vw - c.x1, -c.x0);
         let (mut ylo, mut yhi) = (vh - c.y1, -c.y0);
         // ...and a fully fitted folder's content too.
-        if let Some(f) = self.fit.as_ref().filter(|f| f.blend(self.scale_of(c)) >= 1.0) {
+        if let Some(f) = self
+            .fit
+            .as_ref()
+            .filter(|f| f.blend(self.scale_of(c)) >= 1.0)
+        {
             if let Some(b) = scene.locate(c, &f.reshape.path, std::slice::from_ref(&f.reshape)) {
                 let k = layout::content(b, scene.params.title_h);
                 let view = layout::root_content(self.full_view());
@@ -139,17 +159,25 @@ impl Camera {
 
     /// Keep the root covering the view (ignoring any fitted folder).
     pub(super) fn cover_root(&self, c: Rect) -> Rect {
-        let Size { width: vw, height: vh } = self.view;
+        let Size {
+            width: vw,
+            height: vh,
+        } = self.view;
         if c.width() < vw || c.height() < vh {
             return self.full_view();
         }
-        c.with_origin((c.x0.min(0.0).max(vw - c.width()), c.y0.min(0.0).max(vh - c.height())))
+        c.with_origin((
+            c.x0.min(0.0).max(vw - c.width()),
+            c.y0.min(0.0).max(vh - c.height()),
+        ))
     }
 
     /// Scale the camera by `k` about a view point, keeping whatever is under it in place.
     pub fn zoom_at(&mut self, scene: &Scene, items: &[Item], p: Point, k: f64) {
         let Some(cam) = self.cam else { return };
-        let k = k.min(MAX_ZOOM * self.view.width / cam.width()).min(MAX_ZOOM * self.view.height / cam.height());
+        let k = k
+            .min(MAX_ZOOM * self.view.width / cam.width())
+            .min(MAX_ZOOM * self.view.height / cam.height());
 
         // Deepest entry under the point (drawn last).
         let anchor = items
@@ -157,14 +185,21 @@ impl Camera {
             .rev()
             .find(|it| it.index.is_some() && !it.is_free && it.contains(p.x as f32, p.y as f32))
             .and_then(Item::path);
-        let before = anchor.and_then(|path| scene.locate(cam, &path, &self.ovs_at(cam)).map(|b| (path, b)));
+        let before = anchor.and_then(|path| {
+            scene
+                .locate(cam, &path, &self.ovs_at(cam))
+                .map(|b| (path, b))
+        });
 
         let mut c = Self::scaled(cam, p, k);
         // Frames don't scale (and a fitted folder's stretch fades), so pin the anchor.
         if let Some((path, b0)) = before.filter(|(_, b)| b.width() > 1e-6 && b.height() > 1e-6) {
             if let Some(b1) = scene.locate(c, &path, &self.ovs_at(c)) {
                 let (u, v) = ((p.x - b0.x0) / b0.width(), (p.y - b0.y0) / b0.height());
-                c = c + Vec2::new(p.x - (b1.x0 + u * b1.width()), p.y - (b1.y0 + v * b1.height()));
+                c = c + Vec2::new(
+                    p.x - (b1.x0 + u * b1.width()),
+                    p.y - (b1.y0 + v * b1.height()),
+                );
             }
         }
         self.cam = Some(self.clamp_cam(scene, c));
@@ -190,7 +225,9 @@ impl Camera {
     /// bigger than the view, lines its top / left edge up with the view's).
     pub fn reveal(&mut self, scene: &Scene, path: &[usize]) {
         let Some(cam) = self.cam else { return };
-        let Some(b) = scene.locate(cam, path, &self.ovs_at(cam)) else { return };
+        let Some(b) = scene.locate(cam, path, &self.ovs_at(cam)) else {
+            return;
+        };
         let shift = |lo: f64, len: f64, view: f64| -> f64 {
             let hi = lo + len;
             if lo <= 0.0 && hi >= view && len > view {
@@ -208,7 +245,10 @@ impl Camera {
                 }
             }
         };
-        let d = Vec2::new(shift(b.x0, b.width(), self.view.width), shift(b.y0, b.height(), self.view.height));
+        let d = Vec2::new(
+            shift(b.x0, b.width(), self.view.width),
+            shift(b.y0, b.height(), self.view.height),
+        );
         if d != Vec2::ZERO {
             self.pan(scene, d);
         }
@@ -217,9 +257,15 @@ impl Camera {
     /// Boxes of the folder's entries as drawn now (natural split of its content area at the
     /// current camera), without free space.
     pub fn child_boxes(&self, scene: &Scene, folder: &[usize]) -> Vec<(usize, Rect)> {
-        let (Some(root), Some(cam)) = (scene.root, self.cam) else { return Vec::new() };
-        let Some(f) = root.descendant(folder) else { return Vec::new() };
-        let Some(area) = scene.content_of(cam, folder, &self.ovs_at(cam)) else { return Vec::new() };
+        let (Some(root), Some(cam)) = (scene.root, self.cam) else {
+            return Vec::new();
+        };
+        let Some(f) = root.descendant(folder) else {
+            return Vec::new();
+        };
+        let Some(area) = scene.content_of(cam, folder, &self.ovs_at(cam)) else {
+            return Vec::new();
+        };
         child_boxes(f, area, scene.params)
             .into_iter()
             .filter(|&(i, _)| !matches!(f.entries[i].kind, Kind::Free))

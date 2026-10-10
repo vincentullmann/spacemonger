@@ -190,7 +190,11 @@ pub fn scan(drive: &Drive, ctl: &ScanControl) -> Option<Tree> {
         .stack_size(32 * 1024 * 1024)
         .build()
         .ok()?;
-    let root = Arc::new(LiveDir::new(String::new(), root_meta.mtime, root_meta.created));
+    let root = Arc::new(LiveDir::new(
+        String::new(),
+        root_meta.mtime,
+        root_meta.created,
+    ));
     *ctl.live() = Some(root.clone());
     pool.install(|| {
         scan_dir(

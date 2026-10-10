@@ -118,7 +118,10 @@ mod tests {
         assert_eq!(s.len(), 3);
         // Back onto the previous one: undo the last step.
         s.extend_to(r(&[], 1));
-        assert_eq!(s.iter().cloned().collect::<Vec<_>>(), vec![r(&[], 0), r(&[], 1)]);
+        assert_eq!(
+            s.iter().cloned().collect::<Vec<_>>(),
+            vec![r(&[], 0), r(&[], 1)]
+        );
     }
 
     #[test]

@@ -4,7 +4,10 @@ use std::path::PathBuf;
 
 fn main() -> eframe::Result {
     let open_path = std::env::args_os().nth(1).map(PathBuf::from);
-    if matches!(open_path.as_deref().and_then(|p| p.to_str()), Some("-h" | "--help")) {
+    if matches!(
+        open_path.as_deref().and_then(|p| p.to_str()),
+        Some("-h" | "--help")
+    ) {
         println!("usage: spacemonger [FOLDER]");
         return Ok(());
     }
@@ -14,7 +17,8 @@ fn main() -> eframe::Result {
         .with_app_id("spacemonger")
         .with_inner_size([1200.0, 800.0])
         .with_min_inner_size([400.0, 300.0]);
-    if let Ok(icon) = eframe::icon_data::from_png_bytes(include_bytes!("../assets/SpaceMonger.png")) {
+    if let Ok(icon) = eframe::icon_data::from_png_bytes(include_bytes!("../assets/SpaceMonger.png"))
+    {
         viewport = viewport.with_icon(icon);
     }
 
@@ -25,7 +29,10 @@ fn main() -> eframe::Result {
         // drag pauses. GL just draws at the current size, so the treemap follows the drag.
         #[cfg(target_os = "linux")]
         renderer: eframe::Renderer::Glow,
-        glow_options: eframe::egui_glow::GlowConfiguration { vsync: false, ..Default::default() },
+        glow_options: eframe::egui_glow::GlowConfiguration {
+            vsync: false,
+            ..Default::default()
+        },
         // We only repaint on input, so vsync buys nothing; without it a resize
         // never blocks waiting for a frame and the treemap redraws live.
         wgpu_options: eframe::egui_wgpu::WgpuConfiguration {
@@ -40,6 +47,10 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "spacemonger",
         options,
-        Box::new(move |cc| Ok(Box::new(spacemonger::ui::app::SpaceMonger::new(cc, open_path)))),
+        Box::new(move |cc| {
+            Ok(Box::new(spacemonger::ui::app::SpaceMonger::new(
+                cc, open_path,
+            )))
+        }),
     )
 }
