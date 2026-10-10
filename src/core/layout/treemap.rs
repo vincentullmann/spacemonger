@@ -2,7 +2,7 @@
 
 use super::split::halves;
 use super::{content, root_content, Item, LayoutParams, Reshape};
-use crate::core::geometry::Rect;
+use crate::core::geometry::{Rect, Size};
 use crate::core::model::{Folder, Kind};
 use std::rc::Rc;
 
@@ -34,7 +34,7 @@ struct Ctx<'a> {
 
 impl Ctx<'_> {
     fn on_screen(&self, r: Rect) -> bool {
-        r.x < self.vw && r.y < self.vh && r.x + r.w > 0.0 && r.y + r.h > 0.0
+        r.x0 < self.vw && r.y0 < self.vh && r.x1 > 0.0 && r.y1 > 0.0
     }
 
     /// Does one of `indices` in the folder at `path` lead to a reshaped folder? Its natural box
@@ -53,10 +53,10 @@ impl Ctx<'_> {
 
     fn push(&mut self, folder: &Rc<[usize]>, index: Option<usize>, depth: i32, kind: (bool, bool, bool), r: Rect) {
         let m = CLIP_MARGIN;
-        let x0 = r.x.max(-m);
-        let y0 = r.y.max(-m);
-        let x1 = (r.x + r.w).min(self.vw + m);
-        let y1 = (r.y + r.h).min(self.vh + m);
+        let x0 = r.x0.max(-m);
+        let y0 = r.y0.max(-m);
+        let x1 = r.x1.min(self.vw + m);
+        let y1 = r.y1.min(self.vh + m);
         let (is_folder, is_free, labeled) = kind;
         self.out.push(Item {
             folder: folder.clone(),
@@ -74,8 +74,9 @@ impl Ctx<'_> {
 }
 
 /// Lay out the tree from `root` with the root's box at `cam`, keeping only what falls
-/// inside the `vw` x `vh` view. Folders named in `ovs` get reshaped boxes.
-pub fn build(root: &Folder, cam: Rect, vw: f64, vh: f64, p: LayoutParams, ovs: &[Reshape]) -> Vec<Item> {
+/// inside the `view`. Folders named in `ovs` get reshaped boxes.
+pub fn build(root: &Folder, cam: Rect, view: Size, p: LayoutParams, ovs: &[Reshape]) -> Vec<Item> {
+    let (vw, vh) = (view.width, view.height);
     let mut out = Vec::new();
     let (hmin, vmin) = p.label_min();
     let mut cx = Ctx { out: &mut out, ovs, deferred: Default::default(), p, hmin, vmin, vw, vh };
@@ -85,7 +86,7 @@ pub fn build(root: &Folder, cam: Rect, vw: f64, vh: f64, p: LayoutParams, ovs: &
     while let Some(df) = cx.deferred.pop_front() {
         let Some(folder) = root.descendant(&df.folder) else { continue };
         let e = &folder.entries[df.index];
-        let labeled = df.r.w > cx.hmin && df.r.h > cx.vmin;
+        let labeled = df.r.width() > cx.hmin && df.r.height() > cx.vmin;
         if cx.on_screen(df.r) {
             cx.push(&df.folder, Some(df.index), df.depth, (e.child().is_some(), false, labeled), df.r);
         }
@@ -116,8 +117,8 @@ fn place(cx: &mut Ctx, folder: &Folder, path: &Rc<[usize]>, list: &[usize], r: R
     if list.is_empty() || (!cx.on_screen(r) && !cx.leads_to_ov(path, list)) {
         return;
     }
-    let labeled = r.w > cx.hmin && r.h > cx.vmin;
-    let visible = r.w > MIN_BOX && r.h > MIN_BOX;
+    let labeled = r.width() > cx.hmin && r.height() > cx.vmin;
+    let visible = r.width() > MIN_BOX && r.height() > MIN_BOX;
     if list.len() > 1 && visible {
         split(cx, folder, path, list, r, depth);
     } else if list.len() == 1 && visible {

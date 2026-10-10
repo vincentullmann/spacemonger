@@ -2573,6 +2573,7 @@ dependencies = [
  "filesize",
  "humansize",
  "indexmap",
+ "kurbo",
  "lfs-core",
  "num-format",
  "open",

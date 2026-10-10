@@ -2,7 +2,7 @@
 
 use super::{Anim, Camera, Fit};
 use crate::constants::{FRAME_FILL, MAX_ZOOM};
-use crate::core::geometry::Rect;
+use crate::core::geometry::{Rect, RectExt};
 use crate::core::layout::{self, Reshape, Scene};
 use std::time::Instant;
 
@@ -10,25 +10,23 @@ impl Camera {
     /// Even-zoom camera that centres the bounding box of the entries at `paths` (natural boxes)
     /// and fits it in the view with a margin, as far as the root allows.
     fn solve_frame(&self, scene: &Scene, paths: &[Vec<usize>]) -> Option<Rect> {
-        let (vw, vh) = self.view;
+        let (vw, vh) = (self.view.width, self.view.height);
         let bbox = |cam: Rect| {
-            let mut bb: Option<(f64, f64, f64, f64)> = None;
-            for r in paths.iter().filter_map(|p| scene.locate(cam, p, &[])) {
-                let (x0, y0, x1, y1) = bb.unwrap_or((r.x, r.y, r.x + r.w, r.y + r.h));
-                bb = Some((x0.min(r.x), y0.min(r.y), x1.max(r.x + r.w), y1.max(r.y + r.h)));
-            }
-            bb.map(|(x0, y0, x1, y1)| Rect::new(x0, y0, x1 - x0, y1 - y0)).filter(|b| b.w > 1e-9 && b.h > 1e-9)
+            paths
+                .iter()
+                .filter_map(|p| scene.locate(cam, p, &[]))
+                .reduce(|a, b| a.union(b))
+                .filter(|b| b.width() > 1e-9 && b.height() > 1e-9)
         };
         // Folder frames don't scale with the camera, so converge on it.
         let mut cam = self.cam?;
         for _ in 0..40 {
             let b = bbox(cam)?;
-            let k = (FRAME_FILL * vw / b.w).min(FRAME_FILL * vh / b.h).min(MAX_ZOOM * vw / cam.w);
+            let k = (FRAME_FILL * vw / b.width()).min(FRAME_FILL * vh / b.height()).min(MAX_ZOOM * vw / cam.width());
             let bc = b.center();
-            cam = Self::scaled(cam, bc, k);
-            cam.x += vw / 2.0 - bc.0;
-            cam.y += vh / 2.0 - bc.1;
-            if (k - 1.0).abs() < 1e-9 && (vw / 2.0 - bc.0).abs() < 1e-6 && (vh / 2.0 - bc.1).abs() < 1e-6 {
+            let off = self.view.to_rect().center() - bc;
+            cam = Self::scaled(cam, bc, k) + off;
+            if (k - 1.0).abs() < 1e-9 && off.x.abs() < 1e-6 && off.y.abs() < 1e-6 {
                 break;
             }
         }
@@ -42,15 +40,13 @@ impl Camera {
         let mut cam = self.cam?;
         for _ in 0..40 {
             let n = scene.locate(cam, path, &[])?;
-            if n.area() <= 0.0 {
+            if n.clamped_area() <= 0.0 {
                 return None;
             }
-            let k = (t.area() / n.area()).sqrt();
-            let (nc, tc) = (n.center(), t.center());
-            cam = Self::scaled(cam, nc, k);
-            cam.x += tc.0 - nc.0;
-            cam.y += tc.1 - nc.1;
-            if (k - 1.0).abs() < 1e-9 && (tc.0 - nc.0).abs() < 1e-6 && (tc.1 - nc.1).abs() < 1e-6 {
+            let k = (t.clamped_area() / n.clamped_area()).sqrt();
+            let (nc, off) = (n.center(), t.center() - n.center());
+            cam = Self::scaled(cam, nc, k) + off;
+            if (k - 1.0).abs() < 1e-9 && off.x.abs() < 1e-6 && off.y.abs() < 1e-6 {
                 break;
             }
         }
@@ -78,7 +74,8 @@ impl Camera {
         };
         let Some(n1) = scene.locate(end_cam, path, &[]) else { return };
         let b1 = if path.is_empty() { end_cam } else { self.fill_box() };
-        if end_cam == cam0 && old.is_none() && (b0.x - b1.x).abs() < 0.5 && (b0.w - b1.w).abs() < 0.5 && (b0.h - b1.h).abs() < 0.5 {
+        let same = |a: f64, b: f64| (a - b).abs() < 0.5;
+        if end_cam == cam0 && old.is_none() && same(b0.x0, b1.x0) && same(b0.width(), b1.width()) && same(b0.height(), b1.height()) {
             self.fit = end_fit;
             return;
         }
@@ -134,8 +131,9 @@ impl Camera {
         scene.root?;
         let view = layout::root_content(self.full_view());
         let ovs = self.ovs_at(cam);
+        let same = |a: f64, b: f64| (a - b).abs() < 0.5;
         let fitted = scene.content_of(cam, zoom, &ovs).is_some_and(|c| {
-            (c.x - view.x).abs() < 0.5 && (c.y - view.y).abs() < 0.5 && (c.w - view.w).abs() < 0.5 && (c.h - view.h).abs() < 0.5
+            same(c.x0, view.x0) && same(c.y0, view.y0) && same(c.width(), view.width()) && same(c.height(), view.height())
         });
         let mut target = zoom.to_vec();
         if fitted {

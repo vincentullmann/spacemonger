@@ -42,12 +42,12 @@ pub(super) fn halves(folder: &Folder, indices: &[usize], r: Rect, p: LayoutParam
         _ => (8.0, 8.0),
     };
     let f = s1 as f64 / (s1 + s2) as f64;
-    let (r1, r2) = if r.w * wbias > r.h * hbias {
-        let sp = r.w.max(0.0) * f;
-        (Rect::new(r.x, r.y, sp, r.h), Rect::new(r.x + sp, r.y, r.w - sp, r.h))
+    let (r1, r2) = if r.width() * wbias > r.height() * hbias {
+        let sp = r.x0 + r.width().max(0.0) * f;
+        (Rect::new(r.x0, r.y0, sp, r.y1), Rect::new(sp, r.y0, r.x1, r.y1))
     } else {
-        let sp = r.h.max(0.0) * f;
-        (Rect::new(r.x, r.y, r.w, sp), Rect::new(r.x, r.y + sp, r.w, r.h - sp))
+        let sp = r.y0 + r.height().max(0.0) * f;
+        (Rect::new(r.x0, r.y0, r.x1, sp), Rect::new(r.x0, sp, r.x1, r.y1))
     };
     Some([(l1, r1), (l2, r2)])
 }

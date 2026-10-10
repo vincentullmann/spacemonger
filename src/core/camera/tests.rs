@@ -1,7 +1,7 @@
 //! Camera tests on a small nested tree.
 
 use super::*;
-use crate::core::geometry::Rect;
+use crate::core::geometry::{Point, Rect, Size, Vec2};
 use crate::core::layout::{content, root_content, LayoutParams, Scene};
 use crate::core::model::{Entry, Folder, Kind};
 
@@ -25,18 +25,18 @@ fn tree() -> Folder {
 }
 
 fn camera() -> Camera {
-    let mut c = Camera { view: (VW, VH), ..Default::default() };
+    let mut c = Camera { view: Size::new(VW, VH), ..Default::default() };
     c.ensure();
     c
 }
 
 fn close(a: Rect, b: Rect) -> bool {
-    (a.x - b.x).abs() < 0.5 && (a.y - b.y).abs() < 0.5 && (a.w - b.w).abs() < 0.5 && (a.h - b.h).abs() < 0.5
+    (a.x0 - b.x0).abs() < 0.5 && (a.y0 - b.y0).abs() < 0.5 && (a.x1 - b.x1).abs() < 0.5 && (a.y1 - b.y1).abs() < 0.5
 }
 
 #[test]
 fn fit_blend_fades_between_half_and_full_scale() {
-    let f = Fit { reshape: crate::core::layout::Reshape { path: vec![0], a: (1.0, 1.0), d: (0.0, 0.0) }, scale: 4.0 };
+    let f = Fit { reshape: crate::core::layout::Reshape { path: vec![0], a: Vec2::new(1.0, 1.0), d: Vec2::ZERO }, scale: 4.0 };
     assert_eq!(f.blend(4.0), 1.0);
     assert_eq!(f.blend(8.0), 1.0);
     assert_eq!(f.blend(2.0), 0.0);
@@ -74,7 +74,7 @@ fn framing_keeps_selection() {
     c.frame(&scene, &[vec![2]]);
     assert!(!c.finish_anim(), "framing keeps the selection");
     let b = scene.locate(c.cam.unwrap(), &[2], &[]).unwrap();
-    assert!(b.x >= -0.5 && b.y >= -0.5 && b.x + b.w <= VW + 0.5 && b.y + b.h <= VH + 0.5);
+    assert!(b.x0 >= -0.5 && b.y0 >= -0.5 && b.x1 <= VW + 0.5 && b.y1 <= VH + 0.5);
 }
 
 #[test]
@@ -83,18 +83,18 @@ fn pan_and_zoom_keep_root_covering_view() {
     let scene = Scene { root: Some(&root), params: LayoutParams::default() };
     let mut c = camera();
     // Can't pan or zoom out past the root.
-    c.pan(&scene, 50.0, 50.0);
+    c.pan(&scene, Vec2::new(50.0, 50.0));
     assert_eq!(c.cam, Some(c.full_view()));
-    c.zoom_at(&scene, &[], 100.0, 100.0, 0.5);
+    c.zoom_at(&scene, &[], Point::new(100.0, 100.0), 0.5);
     assert_eq!(c.cam, Some(c.full_view()));
     // Zoom in 2x about a point: that point stays put.
-    c.zoom_at(&scene, &[], 100.0, 100.0, 2.0);
+    c.zoom_at(&scene, &[], Point::new(100.0, 100.0), 2.0);
     let cam = c.cam.unwrap();
-    assert!((cam.w - 2.0 * VW).abs() < 1e-9);
-    assert!((cam.x + 100.0).abs() < 1e-9 && (cam.y + 100.0).abs() < 1e-9);
+    assert!((cam.width() - 2.0 * VW).abs() < 1e-9);
+    assert!((cam.x0 + 100.0).abs() < 1e-9 && (cam.y0 + 100.0).abs() < 1e-9);
     // Panning is clamped to the root's edges.
-    c.pan(&scene, 1e6, 1e6);
-    assert_eq!((c.cam.unwrap().x, c.cam.unwrap().y), (0.0, 0.0));
+    c.pan(&scene, Vec2::new(1e6, 1e6));
+    assert_eq!(c.cam.unwrap().origin(), Point::ZERO);
 }
 
 #[test]
@@ -103,20 +103,20 @@ fn reveal_pans_box_into_view() {
     let scene = Scene { root: Some(&root), params: LayoutParams::default() };
     let on_screen = |c: &Camera| {
         let b = scene.locate(c.cam.unwrap(), &[2], &[]).unwrap();
-        (b, b.x >= 0.0 && b.y >= 0.0 && b.x + b.w <= VW + 1e-9 && b.y + b.h <= VH + 1e-9)
+        (b, b.x0 >= 0.0 && b.y0 >= 0.0 && b.x1 <= VW + 1e-9 && b.y1 <= VH + 1e-9)
     };
     // Fits in the view: pan it fully in.
     let mut c = camera();
-    c.zoom_at(&scene, &[], 0.0, 0.0, 2.0);
+    c.zoom_at(&scene, &[], Point::ZERO, 2.0);
     assert!(!on_screen(&c).1, "c starts off-screen");
     c.reveal(&scene, &[2]);
     assert!(on_screen(&c).1);
     // Bigger than the view: line up its top-left corner with the view's.
     let mut c = camera();
-    c.zoom_at(&scene, &[], 0.0, 0.0, 4.0);
+    c.zoom_at(&scene, &[], Point::ZERO, 4.0);
     c.reveal(&scene, &[2]);
     let (b, _) = on_screen(&c);
-    assert_eq!((b.x, b.y), (0.0, 0.0));
+    assert_eq!(b.origin(), Point::ZERO);
 }
 
 #[test]
@@ -124,7 +124,7 @@ fn resize_when_not_zoomed_stays_full_view() {
     let root = tree();
     let scene = Scene { root: Some(&root), params: LayoutParams::default() };
     let mut c = camera();
-    c.resized(&scene, &[], 800.0, 500.0);
+    c.resized(&scene, &[], Size::new(800.0, 500.0));
     assert_eq!(c.cam, Some(Rect::new(0.0, 0.0, 800.0, 500.0)));
 }
 

@@ -3,6 +3,7 @@
 use super::SpaceMonger;
 use crate::constants::{INFOTIP_DELAY, WHEEL_ZOOM};
 use crate::core::actions::Action;
+use crate::core::geometry::{Point, Size, Vec2};
 use crate::core::layout::{self, hit_test};
 use crate::core::model::EntryRef;
 use crate::core::selection::{Marquee, Selection};
@@ -20,11 +21,11 @@ impl SpaceMonger {
         let mods = ui.input(|i| i.modifiers);
 
         // Camera: start fully zoomed out; on resize, hold the folder in view steady.
-        let (vw, vh) = (w as f64, h as f64);
-        if (vw, vh) != self.camera.view {
+        let view = Size::new(w as f64, h as f64);
+        if view != self.camera.view {
             self.finish_anim();
             let (camera, scene, items) = self.camera_ctx();
-            camera.resized(&scene, items, vw, vh);
+            camera.resized(&scene, items, view);
         }
         self.camera.ensure();
         self.step_anim();
@@ -68,7 +69,7 @@ impl SpaceMonger {
                 if let Some(p) = resp.hover_pos() {
                     let (x, y) = d.local(p);
                     let (camera, scene, items) = self.camera_ctx();
-                    camera.zoom_at(&scene, items, x as f64, y as f64, k);
+                    camera.zoom_at(&scene, items, Point::new(x as f64, y as f64), k);
                 }
             }
         }
@@ -91,7 +92,7 @@ impl SpaceMonger {
             self.finish_anim();
             let delta = resp.drag_delta();
             let (camera, scene, _) = self.camera_ctx();
-            camera.pan(&scene, delta.x as f64, delta.y as f64);
+            camera.pan(&scene, Vec2::new(delta.x as f64, delta.y as f64));
             ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
         }
     }
@@ -104,13 +105,13 @@ impl SpaceMonger {
         };
         let key = (w, h, self.generation, cam, ovs);
         if self.layout_key.as_ref() != Some(&key) {
-            let (vw, vh) = (w as f64, h as f64);
+            let view = Size::new(w as f64, h as f64);
             let p = self.params();
             self.items = match &self.tree {
-                Some(t) => layout::build(&t.root, cam, vw, vh, p, &key.4),
+                Some(t) => layout::build(&t.root, cam, view, p, &key.4),
                 None => Vec::new(),
             };
-            self.zoom = layout::covering(&self.items, vw, vh);
+            self.zoom = layout::covering(&self.items, view);
             self.layout_key = Some(key);
             self.hovered = None;
         }

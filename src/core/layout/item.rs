@@ -1,5 +1,6 @@
 //! One laid-out box.
 
+use crate::core::geometry::Rect;
 use std::rc::Rc;
 
 /// A laid-out box: an entry, the free-space block, or an anonymous block of tiny entries.
@@ -27,6 +28,11 @@ impl Item {
         let mut p = self.folder.to_vec();
         p.push(self.index?);
         Some(p)
+    }
+
+    /// The (clipped) box as an f64 rect.
+    pub fn rect(&self) -> Rect {
+        Rect::from_origin_size((self.x as f64, self.y as f64), (self.w as f64, self.h as f64))
     }
 
     pub fn contains(&self, px: f32, py: f32) -> bool {

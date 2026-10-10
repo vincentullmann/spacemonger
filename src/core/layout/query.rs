@@ -2,7 +2,7 @@
 
 use super::split::{halves, weight};
 use super::{content, root_content, Item, LayoutParams, Reshape};
-use crate::core::geometry::Rect;
+use crate::core::geometry::{Rect, RectExt, Size};
 use crate::core::model::Folder;
 
 /// Boxes of the folder's laid-out entries (not hidden or empty) when its content area is
@@ -73,13 +73,13 @@ pub fn content_of(root: &Folder, cam: Rect, path: &[usize], p: LayoutParams, ovs
     }
 }
 
-/// Deepest folder whose content area covers the whole `vw` x `vh` view.
-pub fn covering(items: &[Item], vw: f64, vh: f64) -> Vec<usize> {
-    let view = root_content(Rect::new(0.0, 0.0, vw, vh));
+/// Deepest folder whose content area covers the whole view.
+pub fn covering(items: &[Item], view: Size) -> Vec<usize> {
+    let view = root_content(view.to_rect());
     items
         .iter()
         .filter(|it| it.is_folder && it.labeled && it.index.is_some())
-        .filter(|it| content(Rect::new(it.x as f64, it.y as f64, it.w as f64, it.h as f64)).covers(&view))
+        .filter(|it| content(it.rect()).covers(&view))
         .max_by_key(|it| it.folder.len())
         .and_then(Item::path)
         .unwrap_or_default()

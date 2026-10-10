@@ -21,6 +21,7 @@ poll-promise = "0.3"
 filesize = "0.2"
 thiserror = "2"
 lfs-core = "0.20"
+kurbo = "0.13.1"
 
 [profile.release]
 opt-level = 3
