@@ -70,8 +70,9 @@ impl ScanControl {
         self.cancelled.load(Ordering::Relaxed)
     }
     /// Returns false if this (device, inode) was already counted (hard links, bind mounts).
-    fn first_sighting(&self, dev: u64, ino: u64) -> bool {
-        self.seen.insert((dev, ino))
+    /// Entries without an id are always counted.
+    fn first_sighting(&self, id: Option<(u64, u64)>) -> bool {
+        id.is_none_or(|id| self.seen.insert(id))
     }
     fn live(&self) -> std::sync::MutexGuard<'_, Option<Arc<LiveDir>>> {
         self.live.lock().unwrap_or_else(|e| e.into_inner())
@@ -116,13 +117,13 @@ fn scan_dir(path: &Path, dev: u64, ctl: &ScanControl, chain: &Chain) {
         let Some(m) = meta(&child) else { continue };
         let name = name.to_string_lossy().to_string();
         if m.is_dir {
-            if (ctl.opts.one_filesystem && m.dev != dev) || !ctl.first_sighting(m.dev, m.ino) {
+            if (ctl.opts.one_filesystem && m.dev != dev) || !ctl.first_sighting(m.id) {
                 continue; // other filesystem, or already seen via a bind mount
             }
             dirs.push(LiveDir::new(name, m.mtime, m.created));
             dir_paths.push(child);
         } else if m.is_file {
-            if ctl.opts.hardlinks_once && m.nlink > 1 && !ctl.first_sighting(m.dev, m.ino) {
+            if ctl.opts.hardlinks_once && m.nlink > 1 && !ctl.first_sighting(m.id) {
                 continue; // hard link already counted
             }
             files.push(Entry {
@@ -260,6 +261,16 @@ mod tests {
         assert_eq!(tree.folder_at(&[ai]).unwrap().entries.len(), 1);
 
         fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn entries_without_id_always_count() {
+        // Windows gives no (device, inode): every folder must still be scanned.
+        let ctl = ScanControl::default();
+        assert!(ctl.first_sighting(None));
+        assert!(ctl.first_sighting(None));
+        assert!(ctl.first_sighting(Some((1, 2))));
+        assert!(!ctl.first_sighting(Some((1, 2))));
     }
 
     #[test]

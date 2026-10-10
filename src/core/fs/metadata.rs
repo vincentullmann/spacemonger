@@ -7,8 +7,12 @@ use std::time::UNIX_EPOCH;
 pub(super) struct Meta {
     pub is_dir: bool,
     pub is_file: bool,
+    /// Filesystem the entry lives on. Always 0 off Unix: there, crossing onto another volume
+    /// means going through a mount point (a reparse point), which is never descended.
     pub dev: u64,
-    pub ino: u64,
+    /// (device, inode), identifying the file across hard links and bind mounts. `None` where
+    /// the platform doesn't give it cheaply (Windows), which turns off de-duplication.
+    pub id: Option<(u64, u64)>,
     pub nlink: u64,
     pub len: u64,
     /// Allocated (on-disk) size.
@@ -36,7 +40,7 @@ pub(super) fn meta(path: &Path) -> Option<Meta> {
             is_dir: ft.is_dir(),
             is_file: ft.is_file(),
             dev: m.dev(),
-            ino: m.ino(),
+            id: Some((m.dev(), m.ino())),
             nlink: m.nlink(),
             len: m.len(),
             alloc,
@@ -50,7 +54,7 @@ pub(super) fn meta(path: &Path) -> Option<Meta> {
             is_dir: ft.is_dir(),
             is_file: ft.is_file(),
             dev: 0,
-            ino: 0,
+            id: None,
             nlink: 1,
             len: m.len(),
             alloc,
