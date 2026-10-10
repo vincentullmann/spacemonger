@@ -16,7 +16,9 @@ fn main() -> eframe::Result {
         .with_title(spacemonger::constants::APP_NAME)
         .with_app_id("spacemonger")
         .with_inner_size([1200.0, 800.0])
-        .with_min_inner_size([400.0, 300.0]);
+        .with_min_inner_size([400.0, 300.0])
+        // The app draws its own title bar and frame (see ui::widgets::titlebar).
+        .with_decorations(false);
     if let Ok(icon) = eframe::icon_data::from_png_bytes(include_bytes!("../assets/SpaceMonger.png"))
     {
         viewport = viewport.with_icon(icon);

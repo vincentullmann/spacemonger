@@ -102,7 +102,7 @@ impl Command {
         }
     }
 
-    fn action(self, extend: bool) -> Action {
+    pub fn action(self, extend: bool) -> Action {
         if let Some(d) = self.direction() {
             return Action::Nav(if extend {
                 Nav::Extend(d)
