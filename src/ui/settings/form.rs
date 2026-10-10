@@ -26,10 +26,16 @@ pub fn group(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Rows)) {
 }
 
 impl Rows<'_> {
-    /// A row: `label` on the left, whatever `add` draws on the right.
-    pub fn row(&mut self, label: &str, add: impl FnOnce(&mut Ui)) {
-        self.ui.label(label);
-        self.ui.horizontal(|ui| add(ui));
+    /// A row: `label` on the left, whatever `add` draws on the right; `tip` shows when
+    /// hovering either.
+    pub fn row(&mut self, label: &str, tip: &str, add: impl FnOnce(&mut Ui)) {
+        self.ui.label(label).on_hover_text(tip);
+        let rect = self.ui.horizontal(|ui| add(ui)).response.rect;
+        // A hover-only area over the inputs, so the tip shows there too without taking
+        // clicks away from them.
+        self.ui
+            .interact(rect, self.ui.id().with(label), egui::Sense::hover())
+            .on_hover_text(tip);
         self.ui.end_row();
     }
 }
