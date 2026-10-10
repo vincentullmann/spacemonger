@@ -255,6 +255,13 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
     let (tt, d) = (&mut s.tooltips, Tooltips::default());
     group(ui, "Tooltips", |r| {
         r.row(
+            "Show full path",
+            "Show where the entry is on disk, under its name.",
+            &mut tt.show_path,
+            &d.show_path,
+            form::check,
+        );
+        r.row(
             "Show size",
             "Show the file or folder size in the tip.",
             &mut tt.show_size,
@@ -266,13 +273,6 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
             "Show the modification date in the tip.",
             &mut tt.show_date,
             &d.show_date,
-            form::check,
-        );
-        r.row(
-            "Show full path",
-            "Show where the entry is on disk, under its name.",
-            &mut tt.show_path,
-            &d.show_path,
             form::check,
         );
         r.row(
