@@ -1,5 +1,7 @@
 //! Settings kept between runs (eframe storage) and edited live in the settings window.
 
+mod form;
+mod pages;
 mod window;
 
 pub use window::SettingsWindow;
@@ -12,8 +14,7 @@ use crate::ui::fonts;
 use crate::ui::keymap::Keymap;
 use crate::ui::palette::Scheme;
 use crate::utils::format::{FormatOptions, DEFAULT_DATE_FORMAT};
-use eframe::egui::{self, Color32, Response, Ui};
-use egui_probe::{EguiProbe, Style};
+use eframe::egui::{self, Color32};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
@@ -36,7 +37,7 @@ pub struct Settings {
     pub keys: Keymap,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default, EguiProbe)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum Theme {
     #[default]
     Light,
@@ -55,20 +56,14 @@ impl From<Theme> for egui::ThemePreference {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EguiProbe)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct General {
-    #[egui_probe(name = "Theme")]
     pub theme: Theme,
-    #[egui_probe(name = "Animation (ms)", range = 0..=2000)]
     pub anim_ms: u32,
-    #[egui_probe(name = "Scroll zoom speed (%)", range = 10..=500)]
     pub zoom_speed: u32,
-    #[egui_probe(name = "Info tip delay (ms)", range = 0..=5000)]
     pub infotip_ms: u32,
-    #[egui_probe(name = "Frame selection fill (%)", range = 10..=100)]
     pub frame_fill: u32,
-    #[egui_probe(name = "Confirm before delete")]
     pub confirm_delete: bool,
 }
 
@@ -85,22 +80,16 @@ impl Default for General {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EguiProbe)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct Layout {
     /// Minimum box size for a label: -3 sparse .. +3 dense.
-    #[egui_probe(name = "Label density", range = -3..=3)]
     pub density: i32,
     /// -20 prefers vertical splits, +20 horizontal.
-    #[egui_probe(name = "Split bias", range = -20..=20)]
     pub bias: i32,
-    #[egui_probe(name = "Show free space")]
     pub show_free: bool,
-    #[egui_probe(name = "File size & date")]
     pub file_details: bool,
-    #[egui_probe(name = "Decimal units (kB, MB)")]
     pub decimal_units: bool,
-    #[egui_probe(name = "Date format (strftime)")]
     pub date_format: String,
 }
 
@@ -117,18 +106,14 @@ impl Default for Layout {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EguiProbe)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct Scan {
     /// Leave out files and folders named `.something` (applies at once).
-    #[egui_probe(name = "Ignore hidden files")]
     pub ignore_hidden: bool,
-    #[egui_probe(name = "Stay on one filesystem")]
     pub one_filesystem: bool,
-    #[egui_probe(name = "Count hard links once")]
     pub hardlinks_once: bool,
     /// Not used by the scanner yet.
-    #[egui_probe(name = "Exclude patterns", with excludes_probe)]
     pub excludes: Vec<String>,
 }
 
@@ -143,19 +128,14 @@ impl Default for Scan {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EguiProbe)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct Tiles {
-    #[egui_probe(name = "Colour scheme")]
     pub scheme: Scheme,
     /// One colour per nesting level, repeating.
-    #[egui_probe(name = "Colours", with colors_probe)]
     pub colors: Vec<Color32>,
-    #[egui_probe(name = "Borders")]
     pub borders: bool,
-    #[egui_probe(name = "Gap (px)", range = 0..=8)]
     pub gap: u8,
-    #[egui_probe(name = "Hover highlight (%)", range = 0..=100)]
     pub hover: u8,
 }
 
@@ -194,15 +174,12 @@ impl Tiles {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EguiProbe)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct Font {
     /// System font family; empty for the built-in font.
-    #[egui_probe(name = "Family", with family_probe)]
     pub family: String,
-    #[egui_probe(name = "Size", range = 6.0..=32.0)]
     pub size: f32,
-    #[egui_probe(name = "Drop shadow")]
     pub shadow: bool,
 }
 
@@ -216,12 +193,10 @@ impl Default for Font {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EguiProbe)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct PathBar {
-    #[egui_probe(name = "Height", range = 12.0..=48.0)]
     pub height: f32,
-    #[egui_probe(name = "Font size", range = 6.0..=32.0)]
     pub font_size: f32,
 }
 
@@ -318,86 +293,6 @@ impl Settings {
     pub fn bar_font(&self) -> egui::FontId {
         egui::FontId::new(self.path_bar.font_size, fonts::map_family())
     }
-}
-
-/// Probe result helper: a response marked changed if `changed`.
-fn mark(mut r: Response, changed: bool) -> Response {
-    if changed {
-        r.mark_changed();
-    }
-    r
-}
-
-/// One swatch per colour, plus buttons to drop / add one.
-fn colors_probe(colors: &mut Vec<Color32>, ui: &mut Ui, _: &Style) -> Response {
-    let mut changed = false;
-    let r = ui
-        .horizontal_wrapped(|ui| {
-            // Buttons first so they stay put as the list grows; small swatches.
-            if ui
-                .add_enabled(colors.len() > 1, egui::Button::new("−").small())
-                .on_hover_text("One colour fewer")
-                .clicked()
-            {
-                colors.pop();
-                changed = true;
-            }
-            if ui
-                .add_enabled(colors.len() < 64, egui::Button::new("+").small())
-                .on_hover_text("One colour more")
-                .clicked()
-            {
-                colors.push(colors.last().copied().unwrap_or(Color32::GRAY));
-                changed = true;
-            }
-            ui.spacing_mut().interact_size.x = 22.0;
-            for c in colors.iter_mut() {
-                changed |= ui.color_edit_button_srgba(c).changed();
-            }
-        })
-        .response;
-    mark(r, changed)
-}
-
-/// System font picker ("Default" is egui's built-in font).
-fn family_probe(family: &mut String, ui: &mut Ui, _: &Style) -> Response {
-    let mut changed = false;
-    let shown = if family.is_empty() {
-        "Default"
-    } else {
-        family.as_str()
-    };
-    let r = egui::ComboBox::from_id_salt("font_family")
-        .selected_text(shown)
-        .height(400.0)
-        .show_ui(ui, |ui| {
-            changed |= ui
-                .selectable_value(family, String::new(), "Default")
-                .changed();
-            for name in fonts::system_families() {
-                changed |= ui.selectable_value(family, name.clone(), name).changed();
-            }
-        })
-        .response;
-    mark(r, changed)
-}
-
-/// Mock-up of the exclude list: not wired to the scanner yet.
-#[allow(clippy::ptr_arg)] // egui-probe's `with` signature
-fn excludes_probe(list: &mut Vec<String>, ui: &mut Ui, _: &Style) -> Response {
-    ui.vertical(|ui| {
-        ui.add_enabled_ui(false, |ui| {
-            for p in list.iter_mut() {
-                ui.text_edit_singleline(p);
-            }
-            for hint in ["node_modules", "*.tmp", "/proc"] {
-                ui.add(egui::TextEdit::singleline(&mut String::new()).hint_text(hint));
-            }
-            let _ = ui.button("+ Add pattern");
-        });
-        ui.weak("Coming soon: glob patterns skipped while scanning.");
-    })
-    .response
 }
 
 #[cfg(test)]

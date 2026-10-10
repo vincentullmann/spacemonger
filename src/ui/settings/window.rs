@@ -1,10 +1,9 @@
 //! The settings window: its own OS window (an in-app window where egui can't open one),
 //! editing [`Settings`] in place so every change shows up in the main window at once.
 
-use super::{Font, General, Layout, PathBar, Scan, Settings, Tiles};
+use super::{pages, Font, General, Layout, PathBar, Scan, Settings, Tiles};
 use crate::ui::keymap::{same_shortcut, shortcut_text, Command, Keymap};
 use eframe::egui::{self, Event, Key, KeyboardShortcut, RichText, ViewportBuilder, ViewportId};
-use egui_probe::Probe;
 
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 enum Tab {
@@ -80,30 +79,9 @@ impl SettingsWindow {
                     egui::ScrollArea::vertical()
                         .auto_shrink(false)
                         .show(ui, |ui| match self.tab {
-                            Tab::General => {
-                                section(ui, "General");
-                                Probe::new(&mut s.general).show(ui);
-                                section(ui, "Layout & labels");
-                                Probe::new(&mut s.layout).show(ui);
-                            }
-                            Tab::Scan => {
-                                section(ui, "Scan");
-                                Probe::new(&mut s.scan).show(ui);
-                                ui.add_space(6.0);
-                                ui.weak(
-                                    "Filesystem and hard-link options apply from the next scan.",
-                                );
-                            }
-                            Tab::Display => {
-                                section(ui, "Tiles");
-                                let before = s.tiles.clone();
-                                Probe::new(&mut s.tiles).show(ui);
-                                s.tiles.reconcile(&before);
-                                section(ui, "Font");
-                                Probe::new(&mut s.font).show(ui);
-                                section(ui, "Path bar");
-                                Probe::new(&mut s.path_bar).show(ui);
-                            }
+                            Tab::General => pages::general(ui, s),
+                            Tab::Scan => pages::scan(ui, s),
+                            Tab::Display => pages::display(ui, s),
                             Tab::Keys => self.keys_ui(ui, &mut s.keys),
                         });
                 });
@@ -218,12 +196,6 @@ impl SettingsWindow {
             self.capture = None;
         }
     }
-}
-
-fn section(ui: &mut egui::Ui, title: &str) {
-    ui.add_space(8.0);
-    ui.heading(title);
-    ui.separator();
 }
 
 /// A key pressed this frame while capturing: `Some(None)` for Esc (cancel),

@@ -374,15 +374,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "convert_case"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "affbf0190ed2caf063e3def54ff444b449371d55c58e513a95ab98eca50adb49"
-dependencies = [
- "unicode-segmentation",
-]
-
-[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -620,29 +611,6 @@ dependencies = [
  "smallvec",
  "unicode-segmentation",
  "web-sys",
-]
-
-[[package]]
-name = "egui-probe"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6178876458650d7319c49ab58162066115a0b2e20fd8905dc84e7532870126b0"
-dependencies = [
- "egui",
- "egui-probe-proc",
-]
-
-[[package]]
-name = "egui-probe-proc"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a24add497fe30374bc5be6bd2f117dbf23c43f450e4ae65380420f1bd203e835"
-dependencies = [
- "convert_case",
- "proc-easy",
- "proc-macro2",
- "quote",
- "syn 2.0.119",
 ]
 
 [[package]]
@@ -2196,17 +2164,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8cf8e6a8aa66ce33f63993ffc4ea4271eb5b0530a9002db8455ea6050c77bfa"
 
 [[package]]
-name = "proc-easy"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "446f7efaa53a9589eaca5040dd749d9721e0ee60cf66f6c370e2716c031dcf7b"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
 name = "proc-macro-crate"
 version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2721,7 +2678,6 @@ dependencies = [
  "colorgrad",
  "dashmap",
  "eframe",
- "egui-probe",
  "filesize",
  "fontdb",
  "humansize",

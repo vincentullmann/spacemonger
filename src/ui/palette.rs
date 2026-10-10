@@ -4,7 +4,6 @@
 use crate::ui::settings::{Font, Settings, Tiles};
 use colorgrad::Gradient;
 use eframe::egui::Color32;
-use egui_probe::EguiProbe;
 use serde::{Deserialize, Serialize};
 
 const fn c(r: u8, g: u8, b: u8) -> Color32 {
@@ -68,7 +67,7 @@ const BOX_DARK: [Color32; 24] = [
 ];
 
 /// Where the depth colours come from.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default, EguiProbe)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum Scheme {
     /// The original SpaceMonger rainbow (with its own dark-mode table).
     #[default]
