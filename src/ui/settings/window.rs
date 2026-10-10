@@ -14,6 +14,8 @@ enum Tab {
     Keys,
 }
 
+const TITLE: &str = "Settings";
+
 /// Label and shortcut column widths on the Keys tab.
 const KEY_LABEL_WIDTH: f32 = 230.0;
 const KEY_INPUT_WIDTH: f32 = 240.0;
@@ -21,11 +23,24 @@ const KEY_INPUT_WIDTH: f32 = 240.0;
 /// Which binding is waiting for a key press: (command, index in `binds` or `None` for new).
 type Capture = (Command, Option<usize>);
 
-#[derive(Default)]
 pub struct SettingsWindow {
     pub open: bool,
+    /// Frames spent trying to make the window a dialog of the main one (X11), or `None`
+    /// once it is.
+    attaching: Option<u32>,
     tab: Tab,
     capture: Option<Capture>,
+}
+
+impl Default for SettingsWindow {
+    fn default() -> Self {
+        Self {
+            open: false,
+            attaching: Some(0),
+            tab: Tab::default(),
+            capture: None,
+        }
+    }
 }
 
 impl SettingsWindow {
@@ -36,10 +51,14 @@ impl SettingsWindow {
 
     pub fn show(&mut self, ctx: &egui::Context, s: &mut Settings) {
         if !self.open {
+            self.attaching = Some(0);
             return;
         }
+        self.attach(ctx);
         let builder = ViewportBuilder::default()
-            .with_title("Settings")
+            .with_title(TITLE)
+            .with_window_type(egui::X11WindowType::Dialog)
+            .with_taskbar(false)
             .with_app_id("spacemonger")
             .with_inner_size([560.0, 640.0])
             .with_min_inner_size([420.0, 360.0]);
@@ -88,6 +107,24 @@ impl SettingsWindow {
                 });
             },
         );
+    }
+
+    /// Make the window a dialog of the main window (X11: in front of it, no taskbar entry).
+    /// It only exists once egui has shown it, so keep trying for a little while.
+    fn attach(&mut self, ctx: &egui::Context) {
+        let Some(tries) = self.attaching else { return };
+        #[cfg(target_os = "linux")]
+        let done = crate::ui::x11_dialog::attach(TITLE);
+        #[cfg(not(target_os = "linux"))]
+        let done = true;
+        self.attaching = if done || tries > 120 {
+            None
+        } else {
+            Some(tries + 1)
+        };
+        if self.attaching.is_some() {
+            ctx.request_repaint();
+        }
     }
 
     /// One row per command: its shortcuts (click one to change it, right-click to remove),

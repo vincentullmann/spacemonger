@@ -182,6 +182,7 @@ impl eframe::App for SpaceMonger {
         {
             let bg = self.palette(&ctx).background;
             crate::ui::x11_sync::install(frame, &ctx, bg);
+            crate::ui::x11_dialog::remember_main(frame);
             crate::ui::x11_sync::set_background(bg);
         }
         #[cfg(not(target_os = "linux"))]
