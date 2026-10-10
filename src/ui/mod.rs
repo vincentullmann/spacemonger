@@ -8,6 +8,7 @@ pub mod keymap;
 pub mod painter;
 pub mod palette;
 pub mod settings;
+pub mod theme;
 pub mod title;
 pub mod widgets;
 #[cfg(target_os = "linux")]

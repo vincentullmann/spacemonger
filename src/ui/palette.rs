@@ -39,37 +39,10 @@ const BOX_LIGHT: [Color32; 24] = [
     c(0xBF, 0x7F, 0xBF),
 ];
 
-const BOX_DARK: [Color32; 24] = [
-    c(0x8F, 0x3F, 0x3F),
-    c(0x90, 0x60, 0x32),
-    c(0x8A, 0x82, 0x28),
-    c(0x3F, 0x78, 0x3F),
-    c(0x35, 0x78, 0x78),
-    c(0x55, 0x55, 0x9A),
-    c(0x62, 0x62, 0x62),
-    c(0x82, 0x42, 0x82),
-    c(0x75, 0x48, 0x48),
-    c(0x78, 0x58, 0x3F),
-    c(0x78, 0x72, 0x40),
-    c(0x48, 0x70, 0x48),
-    c(0x42, 0x70, 0x70),
-    c(0x5A, 0x5A, 0x85),
-    c(0x50, 0x50, 0x50),
-    c(0x70, 0x48, 0x70),
-    c(0x55, 0x28, 0x28),
-    c(0x55, 0x3A, 0x20),
-    c(0x55, 0x50, 0x18),
-    c(0x28, 0x50, 0x28),
-    c(0x25, 0x50, 0x50),
-    c(0x38, 0x38, 0x70),
-    c(0x38, 0x38, 0x38),
-    c(0x50, 0x28, 0x50),
-];
-
 /// Where the depth colours come from.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum Scheme {
-    /// The original SpaceMonger rainbow (with its own dark-mode table).
+    /// The original SpaceMonger rainbow.
     #[default]
     Classic,
     Turbo,
@@ -189,7 +162,6 @@ pub struct Palette {
 impl Palette {
     pub fn new(dark: bool, s: &Settings) -> Self {
         let Tiles {
-            scheme,
             ref colors,
             borders,
             border: border_line,
@@ -197,18 +169,17 @@ impl Palette {
             selection_color,
             gap,
             hover,
+            ..
         } = s.tiles;
         let (size, shadow) = (s.labels.font_size, s.labels.shadow);
-        // Only the classic scheme has dark-mode colours of its own.
-        let boxes = match (dark, scheme) {
-            (true, Scheme::Classic) => classic(&BOX_DARK, colors.len()),
-            _ => colors.clone(),
-        };
+        let boxes = colors.clone();
         let (background, text) = if dark {
-            (c(0x16, 0x17, 0x18), c(0xD0, 0xD0, 0xC8))
+            (c(22, 23, 24), Color32::BLACK)
         } else {
-            (c(0xEE, 0xEE, 0xEE), Color32::BLACK)
+            (c(238, 238, 238), Color32::BLACK)
         };
+
+
         let border = border_line.color.unwrap_or(Self::theme_border(dark));
         // The theme's selection is its text colour with the background colour on it.
         let selection = selection_color.unwrap_or(text);

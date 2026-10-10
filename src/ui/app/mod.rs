@@ -16,6 +16,7 @@ use crate::ui::error::AppError;
 use crate::ui::fonts;
 use crate::ui::palette::Palette;
 use crate::ui::settings::{Settings, SettingsWindow};
+use crate::ui::theme::Theme;
 use crate::ui::title::{scan_title, window_title};
 use crate::ui::widgets::{path_bar, titlebar, window_frame, CommandState};
 use eframe::egui::{self, Vec2};
@@ -60,10 +61,7 @@ pub struct SpaceMonger {
 impl SpaceMonger {
     pub fn new(cc: &eframe::CreationContext<'_>, open_path: Option<PathBuf>) -> Self {
         let settings = Settings::load(cc.storage);
-        // Buttons, check boxes, drop-downs etc. show a hand cursor (both themes).
-        cc.egui_ctx.all_styles_mut(|s| {
-            s.visuals.interact_cursor = Some(egui::CursorIcon::PointingHand);
-        });
+        Theme::install(&cc.egui_ctx);
         let mut app = Self {
             tree: None,
             live: None,
@@ -286,7 +284,7 @@ impl eframe::App for SpaceMonger {
     }
 
     fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {
-        Palette::new(visuals.dark_mode, &self.settings)
+        Theme::of(visuals.dark_mode)
             .background
             .to_normalized_gamma_f32()
     }
