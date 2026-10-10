@@ -137,11 +137,17 @@ impl SpaceMonger {
 }
 
 impl eframe::App for SpaceMonger {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        #[cfg(target_os = "linux")]
+        crate::ui::x11_sync::install(frame, &ctx, self.palette().background);
+        #[cfg(not(target_os = "linux"))]
+        let _ = frame;
         if self.applied_dark != Some(self.dark) {
             self.applied_dark = Some(self.dark);
             ctx.set_visuals(if self.dark { egui::Visuals::dark() } else { egui::Visuals::light() });
+            #[cfg(target_os = "linux")]
+            crate::ui::x11_sync::set_background(self.palette().background);
         }
         self.poll_scan();
 
@@ -156,14 +162,7 @@ impl eframe::App for SpaceMonger {
                 if let Some(target) = target {
                     self.zoom_to(&target);
                 }
-                let tm = self.treemap(ui);
-                // Fill the window and keep frames coming while it is being resized.
-                // ui.allocate_space(ui.available_size());
-                // ui.ctx().request_repaint();
-
-                eprintln!("on show");
-
-                tm
+                self.treemap(ui)
             })
             .inner;
         act = act.or(tm);
@@ -182,25 +181,17 @@ impl eframe::App for SpaceMonger {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
             self.title = title;
         }
+
+        // This frame is drawn at the window's current size: let the WM move on once it's shown.
+        #[cfg(target_os = "linux")]
+        crate::ui::x11_sync::frame_drawn(&ctx);
     }
 
     /// Runs once before every [`Self::ui`]. eframe 0.36 has no `update`; this is that hook.
     fn logic(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        static LAST: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
-        let now = std::time::Instant::now();
-        let gap = {
-            let mut last = LAST.lock().expect("update log clock");
-            let gap = last.map(|t| now.saturating_duration_since(t));
-            *last = Some(now);
-            gap
-        };
-        match gap {
-            Some(gap) => eprintln!("updating  +{:.1}ms", gap.as_secs_f64() * 1000.0),
-            None => eprintln!("updating"),
-        }
-
-        // _ctx.ui.allocate_space(_ctx.ui.available_size());
-        _ctx.request_repaint();
+        // The previous frame is on screen now; release the window manager's resize step.
+        #[cfg(target_os = "linux")]
+        crate::ui::x11_sync::acknowledge();
     }
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {

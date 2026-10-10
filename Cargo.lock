@@ -545,6 +545,7 @@ dependencies = [
  "egui-wgpu",
  "egui-winit",
  "egui_glow",
+ "glow",
  "glutin",
  "glutin-winit",
  "image",
@@ -2578,11 +2579,14 @@ dependencies = [
  "num-format",
  "open",
  "poll-promise",
+ "raw-window-handle",
  "rayon",
  "rfd",
  "serde",
  "thiserror 2.0.21",
  "trash",
+ "x11-dl",
+ "x11rb",
 ]
 
 [[package]]
