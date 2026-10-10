@@ -4,7 +4,7 @@
 const MIN_SIZES: [(f64, f64); 7] =
     [(96.0, 64.0), (64.0, 48.0), (48.0, 32.0), (32.0, 24.0), (24.0, 16.0), (16.0, 12.0), (8.0, 6.0)];
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct LayoutParams {
     pub density: i32,
     /// -20 (prefer vertical splits) .. +20 (prefer horizontal splits).

@@ -110,10 +110,7 @@ impl SpaceMonger {
         if old.is_none_or(|o| o.font.family != s.font.family) {
             fonts::apply(ctx, &s.font.family);
         }
-        if old.is_none_or(|o| {
-            o.layout.decimal_units != s.layout.decimal_units
-                || o.layout.date_format != s.layout.date_format
-        }) {
+        if old.is_none_or(|o| o.format_options() != s.format_options()) {
             crate::utils::format::set_options(s.format_options());
         }
         self.camera.params = s.camera_params();
@@ -124,7 +121,7 @@ impl SpaceMonger {
                 self.generation += 1;
             }
         }
-        if old.is_some_and(|o| o.layout != s.layout) {
+        if old.is_some_and(|o| o.layout_params(false) != s.layout_params(false)) {
             self.generation += 1;
         }
         self.applied = Some(self.settings.clone());

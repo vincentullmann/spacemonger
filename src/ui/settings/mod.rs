@@ -32,6 +32,7 @@ pub struct Settings {
     pub layout: Layout,
     pub scan: Scan,
     pub tiles: Tiles,
+    pub labels: Labels,
     pub font: Font,
     pub path_bar: PathBar,
     pub keys: Keymap,
@@ -83,22 +84,35 @@ impl Default for General {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct Layout {
-    /// Minimum box size for a label: -3 sparse .. +3 dense.
-    pub density: i32,
     /// -20 prefers vertical splits, +20 horizontal.
     pub bias: i32,
     pub show_free: bool,
-    pub file_details: bool,
-    pub decimal_units: bool,
-    pub date_format: String,
 }
 
 impl Default for Layout {
     fn default() -> Self {
         Self {
-            density: 0,
             bias: 0,
             show_free: true,
+        }
+    }
+}
+
+/// Text inside the tiles.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
+pub struct Labels {
+    /// Minimum box size for a label: -3 sparse .. +3 dense.
+    pub density: i32,
+    pub file_details: bool,
+    pub decimal_units: bool,
+    pub date_format: String,
+}
+
+impl Default for Labels {
+    fn default() -> Self {
+        Self {
+            density: 0,
             file_details: true,
             decimal_units: false,
             date_format: DEFAULT_DATE_FORMAT.to_string(),
@@ -247,7 +261,7 @@ impl Settings {
 
     pub fn layout_params(&self, hide_dotfiles: bool) -> LayoutParams {
         LayoutParams {
-            density: self.layout.density,
+            density: self.labels.density,
             bias: self.layout.bias,
             show_free: self.layout.show_free,
             hide_dotfiles,
@@ -270,8 +284,8 @@ impl Settings {
 
     pub fn format_options(&self) -> FormatOptions {
         FormatOptions {
-            decimal_units: self.layout.decimal_units,
-            date_format: self.layout.date_format.clone(),
+            decimal_units: self.labels.decimal_units,
+            date_format: self.labels.date_format.clone(),
         }
     }
 

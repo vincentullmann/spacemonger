@@ -24,6 +24,14 @@ pub fn group(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Rows)) {
     add(&mut Rows { ui });
 }
 
+/// A group of rows belonging to the group above it (e.g. Tiles / Labels).
+pub fn subgroup(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Rows)) {
+    ui.add_space(6.0);
+    ui.label(RichText::new(title).strong());
+    ui.spacing_mut().item_spacing.y = 6.0;
+    add(&mut Rows { ui });
+}
+
 impl Rows<'_> {
     /// A row for `v`: `label` on the left, the input `add` draws, and a reset button.
     /// A value that isn't `default` gets a bold label with a dot and an active reset button;

@@ -200,7 +200,7 @@ impl Palette {
             gap: gap as f32,
             hover: hover as f32 / 100.0,
             shadow,
-            details: s.layout.file_details,
+            details: s.labels.file_details,
             text_scale: size / 10.0,
         }
     }

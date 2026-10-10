@@ -1,7 +1,7 @@
 //! The contents of the General, Scan and Display tabs.
 
-use super::form::{self, group};
-use super::{Font, General, Layout, PathBar, Scan, Settings, Theme, Tiles};
+use super::form::{self, group, subgroup};
+use super::{Font, General, Labels, Layout, PathBar, Scan, Settings, Theme, Tiles};
 use crate::ui::palette::Scheme;
 use eframe::egui::Ui;
 
@@ -72,14 +72,7 @@ pub fn general(ui: &mut Ui, s: &mut Settings) {
     });
 
     let (l, d) = (&mut s.layout, Layout::default());
-    group(ui, "Layout & labels", |r| {
-        r.row(
-            "Label density",
-            "Smallest box that gets a label (and shows a folder's contents): higher shows more, smaller labels.",
-            &mut l.density,
-            &d.density,
-            |ui, v| form::number(ui, v, -3..=3, 1.0, ""),
-        );
+    group(ui, "Layout", |r| {
         r.row(
             "Split bias",
             "Negative prefers side-by-side boxes, positive prefers stacked ones.",
@@ -93,27 +86,6 @@ pub fn general(ui: &mut Ui, s: &mut Settings) {
             &mut l.show_free,
             &d.show_free,
             form::check,
-        );
-        r.row(
-            "File size & date",
-            "Show the size and modification date under file names, where the box is big enough.",
-            &mut l.file_details,
-            &d.file_details,
-            form::check,
-        );
-        r.row(
-            "Decimal units (kB, MB)",
-            "Sizes in powers of 1000 (kB, MB) instead of 1024 (KiB, MiB).",
-            &mut l.decimal_units,
-            &d.decimal_units,
-            form::check,
-        );
-        r.row(
-            "Date format",
-            "strftime pattern for dates, e.g. %Y-%m-%d %H:%M. An invalid pattern falls back to the default.",
-            &mut l.date_format,
-            &d.date_format,
-            |ui, v| ui.text_edit_singleline(v),
         );
     });
 }
@@ -204,6 +176,38 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
     if !(s.tiles.scheme == before.scheme && s.tiles.colors == scheme_colors) {
         s.tiles.reconcile(&before);
     }
+
+    let (lb, d) = (&mut s.labels, Labels::default());
+    subgroup(ui, "Labels", |r| {
+        r.row(
+            "Density",
+            "Smallest box that gets a label (and shows a folder's contents): higher labels smaller boxes.",
+            &mut lb.density,
+            &d.density,
+            |ui, v| form::number(ui, v, -3..=3, 1.0, ""),
+        );
+        r.row(
+            "File size & date",
+            "Show the size and modification date under file names, where the box is big enough.",
+            &mut lb.file_details,
+            &d.file_details,
+            form::check,
+        );
+        r.row(
+            "Decimal units (kB, MB)",
+            "Sizes in powers of 1000 (kB, MB) instead of 1024 (KiB, MiB).",
+            &mut lb.decimal_units,
+            &d.decimal_units,
+            form::check,
+        );
+        r.row(
+            "Date format",
+            "strftime pattern for dates, e.g. %Y-%m-%d %H:%M. An invalid pattern falls back to the default.",
+            &mut lb.date_format,
+            &d.date_format,
+            |ui, v| ui.text_edit_singleline(v),
+        );
+    });
 
     let (f, d) = (&mut s.font, Font::default());
     group(ui, "Font", |r| {
