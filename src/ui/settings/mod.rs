@@ -35,6 +35,7 @@ pub struct Settings {
     pub labels: Labels,
     pub font: Font,
     pub path_bar: PathBar,
+    pub tooltips: Tooltips,
     pub keys: Keymap,
 }
 
@@ -63,7 +64,6 @@ pub struct General {
     pub theme: Theme,
     pub anim_ms: u32,
     pub zoom_speed: u32,
-    pub infotip_ms: u32,
     pub frame_fill: u32,
     pub confirm_delete: bool,
 }
@@ -74,7 +74,6 @@ impl Default for General {
             theme: Theme::Light,
             anim_ms: (ANIM_DURATION * 1000.0) as u32,
             zoom_speed: 100,
-            infotip_ms: INFOTIP_DELAY.as_millis() as u32,
             frame_fill: (FRAME_FILL * 100.0) as u32,
             confirm_delete: true,
         }
@@ -201,6 +200,30 @@ pub struct Font {
     pub family: String,
 }
 
+/// The name / size / date tip shown when hovering a box.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
+pub struct Tooltips {
+    pub show_size: bool,
+    pub show_date: bool,
+    /// The entry's full path on disk, under its name.
+    pub show_path: bool,
+    pub font_size: f32,
+    pub delay_ms: u32,
+}
+
+impl Default for Tooltips {
+    fn default() -> Self {
+        Self {
+            show_size: true,
+            show_date: true,
+            show_path: false,
+            font_size: 13.0,
+            delay_ms: INFOTIP_DELAY.as_millis() as u32,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct PathBar {
@@ -294,7 +317,7 @@ impl Settings {
     }
 
     pub fn infotip_delay(&self) -> Duration {
-        Duration::from_millis(self.general.infotip_ms as u64)
+        Duration::from_millis(self.tooltips.delay_ms as u64)
     }
 
     /// Zoom factor exponent per point of wheel scroll.

@@ -236,11 +236,11 @@ impl SpaceMonger {
             return;
         }
         let it = &self.items[hi];
-        if let (Some(e), Some(pos)) = (
-            it.index.and_then(|i| tree.entry_at(&it.folder, i)),
-            resp.hover_pos(),
-        ) {
-            infotip(ui.ctx(), pos, e);
+        if let (Some(i), Some(pos)) = (it.index, resp.hover_pos()) {
+            if let Some(e) = tree.entry_at(&it.folder, i) {
+                let path = tree.full_path(&it.folder, Some(i));
+                infotip(ui.ctx(), pos, e, &path, &self.settings.tooltips);
+            }
         }
     }
 }

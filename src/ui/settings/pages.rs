@@ -1,7 +1,7 @@
 //! The contents of the General, Scan and Display tabs.
 
 use super::form::{self, group, subgroup};
-use super::{Font, General, Labels, Layout, PathBar, Scan, Settings, Theme, Tiles};
+use super::{Font, General, Labels, Layout, PathBar, Scan, Settings, Theme, Tiles, Tooltips};
 use crate::ui::palette::Scheme;
 use crate::utils::format::SizeFormat;
 use eframe::egui::Ui;
@@ -54,13 +54,6 @@ pub fn general(ui: &mut Ui, s: &mut Settings) {
             &mut g.zoom_speed,
             &d.zoom_speed,
             |ui, v| form::number(ui, v, 10..=500, 5.0, "%"),
-        );
-        r.row(
-            "Info tip delay",
-            "How long to hover over a box before its name, size and date pop up.",
-            &mut g.infotip_ms,
-            &d.infotip_ms,
-            |ui, v| form::number(ui, v, 0..=5000, 10.0, "ms"),
         );
         r.row(
             "Frame selection fill",
@@ -256,6 +249,45 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
             &mut p.font_size,
             &d.font_size,
             |ui, v| form::number(ui, v, 6.0..=32.0, 0.5, "px"),
+        );
+    });
+
+    let (tt, d) = (&mut s.tooltips, Tooltips::default());
+    group(ui, "Tooltips", |r| {
+        r.row(
+            "Show size",
+            "Show the file or folder size in the tip.",
+            &mut tt.show_size,
+            &d.show_size,
+            form::check,
+        );
+        r.row(
+            "Show date",
+            "Show the modification date in the tip.",
+            &mut tt.show_date,
+            &d.show_date,
+            form::check,
+        );
+        r.row(
+            "Show full path",
+            "Show where the entry is on disk, under its name.",
+            &mut tt.show_path,
+            &d.show_path,
+            form::check,
+        );
+        r.row(
+            "Font size",
+            "Text size in the tip.",
+            &mut tt.font_size,
+            &d.font_size,
+            |ui, v| form::number(ui, v, 6.0..=32.0, 0.5, "px"),
+        );
+        r.row(
+            "Delay",
+            "How long to hover over a box before the tip pops up.",
+            &mut tt.delay_ms,
+            &d.delay_ms,
+            |ui, v| form::number(ui, v, 0..=5000, 10.0, "ms"),
         );
     });
 }
