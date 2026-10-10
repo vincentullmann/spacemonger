@@ -9,7 +9,7 @@ use std::path::Path;
 
 /// Show the tip for `entry` (at `path` on disk) next to the pointer at `pos`.
 pub fn infotip(ctx: &egui::Context, pos: Pos2, entry: &Entry, path: &Path, opts: &Tooltips) {
-    let created = opts.show_created.then(|| created_secs(path)).flatten();
+    let created = (opts.show_created && entry.created != 0).then_some(entry.created);
     let k = opts.font_size / Tooltips::default().font_size;
     let (pivot, off) = popup_pivot(pos, ctx.content_rect(), Vec2::new(260.0, 90.0) * k);
     let text = |s: String| RichText::new(s).size(opts.font_size);
@@ -49,11 +49,4 @@ pub fn infotip(ctx: &egui::Context, pos: Pos2, entry: &Entry, path: &Path, opts:
                     });
             });
         });
-}
-
-/// Creation time from the filesystem, seconds since the Unix epoch.
-fn created_secs(path: &Path) -> Option<i64> {
-    let t = std::fs::symlink_metadata(path).ok()?.created().ok()?;
-    let d = t.duration_since(std::time::UNIX_EPOCH).ok()?;
-    i64::try_from(d.as_secs()).ok()
 }

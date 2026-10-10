@@ -17,6 +17,8 @@ pub struct Entry {
     pub actual: u64,
     /// Modification time, seconds since the Unix epoch.
     pub mtime: i64,
+    /// Creation time, seconds since the Unix epoch; 0 where the filesystem doesn't record it.
+    pub created: i64,
     pub kind: Kind,
     /// Hidden from the view by the user (its size is already subtracted from ancestors).
     pub hidden: bool,

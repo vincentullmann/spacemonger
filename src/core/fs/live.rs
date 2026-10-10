@@ -8,6 +8,7 @@ use std::sync::OnceLock;
 pub(super) struct LiveDir {
     name: String,
     mtime: i64,
+    created: i64,
     /// Bytes found so far in this folder and below.
     bytes: AtomicU64,
     /// Set once, when the folder has been listed.
@@ -37,8 +38,8 @@ impl Chain<'_> {
 }
 
 impl LiveDir {
-    pub fn new(name: String, mtime: i64) -> Self {
-        Self { name, mtime, bytes: AtomicU64::new(0), contents: OnceLock::new() }
+    pub fn new(name: String, mtime: i64, created: i64) -> Self {
+        Self { name, mtime, created, bytes: AtomicU64::new(0), contents: OnceLock::new() }
     }
 
     pub fn bytes(&self) -> u64 {
@@ -62,7 +63,7 @@ impl LiveDir {
                 let size = d.bytes();
                 if size >= min && size > 0 {
                     // Sized by everything found so far, including what the snapshot leaves out.
-                    f.entries.push(dir_entry(d.name.clone(), d.mtime, size, d.snapshot(min)));
+                    f.entries.push(dir_entry(d.name.clone(), (d.mtime, d.created), size, d.snapshot(min)));
                 }
             }
         }
@@ -76,9 +77,9 @@ impl LiveDir {
         if let Some(c) = self.contents.into_inner() {
             f.entries = c.files;
             for d in c.dirs {
-                let (name, mtime) = (d.name.clone(), d.mtime);
+                let (name, times) = (d.name.clone(), (d.mtime, d.created));
                 let sub = d.into_folder();
-                f.entries.push(dir_entry(name, mtime, sub.total, sub));
+                f.entries.push(dir_entry(name, times, sub.total, sub));
             }
         }
         f.finalize();
@@ -86,8 +87,8 @@ impl LiveDir {
     }
 }
 
-fn dir_entry(name: String, mtime: i64, size: u64, folder: Folder) -> Entry {
-    Entry { name, size, actual: size, mtime, kind: Kind::Dir(Box::new(folder)), hidden: false }
+fn dir_entry(name: String, (mtime, created): (i64, i64), size: u64, folder: Folder) -> Entry {
+    Entry { name, size, actual: size, mtime, created, kind: Kind::Dir(Box::new(folder)), hidden: false }
 }
 
 #[cfg(test)]
@@ -95,14 +96,14 @@ mod tests {
     use super::*;
 
     fn file(name: &str, size: u64) -> Entry {
-        Entry { name: name.into(), size, actual: size, mtime: 0, kind: Kind::File, hidden: false }
+        Entry { name: name.into(), size, actual: size, mtime: 0, created: 0, kind: Kind::File, hidden: false }
     }
 
     #[test]
     fn snapshot_while_filling_in() {
-        let root = LiveDir::new(String::new(), 0);
+        let root = LiveDir::new(String::new(), 0, 0);
         let root_chain = Chain { dir: &root, parent: None };
-        let dirs = root.set_contents(vec![file("big", 1000), file("tiny", 1)], vec![LiveDir::new("d".into(), 0)]);
+        let dirs = root.set_contents(vec![file("big", 1000), file("tiny", 1)], vec![LiveDir::new("d".into(), 0, 0)]);
         root_chain.add_bytes(1001);
 
         // "d" hasn't been listed yet: it has no bytes, so it's left out.

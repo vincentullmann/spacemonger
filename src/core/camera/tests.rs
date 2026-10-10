@@ -9,14 +9,14 @@ const VW: f64 = 400.0;
 const VH: f64 = 300.0;
 
 fn file(name: &str, size: u64) -> Entry {
-    Entry { name: name.into(), size, actual: size, mtime: 0, kind: Kind::File, hidden: false }
+    Entry { name: name.into(), size, actual: size, mtime: 0, created: 0, kind: Kind::File, hidden: false }
 }
 
 fn tree() -> Folder {
     let sub = Folder { entries: vec![file("x", 700), file("y", 300)], total: 1000 };
     Folder {
         entries: vec![
-            Entry { name: "sub".into(), size: 1000, actual: 1000, mtime: 0, kind: Kind::Dir(Box::new(sub)), hidden: false },
+            Entry { name: "sub".into(), size: 1000, actual: 1000, mtime: 0, created: 0, kind: Kind::Dir(Box::new(sub)), hidden: false },
             file("b", 500),
             file("c", 250),
         ],
@@ -131,7 +131,7 @@ fn resize_when_not_zoomed_stays_full_view() {
 #[test]
 fn child_boxes_skip_free_space() {
     let mut root = tree();
-    root.entries.push(Entry { name: String::new(), size: 100, actual: 100, mtime: 0, kind: Kind::Free, hidden: false });
+    root.entries.push(Entry { name: String::new(), size: 100, actual: 100, mtime: 0, created: 0, kind: Kind::Free, hidden: false });
     let scene = Scene { root: Some(&root), params: LayoutParams::default() };
     let c = camera();
     let boxes = c.child_boxes(&scene, &[]);

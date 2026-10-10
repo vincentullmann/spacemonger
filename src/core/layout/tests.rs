@@ -5,7 +5,7 @@ use crate::core::geometry::{Rect, Size};
 use crate::core::model::{Entry, Folder, Kind};
 
 fn file(name: &str, size: u64) -> Entry {
-    Entry { name: name.into(), size, actual: size, mtime: 0, kind: Kind::File, hidden: false }
+    Entry { name: name.into(), size, actual: size, mtime: 0, created: 0, kind: Kind::File, hidden: false }
 }
 
 /// Rect from x, y, width, height.
@@ -91,7 +91,7 @@ fn nested() -> Folder {
     let sub = Folder { entries: vec![file("x", 700), file("y", 300)], total: 1000 };
     Folder {
         entries: vec![
-            Entry { name: "sub".into(), size: 1000, actual: 1000, mtime: 0, kind: Kind::Dir(Box::new(sub)), hidden: false },
+            Entry { name: "sub".into(), size: 1000, actual: 1000, mtime: 0, created: 0, kind: Kind::Dir(Box::new(sub)), hidden: false },
             file("b", 500),
             file("c", 250),
         ],

@@ -172,7 +172,7 @@ mod tests {
     use super::*;
 
     fn file(name: &str, size: u64) -> Entry {
-        Entry { name: name.into(), size, actual: size, mtime: 0, kind: Kind::File, hidden: false }
+        Entry { name: name.into(), size, actual: size, mtime: 0, created: 0, kind: Kind::File, hidden: false }
     }
 
     #[test]
@@ -180,7 +180,7 @@ mod tests {
         let sub = Folder { entries: vec![file("f", 10), file("g", 5)], total: 15 };
         let root = Folder {
             entries: vec![
-                Entry { name: "d".into(), size: 15, actual: 15, mtime: 0, kind: Kind::Dir(Box::new(sub)), hidden: false },
+                Entry { name: "d".into(), size: 15, actual: 15, mtime: 0, created: 0, kind: Kind::Dir(Box::new(sub)), hidden: false },
                 file("x", 7),
             ],
             total: 22,
@@ -212,7 +212,7 @@ mod tests {
         let sub = Folder { entries: vec![file(".git", 10), file("g", 5)], total: 15 };
         let root = Folder {
             entries: vec![
-                Entry { name: "d".into(), size: 15, actual: 15, mtime: 0, kind: Kind::Dir(Box::new(sub)), hidden: false },
+                Entry { name: "d".into(), size: 15, actual: 15, mtime: 0, created: 0, kind: Kind::Dir(Box::new(sub)), hidden: false },
                 file(".x", 7),
             ],
             total: 22,

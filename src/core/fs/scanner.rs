@@ -119,7 +119,7 @@ fn scan_dir(path: &Path, dev: u64, ctl: &ScanControl, chain: &Chain) {
             if (ctl.opts.one_filesystem && m.dev != dev) || !ctl.first_sighting(m.dev, m.ino) {
                 continue; // other filesystem, or already seen via a bind mount
             }
-            dirs.push(LiveDir::new(name, m.mtime));
+            dirs.push(LiveDir::new(name, m.mtime, m.created));
             dir_paths.push(child);
         } else if m.is_file {
             if ctl.opts.hardlinks_once && m.nlink > 1 && !ctl.first_sighting(m.dev, m.ino) {
@@ -130,6 +130,7 @@ fn scan_dir(path: &Path, dev: u64, ctl: &ScanControl, chain: &Chain) {
                 size: m.alloc,
                 actual: m.len,
                 mtime: m.mtime,
+                created: m.created,
                 kind: Kind::File,
                 hidden: false,
             });
@@ -165,6 +166,7 @@ fn make_tree(drive: &Drive, mut root: Folder, ctl: &ScanControl) -> Tree {
         size: drive.free,
         actual: drive.free,
         mtime: 0,
+        created: 0,
         kind: Kind::Free,
         hidden: false,
     });
@@ -188,7 +190,7 @@ pub fn scan(drive: &Drive, ctl: &ScanControl) -> Option<Tree> {
         .stack_size(32 * 1024 * 1024)
         .build()
         .ok()?;
-    let root = Arc::new(LiveDir::new(String::new(), root_meta.mtime));
+    let root = Arc::new(LiveDir::new(String::new(), root_meta.mtime, root_meta.created));
     *ctl.live() = Some(root.clone());
     pool.install(|| {
         scan_dir(
