@@ -32,27 +32,38 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 20] = [
-        Command::Open,
-        Command::Reload,
-        Command::Settings,
-        Command::ZoomFull,
-        Command::ZoomIn,
-        Command::ZoomOut,
-        Command::Frame,
-        Command::Up,
-        Command::Down,
-        Command::Left,
-        Command::Right,
-        Command::Parent,
-        Command::FirstChild,
-        Command::ClearSelection,
-        Command::RunOpen,
-        Command::Delete,
-        Command::Hide,
-        Command::UnhideAll,
-        Command::ToggleFree,
-        Command::ToggleDark,
+    /// Every command, by group, in the order the Keys tab lists them.
+    pub const GROUPS: [(&'static str, &'static [Command]); 4] = [
+        ("Scanning", &[Command::Open, Command::Reload]),
+        (
+            "Navigation",
+            &[
+                Command::ZoomFull,
+                Command::ZoomIn,
+                Command::ZoomOut,
+                Command::Frame,
+                Command::Up,
+                Command::Down,
+                Command::Left,
+                Command::Right,
+                Command::Parent,
+                Command::FirstChild,
+            ],
+        ),
+        (
+            "Selection & actions",
+            &[
+                Command::ClearSelection,
+                Command::RunOpen,
+                Command::Delete,
+                Command::Hide,
+                Command::UnhideAll,
+            ],
+        ),
+        (
+            "Display",
+            &[Command::ToggleFree, Command::ToggleDark, Command::Settings],
+        ),
     ];
 
     pub fn label(self) -> &'static str {
@@ -276,6 +287,18 @@ mod tests {
             m.lookup(Key::Comma, Modifiers::CTRL),
             Some(Action::Settings)
         );
+    }
+
+    #[test]
+    fn groups_list_every_command_once() {
+        let all: Vec<Command> = Command::GROUPS
+            .iter()
+            .flat_map(|(_, c)| c.iter().copied())
+            .collect();
+        assert_eq!(all.len(), 20);
+        assert!(all.iter().enumerate().all(|(i, c)| !all[..i].contains(c)));
+        // Every default binding's command is listed.
+        assert!(Keymap::default().binds.iter().all(|(c, _)| all.contains(c)));
     }
 
     #[test]
