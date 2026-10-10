@@ -19,6 +19,8 @@ impl SpaceMonger {
         let d = MapPainter::new(&painter, resp.rect.min, ppp, self.palette(), self.font.clone());
         let (w, h) = (resp.rect.width(), resp.rect.height());
         let mods = ui.input(|i| i.modifiers);
+        // A running scan's snapshot is only drawn; its entries move around as the scan goes.
+        let interactive = self.tree.is_some();
 
         // Camera: start fully zoomed out; on resize, hold the folder in view steady.
         let view = Size::new(w as f64, h as f64);
@@ -30,7 +32,9 @@ impl SpaceMonger {
         self.camera.ensure();
         self.step_anim();
 
-        self.view_input(ui, &resp, &d, mods);
+        if interactive {
+            self.view_input(ui, &resp, &d, mods);
+        }
         self.rebuild_layout(w, h);
         self.update_marquee(&resp, &d);
 
@@ -41,7 +45,7 @@ impl SpaceMonger {
                 let (x, y) = d.local(p);
                 hit_test(&self.items, x, y)
             })
-            .filter(|_| self.camera.anim.is_none() && !resp.dragged());
+            .filter(|_| interactive && self.camera.anim.is_none() && !resp.dragged());
         if hit != self.hovered {
             self.hovered = hit;
             self.hover_since = Instant::now();
@@ -49,6 +53,9 @@ impl SpaceMonger {
 
         self.paint(&d, w, h);
 
+        if !interactive {
+            return None;
+        }
         let mut act = self.clicks(&resp, &d, mods);
         act = act.or(context_menu(&resp, &self.command_state()));
         self.show_infotip(ui, &resp);
@@ -107,7 +114,7 @@ impl SpaceMonger {
         if self.layout_key.as_ref() != Some(&key) {
             let view = Size::new(w as f64, h as f64);
             let p = self.params();
-            self.items = match &self.tree {
+            self.items = match self.shown_tree() {
                 Some(t) => layout::build(&t.root, cam, view, p, &key.4),
                 None => Vec::new(),
             };
@@ -131,7 +138,7 @@ impl SpaceMonger {
     fn paint(&self, d: &MapPainter, w: f32, h: f32) {
         let pal = self.palette();
         d.fill(pal.background, 0.0, 0.0, w, h);
-        if let Some(tree) = &self.tree {
+        if let Some(tree) = self.shown_tree() {
             // Parents come before children, so a selected folder's children stay visible.
             for (i, it) in self.items.iter().enumerate() {
                 let is_sel = it.index.is_some_and(|k| self.selection.contains(&EntryRef::new(it.folder.clone(), k)));

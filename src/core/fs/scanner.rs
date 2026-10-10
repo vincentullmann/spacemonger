@@ -1,15 +1,15 @@
 //! Parallel scanner: stays on one filesystem and counts hard links once.
 
+use super::live::{Chain, LiveDir};
 use super::metadata::meta;
 use super::Drive;
 use crate::core::model::{Entry, Folder, Kind, Tree};
-use rayon::prelude::*;
 use dashmap::DashSet;
+use rayon::prelude::*;
 use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Mutex;
-
+use std::sync::{Arc, Mutex};
 
 /// Shared state between the scanner threads and the UI.
 pub struct ScanControl {
@@ -20,6 +20,8 @@ pub struct ScanControl {
     pub current: Mutex<String>,
     /// (device, inode) of hard-linked files and folders already counted.
     seen: DashSet<(u64, u64)>,
+    /// The tree so far, while the scan runs.
+    live: Mutex<Option<Arc<LiveDir>>>,
 }
 
 impl Default for ScanControl {
@@ -31,6 +33,7 @@ impl Default for ScanControl {
             bytes: AtomicU64::new(0),
             current: Mutex::new(String::new()),
             seen: DashSet::new(),
+            live: Mutex::new(None),
         }
     }
 }
@@ -46,24 +49,41 @@ impl ScanControl {
     fn first_sighting(&self, dev: u64, ino: u64) -> bool {
         self.seen.insert((dev, ino))
     }
+    fn live(&self) -> std::sync::MutexGuard<'_, Option<Arc<LiveDir>>> {
+        self.live.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// What the scan of `drive` has found so far, for drawing while it runs. Entries too small
+    /// to show up are left out. `None` before the scan starts and after it ends.
+    pub fn snapshot(&self, drive: &Drive) -> Option<Tree> {
+        let live = self.live();
+        let root = live.as_ref()?;
+        let min = root.bytes() / LIVE_DETAIL;
+        Some(make_tree(drive, root.snapshot(min), self))
+    }
 }
 
-fn scan_dir(path: &Path, dev: u64, ctl: &ScanControl) -> Folder {
-    let mut folder = Folder::default();
+/// A live snapshot keeps entries of at least this fraction of the bytes found so far.
+const LIVE_DETAIL: u64 = 200_000;
+
+/// Scan the folder at `path` into `chain.dir`.
+fn scan_dir(path: &Path, dev: u64, ctl: &ScanControl, chain: &Chain) {
     if ctl.is_cancelled() {
-        return folder;
+        return;
     }
     if let Ok(mut cur) = ctl.current.try_lock() {
         *cur = path.display().to_string();
     }
 
     let Ok(rd) = fs::read_dir(path) else {
-        return folder;
+        return;
     };
     let mut names: Vec<_> = rd.filter_map(|e| e.ok()).map(|e| e.file_name()).collect();
     names.sort();
 
-    let mut subdirs = Vec::new();
+    let mut files = Vec::new();
+    let mut dirs = Vec::new();
+    let mut dir_paths = Vec::new();
     for name in names {
         if ctl.is_cancelled() {
             break;
@@ -75,12 +95,13 @@ fn scan_dir(path: &Path, dev: u64, ctl: &ScanControl) -> Folder {
             if m.dev != dev || !ctl.first_sighting(m.dev, m.ino) {
                 continue; // other filesystem, or already seen via a bind mount
             }
-            subdirs.push((name, child, m.mtime));
+            dirs.push(LiveDir::new(name, m.mtime));
+            dir_paths.push(child);
         } else if m.is_file {
             if m.nlink > 1 && !ctl.first_sighting(m.dev, m.ino) {
                 continue; // hard link already counted
             }
-            folder.entries.push(Entry {
+            files.push(Entry {
                 name,
                 size: m.alloc,
                 actual: m.len,
@@ -88,46 +109,25 @@ fn scan_dir(path: &Path, dev: u64, ctl: &ScanControl) -> Folder {
                 kind: Kind::File,
                 hidden: false,
             });
-            ctl.files.fetch_add(1, Ordering::Relaxed);
-            ctl.bytes.fetch_add(m.alloc, Ordering::Relaxed);
         }
     }
 
-    let children: Vec<_> = subdirs
-        .into_par_iter()
-        .map(|(name, p, mtime)| {
-            let sub = scan_dir(&p, dev, ctl);
-            ctl.folders.fetch_add(1, Ordering::Relaxed);
-            (name, sub, mtime)
-        })
-        .collect();
-    for (name, sub, mtime) in children {
-        let size = sub.total;
-        folder.entries.push(Entry {
-            name,
-            size,
-            actual: size,
-            mtime,
-            kind: Kind::Dir(Box::new(sub)),
-            hidden: false,
-        });
-    }
+    // Stable sort keeps name order for equal sizes.
+    files.sort_by_key(|e| std::cmp::Reverse(e.size));
+    let file_bytes: u64 = files.iter().map(|e| e.size).sum();
+    ctl.files.fetch_add(files.len() as u64, Ordering::Relaxed);
+    ctl.bytes.fetch_add(file_bytes, Ordering::Relaxed);
+    let dirs = chain.dir.set_contents(files, dirs);
+    chain.add_bytes(file_bytes);
 
-    folder.finalize();
-    folder
+    dirs.par_iter().zip(dir_paths).for_each(|(dir, p)| {
+        scan_dir(&p, dev, ctl, &Chain { dir, parent: Some(chain) });
+        ctl.folders.fetch_add(1, Ordering::Relaxed);
+    });
 }
 
-/// Scan a drive. Returns `None` if cancelled.
-pub fn scan(drive: &Drive, ctl: &ScanControl) -> Option<Tree> {
-    let root_meta = meta(&drive.root)?;
-    let pool = rayon::ThreadPoolBuilder::new()
-        .stack_size(32 * 1024 * 1024)
-        .build()
-        .ok()?;
-    let mut root = pool.install(|| scan_dir(&drive.root, root_meta.dev, ctl));
-    if ctl.is_cancelled() {
-        return None;
-    }
+/// A tree from a scanned (or partly scanned) root folder, with the free space block added.
+fn make_tree(drive: &Drive, mut root: Folder, ctl: &ScanControl) -> Tree {
     root.entries.push(Entry {
         name: String::new(),
         size: drive.free,
@@ -137,7 +137,7 @@ pub fn scan(drive: &Drive, ctl: &ScanControl) -> Option<Tree> {
         hidden: false,
     });
     root.finalize();
-    Some(Tree {
+    Tree {
         root,
         root_path: drive.root.clone(),
         total_space: drive.total,
@@ -145,7 +145,27 @@ pub fn scan(drive: &Drive, ctl: &ScanControl) -> Option<Tree> {
         num_files: ctl.files.load(Ordering::Relaxed),
         num_folders: ctl.folders.load(Ordering::Relaxed),
         hidden_count: 0,
-    })
+    }
+}
+
+/// Scan a drive. Returns `None` if cancelled.
+pub fn scan(drive: &Drive, ctl: &ScanControl) -> Option<Tree> {
+    let root_meta = meta(&drive.root)?;
+    let pool = rayon::ThreadPoolBuilder::new()
+        .stack_size(32 * 1024 * 1024)
+        .build()
+        .ok()?;
+    let root = Arc::new(LiveDir::new(String::new(), root_meta.mtime));
+    *ctl.live() = Some(root.clone());
+    pool.install(|| scan_dir(&drive.root, root_meta.dev, ctl, &Chain { dir: &root, parent: None }));
+    // Taking it back waits out any snapshot in progress, leaving the scan the only owner.
+    ctl.live().take();
+    if ctl.is_cancelled() {
+        return None;
+    }
+    let root = Arc::into_inner(root)?;
+    let folder = pool.install(|| root.into_folder());
+    Some(make_tree(drive, folder, ctl))
 }
 
 #[cfg(test)]

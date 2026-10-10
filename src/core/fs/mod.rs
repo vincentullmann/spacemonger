@@ -2,6 +2,7 @@
 
 mod drive;
 mod error;
+mod live;
 mod metadata;
 mod scan_job;
 mod scanner;

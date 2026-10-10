@@ -24,6 +24,8 @@ use std::time::Instant;
 
 pub struct SpaceMonger {
     tree: Option<Tree>,
+    /// Snapshot of a running scan, drawn (but not interactive) until the scan finishes.
+    live: Option<Tree>,
     drive: Option<crate::core::fs::Drive>,
     /// Index path of the deepest folder covering the whole view (derived from the camera).
     zoom: Vec<usize>,
@@ -59,6 +61,7 @@ impl SpaceMonger {
         let settings = Settings::load(cc.storage);
         let mut app = Self {
             tree: None,
+            live: None,
             drive: None,
             zoom: Vec::new(),
             camera: Camera::default(),
@@ -103,6 +106,11 @@ impl SpaceMonger {
         LayoutParams { show_free: self.show_free, ..self.params }
     }
 
+    /// The tree to draw: the scanned one, or a running scan's snapshot.
+    fn shown_tree(&self) -> Option<&Tree> {
+        self.tree.as_ref().or(self.live.as_ref())
+    }
+
     fn selected_entry(&self) -> Option<&Entry> {
         self.tree.as_ref()?.entry(self.selection.primary()?)
     }
@@ -131,7 +139,7 @@ impl SpaceMonger {
     }
 
     fn modal_open(&self) -> bool {
-        self.dialog.is_some() || self.scan.is_some() || self.error.is_some() || self.confirm_delete.is_some()
+        self.dialog.is_some() || self.error.is_some() || self.confirm_delete.is_some()
     }
 }
 
@@ -151,8 +159,8 @@ impl eframe::App for SpaceMonger {
             .frame(egui::Frame::NONE.fill(pal.background))
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing = Vec2::ZERO;
-                let target = self.tree.as_ref().and_then(|t| path_bar(ui, t, &self.zoom, pal, &self.font));
-                if let Some(target) = target {
+                let target = self.shown_tree().and_then(|t| path_bar(ui, t, &self.zoom, pal, &self.font));
+                if let Some(target) = target.filter(|_| self.tree.is_some()) {
                     self.zoom_to(&target);
                 }
                 self.treemap(ui)

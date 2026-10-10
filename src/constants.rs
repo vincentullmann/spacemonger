@@ -16,6 +16,8 @@ pub const MAX_ZOOM: f64 = 1e8;
 pub const RESIZE_SETTLE: Duration = Duration::from_millis(400);
 /// Resize anchor: deepest folder at the window centre covering at least this share of it.
 pub const ANCHOR_MIN_SHARE: f64 = 0.25;
+/// How often a running scan is snapshotted for the treemap.
+pub const LIVE_SCAN_INTERVAL: Duration = Duration::from_millis(100);
 /// Height of the path (breadcrumb) bar above the treemap.
 pub const BAR_H: i32 = 18;
 /// Framing the selection (F): share of the view its bounding box may take up.

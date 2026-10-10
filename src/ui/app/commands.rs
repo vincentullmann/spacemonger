@@ -23,6 +23,7 @@ impl SpaceMonger {
             job.cancel();
         }
         self.tree = None;
+        self.live = None;
         self.zoom.clear();
         self.camera.reset();
         self.selection.clear();
@@ -37,13 +38,18 @@ impl SpaceMonger {
     pub(super) fn poll_scan(&mut self) {
         let Some(job) = &mut self.scan else { return };
         match job.poll() {
-            ScanStatus::Running => {}
-            ScanStatus::Finished(Some(tree)) => {
-                self.tree = Some(tree);
+            ScanStatus::Running => {
+                if let Some(t) = job.take_snapshot() {
+                    self.live = Some(t);
+                    self.invalidate();
+                }
+            }
+            ScanStatus::Finished(tree) => {
+                self.tree = tree;
+                self.live = None;
                 self.scan = None;
                 self.invalidate();
             }
-            ScanStatus::Finished(None) => self.scan = None,
         }
     }
 
@@ -154,6 +160,8 @@ impl SpaceMonger {
             if scan_dialog(ctx, job) {
                 job.cancel();
                 self.scan = None;
+                self.live = None;
+                self.invalidate();
             }
         }
 
