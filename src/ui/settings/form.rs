@@ -99,7 +99,15 @@ pub fn number<T: Numeric>(
     step: f64,
     unit: &str,
 ) -> Response {
+    let (lo, hi) = (range.start().to_f64(), range.end().to_f64());
     let r = ui.add(egui::DragValue::new(v).range(range).speed(step));
+    // Focused, the field steps with Up / Down itself; hovered, we do the same.
+    if r.hovered() && !r.has_focus() {
+        let d = arrow_steps(ui);
+        if d != 0 {
+            *v = T::from_f64((v.to_f64() + d as f64 * step).clamp(lo, hi));
+        }
+    }
     if !unit.is_empty() {
         ui.weak(unit);
     }
@@ -114,14 +122,39 @@ pub fn choice<T: PartialEq + Copy>(
     options: &[(T, &str)],
 ) -> Response {
     let shown = options.iter().find(|(o, _)| o == v).map_or("", |(_, l)| *l);
-    egui::ComboBox::from_id_salt(id)
+    let r = egui::ComboBox::from_id_salt(id)
         .selected_text(shown)
         .show_ui(ui, |ui| {
             for (o, label) in options {
                 ui.selectable_value(v, *o, *label);
             }
         })
-        .response
+        .response;
+    let i = options.iter().position(|(o, _)| o == v).unwrap_or(0);
+    if let Some(j) = arrow_index(ui, &r, i, options.len()) {
+        *v = options[j].0;
+    }
+    r
+}
+
+/// Up / Down presses this frame: +1 for each Up, -1 for each Down (consumed).
+fn arrow_steps(ui: &Ui) -> i32 {
+    ui.input_mut(|i| {
+        let up = i.count_and_consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp);
+        let down = i.count_and_consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown);
+        up as i32 - down as i32
+    })
+}
+
+/// For a closed drop-down that's hovered or focused: the option Up / Down moves to from
+/// `i` (Down goes further down the list), if any.
+fn arrow_index(ui: &Ui, r: &Response, i: usize, n: usize) -> Option<usize> {
+    let open = egui::Popup::is_id_open(ui.ctx(), egui::Popup::default_response_id(r));
+    if open || !(r.hovered() || r.has_focus()) || n == 0 {
+        return None;
+    }
+    let d = -arrow_steps(ui);
+    (d != 0).then(|| (i as i32 + d).clamp(0, n as i32 - 1) as usize)
 }
 
 /// One swatch per colour, plus buttons to drop / add one.
@@ -157,7 +190,7 @@ pub fn font_family(ui: &mut Ui, family: &mut String) -> Response {
     } else {
         family.as_str()
     };
-    egui::ComboBox::from_id_salt("font_family")
+    let r = egui::ComboBox::from_id_salt("font_family")
         .selected_text(shown.to_string())
         .height(400.0)
         .show_ui(ui, |ui| {
@@ -166,7 +199,18 @@ pub fn font_family(ui: &mut Ui, family: &mut String) -> Response {
                 ui.selectable_value(family, name.clone(), name);
             }
         })
-        .response
+        .response;
+    // "Default" is index 0, then the system fonts.
+    let names = fonts::system_families();
+    let i = names.iter().position(|n| n == family).map_or(0, |k| k + 1);
+    if let Some(j) = arrow_index(ui, &r, i, names.len() + 1) {
+        *family = if j == 0 {
+            String::new()
+        } else {
+            names[j - 1].clone()
+        };
+    }
+    r
 }
 
 /// Mock-up of the exclude list: not wired to the scanner yet.
