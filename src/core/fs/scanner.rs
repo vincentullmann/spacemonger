@@ -4,7 +4,7 @@ use super::metadata::meta;
 use super::Drive;
 use crate::core::model::{Entry, Folder, Kind, Tree};
 use rayon::prelude::*;
-use std::collections::HashSet;
+use dashmap::DashSet;
 use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -18,7 +18,8 @@ pub struct ScanControl {
     pub folders: AtomicU64,
     pub bytes: AtomicU64,
     pub current: Mutex<String>,
-    seen: Vec<Mutex<HashSet<(u64, u64)>>>,
+    /// (device, inode) of hard-linked files and folders already counted.
+    seen: DashSet<(u64, u64)>,
 }
 
 impl Default for ScanControl {
@@ -29,7 +30,7 @@ impl Default for ScanControl {
             folders: AtomicU64::new(0),
             bytes: AtomicU64::new(0),
             current: Mutex::new(String::new()),
-            seen: (0..64).map(|_| Mutex::new(HashSet::new())).collect(),
+            seen: DashSet::new(),
         }
     }
 }
@@ -43,8 +44,7 @@ impl ScanControl {
     }
     /// Returns false if this (device, inode) was already counted (hard links, bind mounts).
     fn first_sighting(&self, dev: u64, ino: u64) -> bool {
-        let shard = (ino.wrapping_mul(0x9E37_79B9_7F4A_7C15) >> 58) as usize;
-        self.seen[shard].lock().unwrap().insert((dev, ino))
+        self.seen.insert((dev, ino))
     }
 }
 
@@ -184,6 +184,20 @@ mod tests {
         assert_eq!(tree.root.total, root_total - b_size);
         assert_eq!(tree.root.entries[ai].size, a_size - b_size);
         assert_eq!(tree.folder_at(&[ai]).unwrap().entries.len(), 1);
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn hard_links_count_once() {
+        let dir = std::env::temp_dir().join(format!("sm_test_links_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("sub")).unwrap();
+        fs::write(dir.join("f"), vec![1u8; 10_000]).unwrap();
+        fs::hard_link(dir.join("f"), dir.join("sub/g")).unwrap();
+
+        let tree = scan(&drive_for_path(&dir).unwrap(), &ScanControl::default()).unwrap();
+        assert_eq!(tree.num_files, 1);
 
         fs::remove_dir_all(&dir).unwrap();
     }

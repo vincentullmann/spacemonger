@@ -17,6 +17,7 @@ num-format = "0.4"
 humansize = "2.1"
 serde = { version = "1", features = ["derive"] }
 indexmap = "2"
+dashmap = "6"
 
 [profile.release]
 opt-level = 3
