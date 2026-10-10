@@ -158,12 +158,23 @@ impl SpaceMonger {
         d.fill(d.palette().background, 0.0, 0.0, w, h);
         if let Some(tree) = self.shown_tree() {
             // Parents come before children, so a selected folder's children stay visible.
-            for (i, it) in self.items.iter().enumerate() {
-                let is_sel = it.index.is_some_and(|k| {
+            let is_sel = |it: &layout::Item| {
+                it.index.is_some_and(|k| {
                     self.selection
                         .contains(&EntryRef::new(it.folder.clone(), k))
-                });
-                d.item(tree, it, is_sel, self.hovered == Some(i));
+                })
+            };
+            for (i, it) in self.items.iter().enumerate() {
+                d.item(tree, it, is_sel(it), self.hovered == Some(i));
+            }
+            // Collapsed borders: highlight outlines go on top of the neighbours' lines.
+            if d.collapsed() {
+                for (i, it) in self.items.iter().enumerate() {
+                    let (sel, hover) = (is_sel(it), self.hovered == Some(i));
+                    if (sel || hover) && !it.is_free {
+                        d.outline(it, sel, hover);
+                    }
+                }
             }
         }
         if let Some(m) = &self.marquee {
