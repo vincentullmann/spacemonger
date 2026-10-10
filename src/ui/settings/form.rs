@@ -274,12 +274,32 @@ pub fn font_family(ui: &mut Ui, family: &mut String) -> Response {
     };
     let r = egui::ComboBox::from_id_salt("font_family")
         .selected_text(shown.to_string())
-        .height(400.0)
+        .height(f32::INFINITY)
         .show_ui(ui, |ui| {
-            ui.selectable_value(family, String::new(), "Default");
-            for name in fonts::system_families() {
-                ui.selectable_value(family, name.clone(), name);
-            }
+            // Each name in its own font. Only the rows in view are drawn (and their fonts
+            // loaded), so a long font list stays quick.
+            let names = fonts::system_families();
+            let size = ui.style().text_styles[&egui::TextStyle::Body].size + 2.0;
+            let row_h = size + ui.spacing().button_padding.y * 2.0 + ui.spacing().item_spacing.y;
+            egui::ScrollArea::vertical().max_height(400.0).show_rows(
+                ui,
+                row_h - ui.spacing().item_spacing.y,
+                names.len() + 1,
+                |ui, rows| {
+                    for k in rows {
+                        if k == 0 {
+                            ui.selectable_value(family, String::new(), "Default");
+                            continue;
+                        }
+                        let name = &names[k - 1];
+                        let mut text = RichText::new(name).size(size);
+                        if let Some(f) = fonts::preview_family(ui.ctx(), name) {
+                            text = text.family(f);
+                        }
+                        ui.selectable_value(family, name.clone(), text);
+                    }
+                },
+            );
         })
         .response;
     // "Default" is index 0, then the system fonts.

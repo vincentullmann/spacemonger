@@ -1,7 +1,9 @@
 //! The treemap / path-bar font: egui's default, or a system font found with fontdb.
 
 use eframe::egui::{self, FontData, FontDefinitions, FontFamily};
-use std::sync::{Arc, OnceLock};
+use eframe::epaint::text::{FontInsert, FontPriority, InsertFontFamily};
+use std::collections::BTreeSet;
+use std::sync::{Arc, Mutex, OnceLock};
 
 /// Font family used for treemap and path-bar labels.
 pub fn map_family() -> FontFamily {
@@ -58,4 +60,35 @@ pub fn apply(ctx: &egui::Context, family: &str) {
     }
     defs.families.insert(map_family(), list);
     ctx.set_fonts(defs);
+    // That drops the preview fonts; they're added again when next shown.
+    requested().clear();
+}
+
+/// Preview fonts asked for and not yet known to be loaded.
+fn requested() -> std::sync::MutexGuard<'static, BTreeSet<String>> {
+    static REQUESTED: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
+    REQUESTED.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// A font family that draws text in the system font `name`, for showing font names in their
+/// own font. Loads the font on first use; until it's in egui's fonts (the next frame) this is
+/// `None` and the caller uses the normal font.
+pub fn preview_family(ctx: &egui::Context, name: &str) -> Option<FontFamily> {
+    let family = FontFamily::Name(format!("preview:{name}").into());
+    if ctx.fonts(|f| f.definitions().families.contains_key(&family)) {
+        return Some(family);
+    }
+    if requested().insert(name.to_string()) {
+        if let Some((bytes, index)) = load_family(name) {
+            let mut data = FontData::from_owned(bytes);
+            data.index = index;
+            let to = InsertFontFamily {
+                family,
+                priority: FontPriority::Highest,
+            };
+            ctx.add_font(FontInsert::new(&format!("preview:{name}"), data, vec![to]));
+            ctx.request_repaint();
+        }
+    }
+    None
 }
