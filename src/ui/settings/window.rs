@@ -1,7 +1,7 @@
 //! The settings window: its own OS window (an in-app window where egui can't open one),
 //! editing [`Settings`] in place so every change shows up in the main window at once.
 
-use super::{pages, Font, General, Layout, PathBar, Scan, Settings, Tiles};
+use super::{pages, Settings};
 use crate::ui::keymap::{same_shortcut, shortcut_text, Command, Keymap};
 use eframe::egui::{self, Event, Key, KeyboardShortcut, RichText, ViewportBuilder, ViewportId};
 
@@ -64,9 +64,6 @@ impl SettingsWindow {
                 });
                 egui::Panel::bottom("settings_footer").show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        if ui.button("Reset this tab").clicked() {
-                            self.reset_tab(s);
-                        }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if ui.button("Close").clicked() {
                                 self.open = false;
@@ -87,25 +84,6 @@ impl SettingsWindow {
                 });
             },
         );
-    }
-
-    fn reset_tab(&mut self, s: &mut Settings) {
-        match self.tab {
-            Tab::General => {
-                s.general = General::default();
-                s.layout = Layout::default();
-            }
-            Tab::Scan => s.scan = Scan::default(),
-            Tab::Display => {
-                s.tiles = Tiles::default();
-                s.font = Font::default();
-                s.path_bar = PathBar::default();
-            }
-            Tab::Keys => {
-                s.keys = Keymap::default();
-                self.capture = None;
-            }
-        }
     }
 
     /// One row per command: its shortcuts (click one to change it, right-click to remove),
