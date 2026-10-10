@@ -61,12 +61,27 @@ defaults), translations, About dialog, toolbar bitmaps.
 
 ## Layout
 
-| File | Java origin |
-|---|---|
-| `src/scan.rs` | `CFolder`, `CFolderTree`, `fs/*` |
-| `src/layout.rs` | `FolderView.buildFolderLayout` / `sizeFolders` |
-| `src/app.rs` | `AppController`, `FolderView` (drawing, input, tips), dialogs |
-| `src/colors.rs` | `ColorService` |
-| `src/format.rs` | `FormatService` |
+`core/` is everything that isn't drawing and has no egui dependency; `ui/` is the egui front
+end. `utils/` holds generic helpers, `helpers/` app-specific glue.
 
-`cargo test` covers scanning/removal, layout proportions and formatting.
+| Path | What | Java origin |
+|---|---|---|
+| `src/main.rs` | Arguments, window setup | |
+| `src/constants.rs` | App-wide constants | |
+| `src/core/model/` | `Entry`, `Folder`, `Tree`, `EntryRef` | `CFolder`, `CFolderTree` |
+| `src/core/fs/` | Volumes (lfs-core), parallel scanner, background scan job, errors | `fs/*` |
+| `src/core/geometry/` | kurbo re-exports + `RectExt` | |
+| `src/core/layout/` | Greedy split treemap, reshaping, geometry queries, arrow-key neighbours | `FolderView.buildFolderLayout` / `sizeFolders` |
+| `src/core/camera/` | Camera: pan, wheel zoom, zoom-to-folder / frame animations, fit, resize anchor | `FolderView` (zoom) |
+| `src/core/selection/` | `Selection`, arrow-key navigation, rectangle select | |
+| `src/core/actions.rs` | `Action` enum | |
+| `src/ui/app/` | `SpaceMonger` app state, commands, treemap panel | `AppController`, `FolderView` (input) |
+| `src/ui/widgets/` | Toolbar, path bar, context menu, info tip | |
+| `src/ui/dialogs/` | Drive picker, scan progress, delete confirm, error | |
+| `src/ui/painter.rs` | Box and label drawing | `FolderView` (drawing) |
+| `src/ui/palette.rs` | Colour palettes | `ColorService` |
+| `src/ui/keymap.rs`, `title.rs`, `settings.rs`, `error.rs` | Shortcuts, window title, persisted settings, user-facing errors | |
+| `src/utils/` | Size / date formatting, interpolation, text eliding | `FormatService` |
+| `src/helpers/` | egui conveniences | |
+
+`cargo test` covers scanning / removal, layout, camera moves, selection and formatting.
