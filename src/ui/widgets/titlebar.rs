@@ -16,19 +16,16 @@ pub const HEIGHT: f32 = 34.0;
 const ICON_SIZE: f32 = 16.0;
 const BUTTON: Vec2 = Vec2::new(30.0, 28.0);
 const WINDOW_BUTTON_W: f32 = 44.0;
+/// Pointer travel (points) with the button down before a press on the bar moves the window.
+const DRAG_THRESHOLD: f32 = 3.0;
 const CLOSE_HOVER: Color32 = Color32::from_rgb(0xc4, 0x2b, 0x1c);
 
 /// Draw the bar. Returns the command clicked, if any.
 pub fn titlebar(ui: &mut Ui, st: &CommandState, keys: &Keymap, title: &str) -> Option<Action> {
     let full = ui.max_rect();
-    // Behind everything: drag the window from any empty spot, double-click to maximise.
+    // Behind everything, so it only gets the pointer where nothing else is.
     let bg = ui.interact(full, ui.id().with("titlebar_bg"), Sense::click_and_drag());
     let maximized = ui.input(|i| i.viewport().maximized.unwrap_or(false));
-    if bg.double_clicked() {
-        ui.send_viewport_cmd(ViewportCommand::Maximized(!maximized));
-    } else if bg.drag_started_by(egui::PointerButton::Primary) {
-        ui.send_viewport_cmd(ViewportCommand::StartDrag);
-    }
 
     // Window buttons first, so the icons give way (clipped) in a narrow window, not them.
     let buttons_w = 3.0 * WINDOW_BUTTON_W;
@@ -61,7 +58,53 @@ pub fn titlebar(ui: &mut Ui, st: &CommandState, keys: &Keymap, title: &str) -> O
         egui::pos2((left.right() - 12.0).max(mid_left), full.bottom()),
     );
     title_text(ui, mid, full, title);
+
+    let icons = cmds.min_rect();
+    move_or_maximize(
+        ui,
+        &bg,
+        |p| !icons.contains(p) && !right.contains(p),
+        maximized,
+    );
     act
+}
+
+/// Drag empty bar space to move the window, double-click it to toggle maximised.
+///
+/// The move starts once the pointer has moved a few pixels with the button down, tracked
+/// here from the raw pointer rather than egui's drag state, so it also works on the click
+/// that focuses an inactive window. Then the window manager takes over (see `wm_grab`).
+fn move_or_maximize(
+    ui: &Ui,
+    bg: &egui::Response,
+    empty: impl Fn(egui::Pos2) -> bool,
+    maximized: bool,
+) {
+    if bg.double_clicked() {
+        ui.send_viewport_cmd(ViewportCommand::Maximized(!maximized));
+        return;
+    }
+    let (pressed, down, pos) = ui.input(|i| {
+        (
+            i.pointer.primary_pressed(),
+            i.pointer.primary_down(),
+            i.pointer.interact_pos(),
+        )
+    });
+    let id = bg.id.with("press");
+    if pressed {
+        let start = pos.filter(|&p| bg.contains_pointer() && empty(p));
+        ui.data_mut(|d| d.insert_temp(id, start));
+        return;
+    }
+    let start: Option<egui::Pos2> = ui.data(|d| d.get_temp(id)).flatten();
+    let Some(start) = start else { return };
+    if !down {
+        ui.data_mut(|d| d.remove::<Option<egui::Pos2>>(id));
+    } else if pos.is_some_and(|p| p.distance(start) > DRAG_THRESHOLD) {
+        ui.data_mut(|d| d.remove::<Option<egui::Pos2>>(id));
+        super::wm_grab(ui.ctx(), ViewportCommand::StartDrag);
+    }
 }
 
 /// The window title in `mid`, dimmed, centred on the whole bar (`full`) when it fits, cut
@@ -112,7 +155,7 @@ fn divider(ui: &mut Ui) {
 }
 
 fn commands(ui: &mut Ui, st: &CommandState, keys: &Keymap) -> Option<Action> {
-    let mut act = None;
+    let mut act = main_menu(ui, st, keys);
     let mut cmd = |ui: &mut Ui, glyph: &str, enabled: bool, c: Command, name: &str| {
         if icon_button(ui, glyph, enabled, &tip(keys, c, name)).clicked() {
             act = Some(c.action(false));
@@ -127,88 +170,83 @@ fn commands(ui: &mut Ui, st: &CommandState, keys: &Keymap) -> Option<Action> {
         "Reload",
     );
     divider(ui);
-    let zoomed = st.has_tree && st.zoomed;
-    cmd(
-        ui,
-        icon::MAGNIFYING_GLASS_MINUS,
-        zoomed,
-        Command::ZoomOut,
-        "Zoom out",
-    );
-    cmd(
-        ui,
-        icon::CORNERS_OUT,
-        zoomed,
-        Command::ZoomFull,
-        "Zoom to fit",
-    );
-    let zoom_in = st.has_tree && st.sel_folder;
-    cmd(
-        ui,
-        icon::MAGNIFYING_GLASS_PLUS,
-        zoom_in,
-        Command::ZoomIn,
-        "Zoom in",
-    );
-    divider(ui);
     icon_button(ui, icon::MAGNIFYING_GLASS, false, "Search (coming later)");
-    act = act.or(view_menu(ui, st, keys));
-    if icon_button(
-        ui,
-        icon::GEAR_SIX,
-        true,
-        &tip(keys, Command::Settings, "Settings"),
-    )
-    .clicked()
-    {
-        act = Some(Action::Settings);
-    }
     act
 }
 
-/// The View dropdown: free space and hidden items.
-fn view_menu(ui: &mut Ui, st: &CommandState, keys: &Keymap) -> Option<Action> {
-    let name = if st.hidden > 0 {
-        format!("View  ({} hidden)", st.hidden)
-    } else {
-        "View".to_owned()
-    };
-    let button = Button::new((
-        RichText::new(icon::EYE).size(ICON_SIZE),
-        RichText::new(icon::CARET_DOWN).size(10.0),
-    ))
-    .frame_when_inactive(false)
-    .min_size(BUTTON);
-    let shortcut = |c| {
-        keys.for_command(c)
-            .next()
-            .map(|(_, s)| shortcut_text(s))
-            .unwrap_or_default()
-    };
+/// The menu behind the first icon: every command the bar has, grouped.
+fn main_menu(ui: &mut Ui, st: &CommandState, keys: &Keymap) -> Option<Action> {
+    let button = Button::new(RichText::new(icon::LIST).size(ICON_SIZE))
+        .frame_when_inactive(false)
+        .min_size(BUTTON);
     let mut act = None;
     let (resp, _) = egui::containers::menu::MenuButton::from_button(button).ui(ui, |ui| {
+        ui.set_min_width(200.0);
+        let mut item = |ui: &mut Ui, glyph: &str, label: &str, enabled: bool, c: Command| {
+            let shortcut = keys
+                .for_command(c)
+                .next()
+                .map(|(_, s)| shortcut_text(s))
+                .unwrap_or_default();
+            let b = Button::new((RichText::new(glyph), label)).shortcut_text(shortcut);
+            if ui.add_enabled(enabled, b).clicked() {
+                act = Some(c.action(false));
+            }
+        };
+        item(ui, icon::FOLDER_OPEN, "Open…", true, Command::Open);
+        item(
+            ui,
+            icon::ARROW_CLOCKWISE,
+            "Reload",
+            st.has_tree,
+            Command::Reload,
+        );
+        ui.separator();
+        let (zoom_in, zoomed) = (st.has_tree && st.sel_folder, st.has_tree && st.zoomed);
+        item(
+            ui,
+            icon::MAGNIFYING_GLASS_PLUS,
+            "Zoom in",
+            zoom_in,
+            Command::ZoomIn,
+        );
+        item(
+            ui,
+            icon::MAGNIFYING_GLASS_MINUS,
+            "Zoom out",
+            zoomed,
+            Command::ZoomOut,
+        );
+        item(
+            ui,
+            icon::CORNERS_OUT,
+            "Zoom to fit",
+            zoomed,
+            Command::ZoomFull,
+        );
+        ui.separator();
         let check = if st.show_free {
             icon::CHECK_SQUARE
         } else {
             icon::SQUARE
         };
-        let free = Button::new((RichText::new(check), "Show free space"))
-            .shortcut_text(shortcut(Command::ToggleFree));
-        if ui.add_enabled(st.has_tree, free).clicked() {
-            act = Some(Action::ToggleFree);
-        }
-        let label = if st.hidden > 0 {
+        item(
+            ui,
+            check,
+            "Show free space",
+            st.has_tree,
+            Command::ToggleFree,
+        );
+        let unhide = if st.hidden > 0 {
             format!("Unhide all ({})", st.hidden)
         } else {
             "Unhide all".to_owned()
         };
-        let unhide = Button::new((RichText::new(icon::EYE), label))
-            .shortcut_text(shortcut(Command::UnhideAll));
-        if ui.add_enabled(st.hidden > 0, unhide).clicked() {
-            act = Some(Action::UnhideAll);
-        }
+        item(ui, icon::EYE, &unhide, st.hidden > 0, Command::UnhideAll);
+        ui.separator();
+        item(ui, icon::GEAR_SIX, "Settings…", true, Command::Settings);
     });
-    resp.on_hover_text(name);
+    resp.on_hover_text("Menu");
     act
 }
 

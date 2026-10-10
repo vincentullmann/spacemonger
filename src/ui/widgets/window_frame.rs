@@ -1,13 +1,14 @@
-//! What the system frame did before decorations were turned off: a thin border and resizing
-//! from the window's edges and corners. Neither applies while maximised or full screen.
+//! What the system frame did before decorations were turned off: a thin border, resizing from
+//! the window's edges and corners (neither while maximised or full screen), and handing moves
+//! and resizes to the window manager.
 
 use eframe::egui::{
-    self, CursorIcon, Id, LayerId, Order, Rect, ResizeDirection, Sense, Stroke, StrokeKind, Ui,
-    UiBuilder, ViewportCommand,
+    self, CursorIcon, Event, Id, LayerId, Order, PointerButton, RawInput, Rect, ResizeDirection,
+    Sense, Stroke, StrokeKind, Ui, UiBuilder, ViewportCommand,
 };
 
 /// Width of the grab zone along each edge.
-const EDGE: f32 = 5.0;
+const EDGE: f32 = 6.0;
 /// Length of the corner zones along each edge.
 const CORNER: f32 = 14.0;
 
@@ -65,7 +66,7 @@ pub fn window_frame(ctx: &egui::Context) {
         if resp.hovered() || resp.is_pointer_button_down_on() {
             ctx.set_cursor_icon(cursor(dir));
             if pressed {
-                ctx.send_viewport_cmd(ViewportCommand::BeginResize(dir));
+                wm_grab(ctx, ViewportCommand::BeginResize(dir));
             }
             break;
         }
@@ -83,5 +84,43 @@ fn cursor(dir: ResizeDirection) -> CursorIcon {
         D::NorthWest => CursorIcon::ResizeNorthWest,
         D::SouthEast => CursorIcon::ResizeSouthEast,
         D::SouthWest => CursorIcon::ResizeSouthWest,
+    }
+}
+
+const GRAB_PENDING: &str = "wm_grab_release_pending";
+
+/// Send a move or resize that the window manager carries out (`StartDrag`, `BeginResize`).
+/// The WM takes the pointer, so the button release never reaches us, and egui would think the
+/// button is still down: no hover until the next click. [`release_after_grab`] makes it up.
+pub fn wm_grab(ctx: &egui::Context, cmd: ViewportCommand) {
+    ctx.send_viewport_cmd(cmd);
+    ctx.data_mut(|d| d.insert_temp(Id::new(GRAB_PENDING), true));
+    ctx.request_repaint();
+}
+
+/// From the app's `raw_input_hook`: after a [`wm_grab`], add the release egui won't get.
+pub fn release_after_grab(ctx: &egui::Context, raw: &mut RawInput) {
+    let pending = ctx.data_mut(|d| d.remove_temp::<bool>(Id::new(GRAB_PENDING)));
+    if pending != Some(true) {
+        return;
+    }
+    let released = raw.events.iter().any(|e| {
+        matches!(
+            e,
+            Event::PointerButton {
+                button: PointerButton::Primary,
+                pressed: false,
+                ..
+            }
+        )
+    });
+    let (pos, modifiers) = ctx.input(|i| (i.pointer.interact_pos(), i.modifiers));
+    if let (false, Some(pos)) = (released, pos) {
+        raw.events.push(Event::PointerButton {
+            pos,
+            button: PointerButton::Primary,
+            pressed: false,
+            modifiers,
+        });
     }
 }

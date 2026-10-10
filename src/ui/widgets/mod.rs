@@ -12,4 +12,4 @@ pub use context_menu::context_menu;
 pub use infotip::infotip;
 pub use path_bar::path_bar;
 pub use titlebar::titlebar;
-pub use window_frame::window_frame;
+pub use window_frame::{release_after_grab, window_frame, wm_grab};
