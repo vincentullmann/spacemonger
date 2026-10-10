@@ -58,11 +58,18 @@ pub struct Rows<'a> {
 
 /// A titled group of rows.
 pub fn group(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Rows)) {
-    ui.add_space(8.0);
-    ui.heading(title);
-    ui.separator();
+    heading(ui, title);
     ui.spacing_mut().item_spacing.y = 6.0;
     add(&mut Rows { ui });
+}
+
+/// A group title with a rule under it, in the strong text colour (egui's heading colour is
+/// too dim in dark mode).
+pub fn heading(ui: &mut Ui, title: &str) {
+    ui.add_space(8.0);
+    let color = ui.visuals().strong_text_color();
+    ui.label(RichText::new(title).heading().color(color));
+    ui.separator();
 }
 
 /// A group of rows belonging to the group above it (e.g. Tiles / Labels).

@@ -148,9 +148,7 @@ impl SettingsWindow {
         let mut reset = None;
         ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
         for (title, cmds) in Command::GROUPS {
-            ui.add_space(8.0);
-            ui.heading(title);
-            ui.separator();
+            form::heading(ui, title);
             for &cmd in cmds {
                 let is_default = {
                     let now: Vec<_> = keys.for_command(cmd).map(|(_, s)| *s).collect();
