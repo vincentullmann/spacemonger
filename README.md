@@ -66,7 +66,8 @@ cargo build --release
     - Tiles / Labels: font size (folder title bars grow with it), drop shadow, density, size and
       date lines, size format (bytes, KiB or kB — used by labels and tips), date format.
     - Path bar: font size (the bar's height follows it).
-    - Tooltips: size, date, full path, font size, delay.
+    - Tooltips: full path, size, modified and created date (labelled when both are on), font
+      size, delay.
   - Keys, grouped (Scanning, Navigation, Selection & actions, Display): click a shortcut to
     rebind it, right-click to remove, `+` to add; clashes show in red.
 
