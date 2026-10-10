@@ -148,81 +148,84 @@ impl SettingsWindow {
         let mut reset = None;
         ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
         for (title, cmds) in Command::GROUPS {
-            form::heading(ui, title);
-            for &cmd in cmds {
-                let is_default = {
-                    let now: Vec<_> = keys.for_command(cmd).map(|(_, s)| *s).collect();
-                    let def = Keymap::defaults_for(cmd);
-                    now.len() == def.len() && now.iter().zip(&def).all(|(a, b)| same_shortcut(a, b))
-                };
-                let mut reset_clicked = false;
-                ui.push_id(cmd.label(), |ui| {
-                    // Same columns as the other tabs: label, shortcuts, reset on the right.
-                    form::line(
-                        ui,
-                        |ui| {
-                            reset_clicked = ui
-                                .add_enabled(!is_default, egui::Button::new("⟲").small())
-                                .on_hover_text("Reset to default")
-                                .clicked();
-                        },
-                        |ui| {
-                            let text = if is_default {
-                                RichText::new(cmd.label())
-                            } else {
-                                RichText::new(cmd.label()).strong()
-                            };
-                            ui.label(text);
-                            form::changed_dot(ui, !is_default);
-                            form::pad_to(ui, KEY_LABEL_WIDTH);
-                            let bound: Vec<(usize, KeyboardShortcut)> =
-                                keys.for_command(cmd).map(|(i, s)| (i, *s)).collect();
-                            for (i, sc) in bound {
-                                let waiting = self.capture == Some((cmd, Some(i)));
-                                let clashes = keys.conflicts(i);
-                                let mut text = RichText::new(if waiting {
-                                    "…".to_string()
+            form::section(ui, title, |ui| {
+                for &cmd in cmds {
+                    let is_default = {
+                        let now: Vec<_> = keys.for_command(cmd).map(|(_, s)| *s).collect();
+                        let def = Keymap::defaults_for(cmd);
+                        now.len() == def.len()
+                            && now.iter().zip(&def).all(|(a, b)| same_shortcut(a, b))
+                    };
+                    let mut reset_clicked = false;
+                    ui.push_id(cmd.label(), |ui| {
+                        // Same columns as the other tabs: label, shortcuts, reset on the right.
+                        form::line(
+                            ui,
+                            |ui| {
+                                reset_clicked = ui
+                                    .add_enabled(!is_default, egui::Button::new("⟲").small())
+                                    .on_hover_text("Reset to default")
+                                    .clicked();
+                            },
+                            |ui| {
+                                let text = if is_default {
+                                    RichText::new(cmd.label())
                                 } else {
-                                    shortcut_text(&sc)
-                                });
-                                if !clashes.is_empty() {
-                                    text = text.color(ui.visuals().error_fg_color);
+                                    RichText::new(cmd.label()).strong()
+                                };
+                                ui.label(text);
+                                form::changed_dot(ui, !is_default);
+                                form::pad_to(ui, KEY_LABEL_WIDTH);
+                                let bound: Vec<(usize, KeyboardShortcut)> =
+                                    keys.for_command(cmd).map(|(i, s)| (i, *s)).collect();
+                                for (i, sc) in bound {
+                                    let waiting = self.capture == Some((cmd, Some(i)));
+                                    let clashes = keys.conflicts(i);
+                                    let mut text = RichText::new(if waiting {
+                                        "…".to_string()
+                                    } else {
+                                        shortcut_text(&sc)
+                                    });
+                                    if !clashes.is_empty() {
+                                        text = text.color(ui.visuals().error_fg_color);
+                                    }
+                                    let mut b = ui.add(egui::Button::new(text).selected(waiting));
+                                    if !clashes.is_empty() {
+                                        let names: Vec<_> =
+                                            clashes.iter().map(|c| c.label()).collect();
+                                        b = b.on_hover_text(format!(
+                                            "Also bound to: {}",
+                                            names.join(", ")
+                                        ));
+                                    }
+                                    if b.clicked() {
+                                        self.capture = Some((cmd, Some(i)));
+                                    }
+                                    if b.secondary_clicked() {
+                                        remove = Some(i);
+                                    }
                                 }
-                                let mut b = ui.add(egui::Button::new(text).selected(waiting));
-                                if !clashes.is_empty() {
-                                    let names: Vec<_> = clashes.iter().map(|c| c.label()).collect();
-                                    b = b.on_hover_text(format!(
-                                        "Also bound to: {}",
-                                        names.join(", ")
-                                    ));
+                                let adding = self.capture == Some((cmd, None));
+                                if ui
+                                    .add(
+                                        // Frameless, so it doesn't read as a key.
+                                        egui::Button::new(if adding { "…" } else { "+" })
+                                            .frame(adding)
+                                            .selected(adding),
+                                    )
+                                    .on_hover_text("Add a shortcut")
+                                    .clicked()
+                                {
+                                    self.capture = Some((cmd, None));
                                 }
-                                if b.clicked() {
-                                    self.capture = Some((cmd, Some(i)));
-                                }
-                                if b.secondary_clicked() {
-                                    remove = Some(i);
-                                }
-                            }
-                            let adding = self.capture == Some((cmd, None));
-                            if ui
-                                .add(
-                                    // Frameless, so it doesn't read as a key.
-                                    egui::Button::new(if adding { "…" } else { "+" })
-                                        .frame(adding)
-                                        .selected(adding),
-                                )
-                                .on_hover_text("Add a shortcut")
-                                .clicked()
-                            {
-                                self.capture = Some((cmd, None));
-                            }
-                        },
-                    );
-                });
-                if reset_clicked {
-                    reset = Some(cmd);
+                            },
+                        );
+                    });
+                    if reset_clicked {
+                        reset = Some(cmd);
+                    }
                 }
-            }
+            });
         }
         if let Some(i) = remove {
             keys.binds.remove(i);

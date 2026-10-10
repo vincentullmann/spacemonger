@@ -1,6 +1,6 @@
 //! The contents of the General, Scan and Display tabs.
 
-use super::form::{self, group, subgroup};
+use super::form::{self, group};
 use super::{Font, General, Labels, Layout, PathBar, Scan, Settings, Theme, Tiles, Tooltips};
 use crate::ui::palette::Scheme;
 use crate::utils::format::SizeFormat;
@@ -148,6 +148,7 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
 
     let before = s.tiles.clone();
     let (t, d) = (&mut s.tiles, Tiles::default());
+    let (lb, dl) = (&mut s.labels, Labels::default());
     // The colours' default is the scheme's own set (Classic's for Custom).
     let scheme_colors = t
         .scheme
@@ -190,64 +191,62 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
             &d.hover,
             |ui, v| form::number(ui, v, 0..=100, 1.0, "%"),
         );
+        r.subgroup("Labels", |r| {
+            r.row(
+                "Font size",
+                "Text size of the labels in boxes. Folder title bars grow with it.",
+                &mut lb.font_size,
+                &dl.font_size,
+                |ui, v| form::number(ui, v, 6.0..=32.0, 0.5, "px"),
+            );
+            r.row(
+                "Drop shadow",
+                "Draw a soft shadow behind label text.",
+                &mut lb.shadow,
+                &dl.shadow,
+                form::check,
+            );
+            r.row(
+                "Density",
+                "Smallest box that gets a label (and shows a folder's contents): higher labels smaller boxes.",
+                &mut lb.density,
+                &dl.density,
+                |ui, v| form::number(ui, v, -3..=3, 1.0, ""),
+            );
+            r.row(
+                "Show size",
+                "Show the size under file names, where the box is big enough.",
+                &mut lb.show_size,
+                &dl.show_size,
+                form::check,
+            );
+            r.row(
+                "Show date",
+                "Show the modification date under file names, where the box is big enough.",
+                &mut lb.show_date,
+                &dl.show_date,
+                form::check,
+            );
+            r.row(
+                "Size format",
+                "How file sizes are shown in labels and tips. Totals (title bar, free space) use binary or decimal units.",
+                &mut lb.size_format,
+                &dl.size_format,
+                |ui, v| form::choice(ui, "size_format", v, &SIZE_FORMATS),
+            );
+            r.row(
+                "Date format",
+                "strftime pattern for dates, e.g. %Y-%m-%d %H:%M. An invalid pattern falls back to the default.",
+                &mut lb.date_format,
+                &dl.date_format,
+                |ui, v| ui.text_edit_singleline(v),
+            );
+        });
     });
     // A colour list reset to the scheme's own stays with that scheme.
     if !(s.tiles.scheme == before.scheme && s.tiles.colors == scheme_colors) {
         s.tiles.reconcile(&before);
     }
-
-    let (lb, d) = (&mut s.labels, Labels::default());
-    subgroup(ui, "Labels", |r| {
-        r.row(
-            "Font size",
-            "Text size of the labels in boxes. Folder title bars grow with it.",
-            &mut lb.font_size,
-            &d.font_size,
-            |ui, v| form::number(ui, v, 6.0..=32.0, 0.5, "px"),
-        );
-        r.row(
-            "Drop shadow",
-            "Draw a soft shadow behind label text.",
-            &mut lb.shadow,
-            &d.shadow,
-            form::check,
-        );
-        r.row(
-            "Density",
-            "Smallest box that gets a label (and shows a folder's contents): higher labels smaller boxes.",
-            &mut lb.density,
-            &d.density,
-            |ui, v| form::number(ui, v, -3..=3, 1.0, ""),
-        );
-        r.row(
-            "Show size",
-            "Show the size under file names, where the box is big enough.",
-            &mut lb.show_size,
-            &d.show_size,
-            form::check,
-        );
-        r.row(
-            "Show date",
-            "Show the modification date under file names, where the box is big enough.",
-            &mut lb.show_date,
-            &d.show_date,
-            form::check,
-        );
-        r.row(
-            "Size format",
-            "How file sizes are shown in labels and tips. Totals (title bar, free space) use binary or decimal units.",
-            &mut lb.size_format,
-            &d.size_format,
-            |ui, v| form::choice(ui, "size_format", v, &SIZE_FORMATS),
-        );
-        r.row(
-            "Date format",
-            "strftime pattern for dates, e.g. %Y-%m-%d %H:%M. An invalid pattern falls back to the default.",
-            &mut lb.date_format,
-            &d.date_format,
-            |ui, v| ui.text_edit_singleline(v),
-        );
-    });
 
     let (p, d) = (&mut s.path_bar, PathBar::default());
     group(ui, "Path bar", |r| {

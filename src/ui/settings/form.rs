@@ -58,29 +58,45 @@ pub struct Rows<'a> {
 
 /// A titled group of rows.
 pub fn group(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Rows)) {
-    heading(ui, title);
-    ui.spacing_mut().item_spacing.y = 6.0;
-    add(&mut Rows { ui });
+    section(ui, title, |ui| {
+        ui.spacing_mut().item_spacing.y = 6.0;
+        add(&mut Rows { ui });
+    });
 }
 
-/// A group title with a rule under it, in the strong text colour (egui's heading colour is
-/// too dim in dark mode).
-pub fn heading(ui: &mut Ui, title: &str) {
+/// A collapsible section: a title in the strong text colour (egui's heading colour is too
+/// dim in dark mode) with a rule under it, open to begin with. Remembers being collapsed.
+pub fn section(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Ui)) {
     ui.add_space(8.0);
     let color = ui.visuals().strong_text_color();
-    ui.label(RichText::new(title).heading().color(color));
-    ui.separator();
+    egui::CollapsingHeader::new(RichText::new(title).heading().color(color))
+        .id_salt(("section", title))
+        .default_open(true)
+        .show_unindented(ui, |ui| {
+            ui.separator();
+            add(ui);
+        });
 }
 
-/// A group of rows belonging to the group above it (e.g. Tiles / Labels).
-pub fn subgroup(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Rows)) {
+/// A collapsible group of rows inside another group (e.g. Tiles / Labels).
+fn subgroup(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Rows)) {
     ui.add_space(6.0);
-    ui.label(RichText::new(title).strong());
-    ui.spacing_mut().item_spacing.y = 6.0;
-    add(&mut Rows { ui });
+    let color = ui.visuals().strong_text_color();
+    egui::CollapsingHeader::new(RichText::new(title).strong().color(color))
+        .id_salt(("subgroup", title))
+        .default_open(true)
+        .show_unindented(ui, |ui| {
+            ui.spacing_mut().item_spacing.y = 6.0;
+            add(&mut Rows { ui });
+        });
 }
 
 impl Rows<'_> {
+    /// A collapsible group of rows nested in this one.
+    pub fn subgroup(&mut self, title: &str, add: impl FnOnce(&mut Rows)) {
+        subgroup(self.ui, title, add);
+    }
+
     /// A row for `v`: `label` on the left, the input `add` draws, and a reset button.
     /// A value that isn't `default` gets a bold label with a dot and an active reset button;
     /// right-click on the label or input offers the reset too. `tip` shows when hovering the
