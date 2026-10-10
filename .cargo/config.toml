@@ -1,0 +1,4 @@
+# Use lld for linking (much faster than the default ld.bfd).
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]

@@ -67,7 +67,9 @@ impl Default for Tiles {
     fn default() -> Self {
         Self {
             scheme: Scheme::Classic,
+
             colors: Scheme::Classic.colors(8).unwrap_or_default(),
+
             borders: true,
             border: Line {
                 color: None,
@@ -78,7 +80,7 @@ impl Default for Tiles {
                 width: 2.0,
             },
             selection_color: None,
-            gap: 1,
+            gap: 0,
             hover: 20,
         }
     }

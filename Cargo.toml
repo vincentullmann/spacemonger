@@ -35,3 +35,21 @@ x11rb = { version = "0.13", features = ["sync"] }
 opt-level = 3
 lto = "thin"
 strip = true
+
+# Dev builds: less debug info = much faster final link of the bin.
+# Deps get optimised once (cached), so the app runs smoothly in debug.
+[profile.dev]
+debug = "line-tables-only"
+split-debuginfo = "unpacked"
+
+[profile.dev.package."*"]
+opt-level = 2
+debug = false
+
+# Optimised build without LTO, for quick perf testing:
+#   cargo run --profile fastrel
+[profile.fastrel]
+inherits = "release"
+lto = false
+codegen-units = 256
+incremental = true
