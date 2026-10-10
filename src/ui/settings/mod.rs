@@ -143,6 +143,13 @@ impl Default for Scan {
     }
 }
 
+/// An outline: its colour (`None` = automatic) and width in physical pixels.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+pub struct Line {
+    pub color: Option<Color32>,
+    pub width: f32,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct Tiles {
@@ -150,12 +157,9 @@ pub struct Tiles {
     /// One colour per nesting level, repeating.
     pub colors: Vec<Color32>,
     pub borders: bool,
-    /// `None` follows the theme.
-    pub border_color: Option<Color32>,
-    /// In physical pixels.
-    pub border_width: f32,
-    pub hover_border_color: Option<Color32>,
-    pub hover_border_width: f32,
+    pub border: Line,
+    /// Outline of the box under the mouse.
+    pub hover_border: Line,
     /// Fill and outline of selected boxes; `None` follows the theme.
     pub selection_color: Option<Color32>,
     pub gap: u8,
@@ -168,10 +172,14 @@ impl Default for Tiles {
             scheme: Scheme::Classic,
             colors: Scheme::Classic.colors(8).unwrap_or_default(),
             borders: true,
-            border_color: None,
-            border_width: 1.0,
-            hover_border_color: None,
-            hover_border_width: 2.0,
+            border: Line {
+                color: None,
+                width: 1.0,
+            },
+            hover_border: Line {
+                color: None,
+                width: 2.0,
+            },
             selection_color: None,
             gap: 1,
             hover: 20,

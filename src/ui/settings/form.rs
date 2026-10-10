@@ -1,7 +1,7 @@
 //! Small building blocks for the settings pages: labelled rows with a reset button, and the input
 //! widgets they hold (numbers with a unit, drop-downs, colour lists, ...).
 
-use super::Shown;
+use super::{Line, Shown};
 use crate::ui::fonts;
 use eframe::egui::{self, emath::Numeric, Color32, Response, RichText, Ui};
 use std::ops::RangeInclusive;
@@ -260,10 +260,19 @@ pub fn auto_color(ui: &mut Ui, v: &mut Option<Color32>, fallback: Color32, hint:
     if r.changed() {
         *v = Some(c);
     }
+    // The hint takes the same width either way, so anything after it stays put.
+    let x = ui.cursor().min.x;
     if v.is_none() {
         ui.weak(hint);
     }
+    ui.add_space((x + 56.0 - ui.cursor().min.x).max(0.0));
     r
+}
+
+/// An outline's colour (automatic until picked) and width slider on one line.
+pub fn outline(ui: &mut Ui, v: &mut Line, fallback: Color32, hint: &str) -> Response {
+    let r = auto_color(ui, &mut v.color, fallback, hint);
+    r | number(ui, &mut v.width, 0.0..=6.0, 0.5, "px")
 }
 
 /// One swatch per colour, plus buttons to drop / add one.

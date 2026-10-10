@@ -192,10 +192,8 @@ impl Palette {
             scheme,
             ref colors,
             borders,
-            border_color,
-            border_width,
-            hover_border_color,
-            hover_border_width,
+            border: border_line,
+            hover_border: hover_line,
             selection_color,
             gap,
             hover,
@@ -211,7 +209,7 @@ impl Palette {
         } else {
             (c(0xEE, 0xEE, 0xEE), Color32::BLACK)
         };
-        let border = border_color.unwrap_or(Self::theme_border(dark));
+        let border = border_line.color.unwrap_or(Self::theme_border(dark));
         // The theme's selection is its text colour with the background colour on it.
         let selection = selection_color.unwrap_or(text);
         let selection_text = match selection_color {
@@ -226,9 +224,9 @@ impl Palette {
             borders,
             selection,
             selection_text,
-            border_width,
-            hover_border: hover_border_color.unwrap_or(Self::HOVER_BORDER),
-            hover_width: hover_border_width,
+            border_width: border_line.width,
+            hover_border: hover_line.color.unwrap_or(Self::HOVER_BORDER),
+            hover_width: hover_line.width,
             gap: gap as f32,
             hover: hover as f32 / 100.0,
             shadow,

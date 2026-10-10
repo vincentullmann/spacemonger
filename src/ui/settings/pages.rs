@@ -193,32 +193,18 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
             form::check,
         );
         r.row(
-            "Border colour",
-            "Colour of the box outlines. Follows the theme until you pick one.",
-            &mut t.border_color,
-            &d.border_color,
-            |ui, v| form::auto_color(ui, v, Palette::theme_border(dark), "theme"),
+            "Border",
+            "Colour and width (in screen pixels) of the box outlines. The colour follows the theme until you pick one.",
+            &mut t.border,
+            &d.border,
+            |ui, v| form::outline(ui, v, Palette::theme_border(dark), "theme"),
         );
         r.row(
-            "Border width",
-            "Width of the box outlines, in screen pixels.",
-            &mut t.border_width,
-            &d.border_width,
-            |ui, v| form::number(ui, v, 0.0..=6.0, 0.5, "px"),
-        );
-        r.row(
-            "Hover border colour",
-            "Outline of the box under the mouse.",
-            &mut t.hover_border_color,
-            &d.hover_border_color,
-            |ui, v| form::auto_color(ui, v, Palette::HOVER_BORDER, "default"),
-        );
-        r.row(
-            "Hover border width",
-            "Width of the outline of the box under the mouse, in screen pixels.",
-            &mut t.hover_border_width,
-            &d.hover_border_width,
-            |ui, v| form::number(ui, v, 0.0..=6.0, 0.5, "px"),
+            "Hover border",
+            "Colour and width of the outline of the box under the mouse.",
+            &mut t.hover_border,
+            &d.hover_border,
+            |ui, v| form::outline(ui, v, Palette::HOVER_BORDER, "default"),
         );
         r.row(
             "Selection colour",
