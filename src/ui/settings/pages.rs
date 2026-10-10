@@ -12,10 +12,18 @@ const THEMES: [(Theme, &str); 3] = [
     (Theme::System, "Follow system"),
 ];
 
-const SIZE_FORMATS: [(SizeFormat, &str); 3] = [
+const SIZE_FORMATS: [(SizeFormat, &str); 5] = [
     (SizeFormat::Bytes, "Bytes (1,234,567 bytes)"),
     (SizeFormat::Binary, "Binary (1.2 MiB)"),
     (SizeFormat::Decimal, "Decimal (1.2 MB)"),
+    (
+        SizeFormat::BinaryAndBytes,
+        "Binary + bytes (1.2 MiB (1,234,567 bytes))",
+    ),
+    (
+        SizeFormat::DecimalAndBytes,
+        "Decimal + bytes (1.2 MB (1,234,567 bytes))",
+    ),
 ];
 
 const SCHEMES: [(Scheme, &str); 10] = [

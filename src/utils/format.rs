@@ -20,6 +20,10 @@ pub enum SizeFormat {
     Binary,
     /// Powers of 1000: "1.2 MB".
     Decimal,
+    /// "38.8 KiB (39,718 bytes)".
+    BinaryAndBytes,
+    /// "39.7 kB (39,718 bytes)".
+    DecimalAndBytes,
 }
 
 /// App-wide formatting choices (set from the settings).
@@ -56,7 +60,8 @@ fn with_options<T>(f: impl FnOnce(&FormatOptions) -> T) -> T {
 
 /// One decimal, in powers of 1024 ("KiB", "MiB", ...) or 1000 ("kB", "MB", ...).
 fn size_format() -> FormatSizeOptions {
-    let decimal = with_options(|o| o.size == SizeFormat::Decimal);
+    let decimal =
+        with_options(|o| matches!(o.size, SizeFormat::Decimal | SizeFormat::DecimalAndBytes));
     let base = if decimal { DECIMAL } else { BINARY };
     base.decimal_places(1).decimal_zeroes(1)
 }
@@ -71,11 +76,15 @@ pub fn size_string(size: u64, total: u64, percent: bool) -> String {
     humansize::format_size(size, size_format())
 }
 
-/// A file's size as the options say: "1,234,567 bytes", "1.2 MiB" or "1.2 MB".
+/// A file's size as the options say: "1,234,567 bytes", "1.2 MiB", "1.2 MB", or a unit
+/// size followed by the bytes.
 pub fn file_size(size: u64) -> String {
     match with_options(|o| o.size) {
         SizeFormat::Bytes => bytes(size),
         SizeFormat::Binary | SizeFormat::Decimal => size_string(size, 0, false),
+        SizeFormat::BinaryAndBytes | SizeFormat::DecimalAndBytes => {
+            format!("{} ({})", size_string(size, 0, false), bytes(size))
+        }
     }
 }
 
