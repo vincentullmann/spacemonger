@@ -58,40 +58,37 @@ impl Rows<'_> {
                 }
             });
         };
-        self.ui.horizontal(|ui| {
-            // Fixed-width label and input columns, padded with space so every row lines up.
-            let x0 = ui.cursor().min.x;
-            let l = if changed {
-                let r = ui.label(RichText::new(label).strong());
+        self.ui.push_id(label, |ui| {
+            ui.horizontal(|ui| {
+                // Fixed-width label and input columns, padded with space so every row lines up.
+                let x0 = ui.cursor().min.x;
+                let text = if changed {
+                    RichText::new(label).strong()
+                } else {
+                    RichText::new(label)
+                };
+                let l = ui.label(text).on_hover_text(tip);
+                // The dot's space is always taken, so the widgets after it keep their ids (and
+                // focus / drag) when the value stops or starts being the default.
                 let (dot, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-                let color = ui.visuals().hyperlink_color;
-                ui.painter().circle_filled(dot.center(), 3.0, color);
-                r
-            } else {
-                ui.label(label)
-            }
-            .on_hover_text(tip);
-            menu(&l);
-            ui.add_space((x0 + LABEL_WIDTH - ui.cursor().min.x).max(0.0));
-            let x1 = ui.cursor().min.x;
-            let inner = ui.scope(|ui| add(ui, v));
-            ui.add_space((x1 + INPUT_WIDTH - ui.cursor().min.x).max(0.0));
-            menu(&inner.inner);
-            // A hover-only area over the inputs, so the tip shows there too without taking
-            // clicks away from them.
-            ui.interact(
-                inner.response.rect,
-                ui.id().with(label),
-                egui::Sense::hover(),
-            )
-            .on_hover_text(tip);
-            let clicked = ui
-                .add_enabled(changed, egui::Button::new("⟲").small())
-                .on_hover_text("Reset to default")
-                .clicked();
-            if clicked {
-                reset.set(true);
-            }
+                if changed {
+                    let color = ui.visuals().hyperlink_color;
+                    ui.painter().circle_filled(dot.center(), 3.0, color);
+                }
+                menu(&l);
+                ui.add_space((x0 + LABEL_WIDTH - ui.cursor().min.x).max(0.0));
+                let x1 = ui.cursor().min.x;
+                let inner = ui.scope(|ui| add(ui, v));
+                ui.add_space((x1 + INPUT_WIDTH - ui.cursor().min.x).max(0.0));
+                inner.inner.clone().on_hover_text(tip);
+                let clicked = ui
+                    .add_enabled(changed, egui::Button::new("⟲").small())
+                    .on_hover_text("Reset to default")
+                    .clicked();
+                if clicked {
+                    reset.set(true);
+                }
+            })
         });
         if reset.get() {
             *v = default.clone();
