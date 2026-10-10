@@ -2578,11 +2578,13 @@ dependencies = [
  "num-format",
  "open",
  "poll-promise",
+ "raw-window-handle",
  "rayon",
  "rfd",
  "serde",
  "thiserror 2.0.21",
  "trash",
+ "x11rb",
 ]
 
 [[package]]

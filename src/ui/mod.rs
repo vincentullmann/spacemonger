@@ -9,3 +9,6 @@ pub mod palette;
 pub mod settings;
 pub mod title;
 pub mod widgets;
+
+#[cfg(target_os = "linux")]
+mod x11_resize;

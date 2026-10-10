@@ -6,10 +6,16 @@ use crate::core::selection::Selection;
 use crate::utils::format;
 
 pub fn window_title(tree: Option<&Tree>, selection: &Selection, zoom: &[usize]) -> String {
-    let Some(t) = tree else { return APP_NAME.to_string() };
+    let Some(t) = tree else {
+        return APP_NAME.to_string();
+    };
     if selection.len() > 1 {
         let roots = selection.roots();
-        let size: u64 = roots.iter().filter_map(|r| t.entry(r)).map(|e| e.size).sum();
+        let size: u64 = roots
+            .iter()
+            .filter_map(|r| t.entry(r))
+            .map(|e| e.size)
+            .sum();
         return format!(
             "{} items selected  -  {}  -  {}  -  {APP_NAME}",
             roots.len(),
@@ -25,7 +31,11 @@ pub fn window_title(tree: Option<&Tree>, selection: &Selection, zoom: &[usize]) 
             format::size_string(e.size, t.total_space, false),
         );
     }
-    let size = if zoom.is_empty() { t.total_space } else { t.folder_at(zoom).map_or(0, |f| f.total) };
+    let size = if zoom.is_empty() {
+        t.total_space
+    } else {
+        t.folder_at(zoom).map_or(0, |f| f.total)
+    };
     format!(
         "{}  -  {} Total  -  {} Free  -  {APP_NAME}",
         t.full_path(zoom, None).display(),

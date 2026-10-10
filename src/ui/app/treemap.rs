@@ -16,7 +16,13 @@ impl SpaceMonger {
     pub(super) fn treemap(&mut self, ui: &mut egui::Ui) -> Option<Action> {
         let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
         let ppp = ui.ctx().pixels_per_point();
-        let d = MapPainter::new(&painter, resp.rect.min, ppp, self.palette(), self.font.clone());
+        let d = MapPainter::new(
+            &painter,
+            resp.rect.min,
+            ppp,
+            self.palette(),
+            self.font.clone(),
+        );
         let (w, h) = (resp.rect.width(), resp.rect.height());
         let mods = ui.input(|i| i.modifiers);
 
@@ -62,7 +68,11 @@ impl SpaceMonger {
     /// Wheel / pinch zoom, Shift+drag rectangle select, drag to pan.
     fn view_input(&mut self, ui: &egui::Ui, resp: &Response, d: &MapPainter, mods: Modifiers) {
         // Wheel / pinch: zoom about the pointer, like an infinite canvas.
-        if resp.hovered() && self.camera.anim.is_none() && self.marquee.is_none() && self.tree.is_some() {
+        if resp.hovered()
+            && self.camera.anim.is_none()
+            && self.marquee.is_none()
+            && self.tree.is_some()
+        {
             let (dy, pinch) = ui.input(|i| (i.smooth_scroll_delta.y, i.zoom_delta()));
             let k = pinch as f64 * (dy as f64 * WHEEL_ZOOM).exp();
             if (k - 1.0).abs() > 1e-6 {
@@ -77,11 +87,18 @@ impl SpaceMonger {
         if self.tree.is_some() && resp.drag_started_by(PointerButton::Primary) && mods.shift {
             if let Some(p) = ui.input(|i| i.pointer.press_origin()) {
                 self.finish_anim();
-                let base = if mods.command { self.selection.clone() } else { Selection::default() };
+                let base = if mods.command {
+                    self.selection.clone()
+                } else {
+                    Selection::default()
+                };
                 self.marquee = Some(Marquee::new(d.local(p), base));
             }
         }
-        if self.marquee.is_some() && !resp.dragged_by(PointerButton::Primary) && !resp.drag_stopped() {
+        if self.marquee.is_some()
+            && !resp.dragged_by(PointerButton::Primary)
+            && !resp.drag_stopped()
+        {
             self.marquee = None;
         }
         // Drag (left or middle button) to pan.
@@ -120,7 +137,10 @@ impl SpaceMonger {
     /// Live rectangle selection against this frame's layout.
     fn update_marquee(&mut self, resp: &Response, d: &MapPainter) {
         let Some(m) = &mut self.marquee else { return };
-        let end = resp.interact_pointer_pos().map(|p| d.local(p)).unwrap_or(m.end);
+        let end = resp
+            .interact_pointer_pos()
+            .map(|p| d.local(p))
+            .unwrap_or(m.end);
         self.selection = m.selection(&self.items, end);
         m.end = end;
         if resp.drag_stopped() {
@@ -134,7 +154,10 @@ impl SpaceMonger {
         if let Some(tree) = &self.tree {
             // Parents come before children, so a selected folder's children stay visible.
             for (i, it) in self.items.iter().enumerate() {
-                let is_sel = it.index.is_some_and(|k| self.selection.contains(&EntryRef::new(it.folder.clone(), k)));
+                let is_sel = it.index.is_some_and(|k| {
+                    self.selection
+                        .contains(&EntryRef::new(it.folder.clone(), k))
+                });
                 d.item(tree, it, is_sel, self.hovered == Some(i));
             }
         }
@@ -173,7 +196,11 @@ impl SpaceMonger {
         if resp.double_clicked() && !mods.command {
             if let Some(i) = pointer_hit(&self.items) {
                 self.selection.set(self.item_ref(i));
-                return Some(if self.items[i].is_folder { Action::ZoomIn } else { Action::RunOpen });
+                return Some(if self.items[i].is_folder {
+                    Action::ZoomIn
+                } else {
+                    Action::RunOpen
+                });
             }
         }
         None
@@ -181,16 +208,21 @@ impl SpaceMonger {
 
     /// Name / size / date tip after hovering a box for a moment.
     fn show_infotip(&self, ui: &egui::Ui, resp: &Response) {
-        let (Some(hi), Some(tree), false) = (self.hovered, &self.tree, resp.context_menu_opened()) else { return };
+        let (Some(hi), Some(tree), false) = (self.hovered, &self.tree, resp.context_menu_opened())
+        else {
+            return;
+        };
         let held = self.hover_since.elapsed();
         if held < INFOTIP_DELAY {
             ui.ctx().request_repaint_after(INFOTIP_DELAY - held);
             return;
         }
         let it = &self.items[hi];
-        if let (Some(e), Some(pos)) = (it.index.and_then(|i| tree.entry_at(&it.folder, i)), resp.hover_pos()) {
+        if let (Some(e), Some(pos)) = (
+            it.index.and_then(|i| tree.entry_at(&it.folder, i)),
+            resp.hover_pos(),
+        ) {
             infotip(ui.ctx(), pos, e);
         }
     }
 }
-

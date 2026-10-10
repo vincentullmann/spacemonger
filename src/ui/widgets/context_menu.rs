@@ -24,7 +24,11 @@ pub fn context_menu(resp: &egui::Response, st: &CommandState) -> Option<Action> 
         ui.separator();
         item(ui, true, "Open Drive...", Action::Open);
         item(ui, true, "Rescan Drive", Action::Reload);
-        let label = if st.show_free { "✔ Show Free Space" } else { "Show Free Space" };
+        let label = if st.show_free {
+            "✔ Show Free Space"
+        } else {
+            "Show Free Space"
+        };
         item(ui, true, label, Action::ToggleFree);
     });
     act

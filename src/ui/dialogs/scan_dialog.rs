@@ -17,9 +17,19 @@ pub fn scan_dialog(ctx: &egui::Context, job: &ScanJob) -> bool {
         ui.heading("Scanning Disk...");
         let cur = ctl.current.lock().map(|s| s.clone()).unwrap_or_default();
         ui.label(elide_start(&cur, 70));
-        ui.label(format!("Files Found:  {}", ctl.files.load(Ordering::Relaxed)));
-        ui.label(format!("Folders Found:  {}", ctl.folders.load(Ordering::Relaxed)));
-        let frac = if used > 0 { (bytes as f32 / used as f32).min(1.0) } else { 0.0 };
+        ui.label(format!(
+            "Files Found:  {}",
+            ctl.files.load(Ordering::Relaxed)
+        ));
+        ui.label(format!(
+            "Folders Found:  {}",
+            ctl.folders.load(Ordering::Relaxed)
+        ));
+        let frac = if used > 0 {
+            (bytes as f32 / used as f32).min(1.0)
+        } else {
+            0.0
+        };
         ui.add(egui::ProgressBar::new(frac).show_percentage());
         if ui.button("Cancel").clicked() {
             cancel = true;

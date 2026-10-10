@@ -136,7 +136,9 @@ impl SpaceMonger {
 }
 
 impl eframe::App for SpaceMonger {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        #[cfg(target_os = "linux")]
+        crate::ui::x11_resize::install(frame, ui.ctx());
         let ctx = ui.ctx().clone();
         if self.applied_dark != Some(self.dark) {
             self.applied_dark = Some(self.dark);
@@ -174,6 +176,10 @@ impl eframe::App for SpaceMonger {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
             self.title = title;
         }
+
+        // The treemap for this size is built. Tell the window manager it can show it.
+        #[cfg(target_os = "linux")]
+        crate::ui::x11_resize::acknowledge();
     }
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {

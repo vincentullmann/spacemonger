@@ -23,6 +23,10 @@ thiserror = "2"
 lfs-core = "0.20"
 kurbo = "0.13.1"
 
+[target.'cfg(target_os = "linux")'.dependencies]
+raw-window-handle = "0.6"
+x11rb = { version = "0.13", features = ["sync", "record"] }
+
 [profile.release]
 opt-level = 3
 lto = "thin"
