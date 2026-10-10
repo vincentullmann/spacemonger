@@ -1,6 +1,7 @@
 //! Scannable locations: mounted volumes or an arbitrary folder.
 
 use super::FsError;
+use lfs_core::{read_mounts, Mount, ReadOptions};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -15,42 +16,40 @@ pub struct Drive {
     pub fs: String,
 }
 
-const KNOWN_PHYSICAL_FS: &[&str] = &[
-    "afpfs", "apfs", "bcachefs", "btrfs", "cd9660", "cifs", "exfat", "ext2", "ext3", "ext4",
-    "f2fs", "fat", "fat32", "fuseblk", "hfs", "hfsplus", "iso9660", "jfs", "msdos", "msdosfs",
-    "nfs", "nfs4", "ntfs", "ntfs3", "reiserfs", "refs", "smbfs", "udf", "ufs", "vfat", "webdav",
-    "xfs", "zfs",
-];
-
-fn is_physical(fs: &str) -> bool {
-    let fs = fs.to_ascii_lowercase();
-    KNOWN_PHYSICAL_FS.contains(&fs.as_str())
+/// Real storage: has a size, sits on a disk (or is a network share), and isn't a bind mount
+/// or a read-only image.
+fn is_storage(m: &Mount) -> bool {
+    m.stats().is_some_and(|s| s.size() > 0)
+        && (m.disk.is_some() || m.is_remote() || m.info.fs_type == "zfs")
+        && !m.info.bound
+        && m.info.fs_type != "squashfs"
 }
 
-/// All mounted, non-virtual volumes.
+fn mounts() -> Vec<Mount> {
+    read_mounts(&ReadOptions::default()).unwrap_or_default()
+}
+
+/// All mounted storage volumes.
 pub fn volumes() -> Vec<Drive> {
-    let disks = sysinfo::Disks::new_with_refreshed_list();
     let mut seen = HashSet::new();
-    let mut out = Vec::new();
-    for d in disks.list() {
-        let fs = d.file_system().to_string_lossy().to_string();
-        if !is_physical(&fs) || d.total_space() == 0 {
-            continue;
-        }
-        let root = d.mount_point().to_path_buf();
-        if !seen.insert(root.clone()) {
-            continue;
-        }
-        out.push(Drive {
-            name: root.display().to_string(),
-            root,
-            total: d.total_space(),
-            free: d.available_space(),
-            fs,
-        });
-    }
+    let mut out: Vec<Drive> = mounts()
+        .iter()
+        .filter(|m| is_storage(m) && seen.insert(m.info.mount_point.clone()))
+        .map(|m| {
+            let root = m.info.mount_point.clone();
+            Drive { name: root.display().to_string(), root, total: total(m), free: free(m), fs: m.info.fs_type.clone() }
+        })
+        .collect();
     out.sort_by(|a, b| a.root.cmp(&b.root));
     out
+}
+
+fn total(m: &Mount) -> u64 {
+    m.stats().map_or(0, |s| s.size())
+}
+
+fn free(m: &Mount) -> u64 {
+    m.stats().map_or(0, |s| s.available())
 }
 
 /// Build a `Drive` for an arbitrary folder, using the stats of the volume it lives on.
@@ -59,26 +58,23 @@ pub fn drive_for_path(path: &Path) -> Result<Drive, FsError> {
     if !path.is_dir() {
         return Err(FsError::NotAFolder(path));
     }
-    let disks = sysinfo::Disks::new_with_refreshed_list();
-    let best = disks
-        .list()
+    let mounts = mounts();
+    let best = mounts
         .iter()
-        .filter(|d| path.starts_with(d.mount_point()))
-        .max_by_key(|d| d.mount_point().as_os_str().len());
+        .filter(|m| path.starts_with(&m.info.mount_point))
+        .max_by_key(|m| m.info.mount_point.as_os_str().len());
     let name = path
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| path.display().to_string());
     Ok(Drive {
         name,
-        total: best.map_or(0, |d| d.total_space()),
-        free: best.map_or(0, |d| d.available_space()),
-        fs: best.map_or(String::new(), |d| d.file_system().to_string_lossy().to_string()),
+        total: best.map_or(0, total),
+        free: best.map_or(0, free),
+        fs: best.map_or(String::new(), |m| m.info.fs_type.clone()),
         root: path,
     })
 }
-
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

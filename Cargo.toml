@@ -8,7 +8,6 @@ license = "MIT"
 [dependencies]
 eframe = { version = "0.36", default-features = false, features = ["default_fonts", "wgpu", "wayland", "x11", "persistence"] }
 rayon = "1.12"
-sysinfo = { version = "0.39", default-features = false, features = ["disk"] }
 trash = "5.2"
 open = "5.4"
 rfd = "0.17"
@@ -21,6 +20,7 @@ dashmap = "6"
 poll-promise = "0.3"
 filesize = "0.2"
 thiserror = "2"
+lfs-core = "0.20"
 
 [profile.release]
 opt-level = 3
