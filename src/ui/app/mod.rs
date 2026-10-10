@@ -14,6 +14,7 @@ use crate::core::selection::{Marquee, Selection};
 use crate::ui::dialogs::DriveDialog;
 use crate::ui::keymap::action_for_keys;
 use crate::ui::palette::Palette;
+use crate::ui::settings::Settings;
 use crate::ui::title::window_title;
 use crate::ui::widgets::{path_bar, toolbar, CommandState};
 use eframe::egui::{self, FontId, Vec2};
@@ -54,7 +55,7 @@ pub struct SpaceMonger {
 
 impl SpaceMonger {
     pub fn new(cc: &eframe::CreationContext<'_>, open_path: Option<PathBuf>) -> Self {
-        let get = |k: &str| cc.storage.and_then(|s| s.get_string(k));
+        let settings = Settings::load(cc.storage);
         let mut app = Self {
             tree: None,
             drive: None,
@@ -67,8 +68,8 @@ impl SpaceMonger {
             marquee: None,
             hovered: None,
             hover_since: Instant::now(),
-            show_free: get("show_free").is_none_or(|v| v == "true"),
-            dark: get("dark").is_some_and(|v| v == "true"),
+            show_free: settings.show_free,
+            dark: settings.dark,
             applied_dark: None,
             params: LayoutParams::default(),
             dialog: None,
@@ -179,7 +180,6 @@ impl eframe::App for SpaceMonger {
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        storage.set_string("dark", self.dark.to_string());
-        storage.set_string("show_free", self.show_free.to_string());
+        Settings { dark: self.dark, show_free: self.show_free }.save(storage);
     }
 }

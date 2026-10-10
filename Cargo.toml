@@ -15,6 +15,7 @@ rfd = "0.17"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 num-format = "0.4"
 humansize = "2.1"
+serde = { version = "1", features = ["derive"] }
 
 [profile.release]
 opt-level = 3
