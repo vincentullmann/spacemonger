@@ -6,9 +6,50 @@ use eframe::egui::{self, emath::Numeric, Color32, Response, RichText, Ui};
 use std::ops::RangeInclusive;
 
 /// Width of the label column, shared by every group so the inputs line up.
-const LABEL_WIDTH: f32 = 170.0;
-/// Width of the input column; the reset buttons line up after it.
-const INPUT_WIDTH: f32 = 300.0;
+pub const LABEL_WIDTH: f32 = 170.0;
+/// Space kept between the inputs and the reset button.
+const RESET_GAP: f32 = 12.0;
+
+/// One settings line across the full width: `right` (the reset button) pinned to the right
+/// edge, `left` (label and input) filling the rest from the left. Follows the window width.
+pub fn line(ui: &mut Ui, right: impl FnOnce(&mut Ui), left: impl FnOnce(&mut Ui)) {
+    let h = ui.spacing().interact_size.y;
+    let size = egui::vec2(ui.available_width(), h);
+    ui.allocate_ui_with_layout(
+        size,
+        egui::Layout::right_to_left(egui::Align::Center),
+        |ui| {
+            right(ui);
+            ui.add_space(RESET_GAP);
+            let size = egui::vec2(ui.available_width(), h);
+            ui.allocate_ui_with_layout(
+                size,
+                egui::Layout::left_to_right(egui::Align::Center),
+                |ui| {
+                    // Keep the start of the line as the origin for `pad_to`.
+                    ui.set_min_width(ui.available_width());
+                    left(ui)
+                },
+            );
+        },
+    );
+}
+
+/// Space up to `x` from the start of the current line (the label column's width).
+pub fn pad_to(ui: &mut Ui, x: f32) {
+    let start = ui.min_rect().left();
+    ui.add_space((start + x - ui.cursor().min.x).max(0.0));
+}
+
+/// The changed-value marker after a label. Its space is always taken, so the widgets after
+/// it keep their ids (and focus / drag) when a value stops or starts being the default.
+pub fn changed_dot(ui: &mut Ui, changed: bool) {
+    let (dot, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
+    if changed {
+        let color = ui.visuals().hyperlink_color;
+        ui.painter().circle_filled(dot.center(), 3.0, color);
+    }
+}
 
 /// A group of labelled rows.
 pub struct Rows<'a> {
@@ -59,36 +100,30 @@ impl Rows<'_> {
             });
         };
         self.ui.push_id(label, |ui| {
-            ui.horizontal(|ui| {
-                // Fixed-width label and input columns, padded with space so every row lines up.
-                let x0 = ui.cursor().min.x;
-                let text = if changed {
-                    RichText::new(label).strong()
-                } else {
-                    RichText::new(label)
-                };
-                let l = ui.label(text).on_hover_text(tip);
-                // The dot's space is always taken, so the widgets after it keep their ids (and
-                // focus / drag) when the value stops or starts being the default.
-                let (dot, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-                if changed {
-                    let color = ui.visuals().hyperlink_color;
-                    ui.painter().circle_filled(dot.center(), 3.0, color);
-                }
-                menu(&l);
-                ui.add_space((x0 + LABEL_WIDTH - ui.cursor().min.x).max(0.0));
-                let x1 = ui.cursor().min.x;
-                let inner = ui.scope(|ui| add(ui, v));
-                ui.add_space((x1 + INPUT_WIDTH - ui.cursor().min.x).max(0.0));
-                inner.inner.clone().on_hover_text(tip);
-                let clicked = ui
-                    .add_enabled(changed, egui::Button::new("⟲").small())
-                    .on_hover_text("Reset to default")
-                    .clicked();
-                if clicked {
-                    reset.set(true);
-                }
-            })
+            line(
+                ui,
+                |ui| {
+                    let clicked = ui
+                        .add_enabled(changed, egui::Button::new("⟲").small())
+                        .on_hover_text("Reset to default")
+                        .clicked();
+                    if clicked {
+                        reset.set(true);
+                    }
+                },
+                |ui| {
+                    let text = if changed {
+                        RichText::new(label).strong()
+                    } else {
+                        RichText::new(label)
+                    };
+                    let l = ui.label(text).on_hover_text(tip);
+                    menu(&l);
+                    changed_dot(ui, changed);
+                    pad_to(ui, LABEL_WIDTH);
+                    add(ui, v).on_hover_text(tip);
+                },
+            );
         });
         if reset.get() {
             *v = default.clone();

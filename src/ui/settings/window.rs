@@ -1,7 +1,7 @@
 //! The settings window: its own OS window (an in-app window where egui can't open one),
 //! editing [`Settings`] in place so every change shows up in the main window at once.
 
-use super::{pages, Settings};
+use super::{form, pages, Settings};
 use crate::ui::keymap::{same_shortcut, shortcut_text, Command, Keymap};
 use eframe::egui::{self, Event, Key, KeyboardShortcut, RichText, ViewportBuilder, ViewportId};
 
@@ -16,9 +16,8 @@ enum Tab {
 
 const TITLE: &str = "Settings";
 
-/// Label and shortcut column widths on the Keys tab.
+/// Label column width on the Keys tab.
 const KEY_LABEL_WIDTH: f32 = 230.0;
-const KEY_INPUT_WIDTH: f32 = 240.0;
 
 /// Which binding is waiting for a key press: (command, index in `binds` or `None` for new).
 type Capture = (Command, Option<usize>);
@@ -158,62 +157,71 @@ impl SettingsWindow {
                     let def = Keymap::defaults_for(cmd);
                     now.len() == def.len() && now.iter().zip(&def).all(|(a, b)| same_shortcut(a, b))
                 };
-                ui.horizontal(|ui| {
-                    // Same columns as the other tabs: label, shortcuts, reset.
-                    let x0 = ui.cursor().min.x;
-                    if is_default {
-                        ui.label(cmd.label());
-                    } else {
-                        ui.label(RichText::new(cmd.label()).strong());
-                        let (dot, _) =
-                            ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-                        let color = ui.visuals().hyperlink_color;
-                        ui.painter().circle_filled(dot.center(), 3.0, color);
-                    }
-                    ui.add_space((x0 + KEY_LABEL_WIDTH - ui.cursor().min.x).max(0.0));
-                    let x1 = ui.cursor().min.x;
-                    let bound: Vec<(usize, KeyboardShortcut)> =
-                        keys.for_command(cmd).map(|(i, s)| (i, *s)).collect();
-                    for (i, sc) in bound {
-                        let waiting = self.capture == Some((cmd, Some(i)));
-                        let clashes = keys.conflicts(i);
-                        let mut text = RichText::new(if waiting {
-                            "…".to_string()
-                        } else {
-                            shortcut_text(&sc)
-                        });
-                        if !clashes.is_empty() {
-                            text = text.color(ui.visuals().error_fg_color);
-                        }
-                        let mut b = ui.add(egui::Button::new(text).selected(waiting));
-                        if !clashes.is_empty() {
-                            let names: Vec<_> = clashes.iter().map(|c| c.label()).collect();
-                            b = b.on_hover_text(format!("Also bound to: {}", names.join(", ")));
-                        }
-                        if b.clicked() {
-                            self.capture = Some((cmd, Some(i)));
-                        }
-                        if b.secondary_clicked() {
-                            remove = Some(i);
-                        }
-                    }
-                    let adding = self.capture == Some((cmd, None));
-                    if ui
-                        .add(egui::Button::new(if adding { "…" } else { "+" }).selected(adding))
-                        .on_hover_text("Add a shortcut")
-                        .clicked()
-                    {
-                        self.capture = Some((cmd, None));
-                    }
-                    ui.add_space((x1 + KEY_INPUT_WIDTH - ui.cursor().min.x).max(0.0));
-                    if ui
-                        .add_enabled(!is_default, egui::Button::new("⟲").small())
-                        .on_hover_text("Reset to default")
-                        .clicked()
-                    {
-                        reset = Some(cmd);
-                    }
+                let mut reset_clicked = false;
+                ui.push_id(cmd.label(), |ui| {
+                    // Same columns as the other tabs: label, shortcuts, reset on the right.
+                    form::line(
+                        ui,
+                        |ui| {
+                            reset_clicked = ui
+                                .add_enabled(!is_default, egui::Button::new("⟲").small())
+                                .on_hover_text("Reset to default")
+                                .clicked();
+                        },
+                        |ui| {
+                            let text = if is_default {
+                                RichText::new(cmd.label())
+                            } else {
+                                RichText::new(cmd.label()).strong()
+                            };
+                            ui.label(text);
+                            form::changed_dot(ui, !is_default);
+                            form::pad_to(ui, KEY_LABEL_WIDTH);
+                            let bound: Vec<(usize, KeyboardShortcut)> =
+                                keys.for_command(cmd).map(|(i, s)| (i, *s)).collect();
+                            for (i, sc) in bound {
+                                let waiting = self.capture == Some((cmd, Some(i)));
+                                let clashes = keys.conflicts(i);
+                                let mut text = RichText::new(if waiting {
+                                    "…".to_string()
+                                } else {
+                                    shortcut_text(&sc)
+                                });
+                                if !clashes.is_empty() {
+                                    text = text.color(ui.visuals().error_fg_color);
+                                }
+                                let mut b = ui.add(egui::Button::new(text).selected(waiting));
+                                if !clashes.is_empty() {
+                                    let names: Vec<_> = clashes.iter().map(|c| c.label()).collect();
+                                    b = b.on_hover_text(format!(
+                                        "Also bound to: {}",
+                                        names.join(", ")
+                                    ));
+                                }
+                                if b.clicked() {
+                                    self.capture = Some((cmd, Some(i)));
+                                }
+                                if b.secondary_clicked() {
+                                    remove = Some(i);
+                                }
+                            }
+                            let adding = self.capture == Some((cmd, None));
+                            if ui
+                                .add(
+                                    egui::Button::new(if adding { "…" } else { "+" })
+                                        .selected(adding),
+                                )
+                                .on_hover_text("Add a shortcut")
+                                .clicked()
+                            {
+                                self.capture = Some((cmd, None));
+                            }
+                        },
+                    );
                 });
+                if reset_clicked {
+                    reset = Some(cmd);
+                }
             }
         }
         if let Some(i) = remove {
