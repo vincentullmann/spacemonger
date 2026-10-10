@@ -8,11 +8,20 @@ license = "MIT"
 [dependencies]
 eframe = { version = "0.36", default-features = false, features = ["default_fonts", "wgpu", "wayland", "x11", "persistence"] }
 rayon = "1.12"
-sysinfo = { version = "0.39", default-features = false, features = ["disk"] }
 trash = "5.2"
 open = "5.4"
 rfd = "0.17"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+num-format = "0.4"
+humansize = "2.1"
+serde = { version = "1", features = ["derive"] }
+indexmap = "2"
+dashmap = "6"
+poll-promise = "0.3"
+filesize = "0.2"
+thiserror = "2"
+lfs-core = "0.20"
+kurbo = "0.13.1"
 
 [profile.release]
 opt-level = 3
