@@ -251,15 +251,8 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
     let (p, d) = (&mut s.path_bar, PathBar::default());
     group(ui, "Path bar", |r| {
         r.row(
-            "Height",
-            "Height of the path bar above the map.",
-            &mut p.height,
-            &d.height,
-            |ui, v| form::number(ui, v, 12.0..=48.0, 1.0, "px"),
-        );
-        r.row(
             "Font size",
-            "Text size in the path bar.",
+            "Text size in the path bar; the bar's height follows it.",
             &mut p.font_size,
             &d.font_size,
             |ui, v| form::number(ui, v, 6.0..=32.0, 0.5, "px"),

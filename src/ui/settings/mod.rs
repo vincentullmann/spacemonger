@@ -6,7 +6,7 @@ mod window;
 
 pub use window::SettingsWindow;
 
-use crate::constants::{ANIM_DURATION, BAR_H, FRAME_FILL, INFOTIP_DELAY};
+use crate::constants::{ANIM_DURATION, BAR_H, BAR_H_PER_PX, FRAME_FILL, INFOTIP_DELAY};
 use crate::core::camera::CameraParams;
 use crate::core::fs::ScanOptions;
 use crate::core::layout::LayoutParams;
@@ -204,16 +204,13 @@ pub struct Font {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct PathBar {
-    pub height: f32,
+    /// The bar's height follows it (see [`Settings::bar_height`]).
     pub font_size: f32,
 }
 
 impl Default for PathBar {
     fn default() -> Self {
-        Self {
-            height: BAR_H as f32,
-            font_size: 10.0,
-        }
+        Self { font_size: 10.0 }
     }
 }
 
@@ -261,6 +258,13 @@ impl Settings {
             hide_dotfiles,
             title_h: self.title_h(),
         }
+    }
+
+    /// Path bar height: 18px for the default 10px font, in proportion otherwise.
+    pub fn bar_height(&self) -> f32 {
+        (self.path_bar.font_size * BAR_H_PER_PX)
+            .round()
+            .max(BAR_H as f32 / 2.0)
     }
 
     /// Folder title bar height: 12px for the default 10px labels, growing with the font.

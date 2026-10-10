@@ -18,7 +18,9 @@ pub const RESIZE_SETTLE: Duration = Duration::from_millis(400);
 pub const ANCHOR_MIN_SHARE: f64 = 0.25;
 /// How often a running scan is snapshotted for the treemap.
 pub const LIVE_SCAN_INTERVAL: Duration = Duration::from_millis(100);
-/// Height of the path (breadcrumb) bar above the treemap.
+/// Height of the path (breadcrumb) bar above the treemap, at the default 10px font.
 pub const BAR_H: i32 = 18;
+/// Path bar height per pixel of its font size.
+pub const BAR_H_PER_PX: f32 = BAR_H as f32 / 10.0;
 /// Framing the selection (F): share of the view its bounding box may take up.
 pub const FRAME_FILL: f64 = 0.9;

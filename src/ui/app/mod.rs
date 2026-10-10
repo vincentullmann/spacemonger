@@ -193,7 +193,7 @@ impl eframe::App for SpaceMonger {
             .show(ui, |ui| toolbar(ui, &st))
             .inner;
         let pal = self.palette(&ctx);
-        let (bar_font, bar_h) = (self.settings.bar_font(), self.settings.path_bar.height);
+        let (bar_font, bar_h) = (self.settings.bar_font(), self.settings.bar_height());
         let tm = egui::CentralPanel::no_frame()
             .frame(egui::Frame::NONE.fill(pal.background))
             .show(ui, |ui| {
