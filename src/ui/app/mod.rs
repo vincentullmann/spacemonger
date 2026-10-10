@@ -101,8 +101,8 @@ impl SpaceMonger {
         ctx.theme() == egui::Theme::Dark
     }
 
-    fn palette(&self, ctx: &egui::Context) -> Palette {
-        Palette::new(self.dark(ctx), &self.settings)
+    fn palette(&self) -> Palette {
+        Palette::new(&self.settings)
     }
 
     /// Push changed settings out to egui, the camera, the tree and the layout.
@@ -185,7 +185,7 @@ impl eframe::App for SpaceMonger {
         let ctx = ui.ctx().clone();
         #[cfg(target_os = "linux")]
         {
-            let bg = self.palette(&ctx).background;
+            let bg = self.palette().background;
             crate::ui::x11_sync::install(frame, &ctx, bg);
             crate::ui::x11_dialog::remember_main(frame);
             crate::ui::x11_sync::set_background(bg);
@@ -208,7 +208,7 @@ impl eframe::App for SpaceMonger {
         self.poll_scan();
 
         let st = self.command_state();
-        let pal = self.palette(&ctx);
+        let pal = self.palette();
         let (bar_font, bar_h) = (self.settings.bar_font(), self.settings.bar_height());
         let (title, progress) = match &self.scan {
             Some(job) => {

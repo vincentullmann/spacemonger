@@ -160,7 +160,14 @@ pub struct Palette {
 }
 
 impl Palette {
-    pub fn new(dark: bool, s: &Settings) -> Self {
+    /// Map background. The window theme does not change it.
+    pub const BACKGROUND: Color32 = c(238, 238, 238);
+    /// Label colour. The window theme does not change it.
+    pub const TEXT: Color32 = Color32::BLACK;
+    /// Outline colour when the settings don't pick one.
+    pub const BORDER: Color32 = c(0x55, 0x55, 0x55);
+
+    pub fn new(s: &Settings) -> Self {
         let Tiles {
             ref colors,
             borders,
@@ -173,15 +180,9 @@ impl Palette {
         } = s.tiles;
         let (size, shadow) = (s.labels.font_size, s.labels.shadow);
         let boxes = colors.clone();
-        let (background, text) = if dark {
-            (c(22, 23, 24), Color32::BLACK)
-        } else {
-            (c(238, 238, 238), Color32::BLACK)
-        };
-
-
-        let border = border_line.color.unwrap_or(Self::theme_border(dark));
-        // The theme's selection is its text colour with the background colour on it.
+        let (background, text) = (Self::BACKGROUND, Self::TEXT);
+        let border = border_line.color.unwrap_or(Self::BORDER);
+        // The standard selection is the text colour with the background colour on it.
         let selection = selection_color.unwrap_or(text);
         let selection_text = match selection_color {
             None => background,
@@ -203,24 +204,6 @@ impl Palette {
             shadow,
             shown: s.labels.shown,
             text_scale: size / 10.0,
-        }
-    }
-
-    /// The theme's border colour (when the settings don't pick one).
-    pub fn theme_border(dark: bool) -> Color32 {
-        if dark {
-            c(0x10, 0x10, 0x10)
-        } else {
-            c(0x55, 0x55, 0x55)
-        }
-    }
-
-    /// The theme's selection colour (its text colour).
-    pub fn theme_selection(dark: bool) -> Color32 {
-        if dark {
-            c(0xD0, 0xD0, 0xC8)
-        } else {
-            Color32::BLACK
         }
     }
 
@@ -249,19 +232,17 @@ mod tests {
     #[test]
     fn selection_colour() {
         let mut s = Settings::default();
-        let p = Palette::new(false, &s);
+        let p = Palette::new(&s);
         assert_eq!(
             (p.selection, p.selection_text),
             (Color32::BLACK, p.background)
         );
         s.tiles.selection_color = Some(Color32::YELLOW);
-        let p = Palette::new(false, &s);
+        let p = Palette::new(&s);
         assert_eq!(
             (p.selection, p.selection_text),
             (Color32::YELLOW, Color32::BLACK)
         );
-        let p = Palette::new(true, &s);
-        assert_eq!(p.selection_text, Color32::BLACK);
     }
 
     #[test]

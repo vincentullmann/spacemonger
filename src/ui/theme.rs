@@ -125,6 +125,10 @@ impl Theme {
             Color32::WHITE
         };
         visuals.text_cursor.stroke.color = self.accent_color;
+        // One glyph rasterizer for both themes. Dark mode thickens antialiased edges, which
+        // makes the treemap's black labels look like they grew a shadow.
+        visuals.text_options.color_transfer_function =
+            egui::epaint::FontColorTransferFunction::LIGHT_MODE_DEFAULT;
     }
 }
 
