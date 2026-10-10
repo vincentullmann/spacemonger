@@ -1,6 +1,7 @@
 //! The window's own title bar (system decorations are off): command icons on the left, the
-//! title in the middle, minimise / maximise / close on the right. Empty space drags the
-//! window; a double-click maximises it.
+//! title (or scan progress) in the middle, minimise / maximise / close on the right. Empty
+//! space drags the window, a double-click maximises it, a right-click opens the window
+//! manager's window menu. The bar dims while the window isn't focused.
 
 use super::CommandState;
 use crate::core::actions::Action;
@@ -18,11 +19,25 @@ const BUTTON: Vec2 = Vec2::new(30.0, 28.0);
 const WINDOW_BUTTON_W: f32 = 44.0;
 /// Pointer travel (points) with the button down before a press on the bar moves the window.
 const DRAG_THRESHOLD: f32 = 3.0;
+/// The bar's opacity while the window isn't focused.
+const UNFOCUSED_OPACITY: f32 = 0.55;
+const SEARCH_W: f32 = 260.0;
+const PROGRESS_H: f32 = 2.0;
 const CLOSE_HOVER: Color32 = Color32::from_rgb(0xc4, 0x2b, 0x1c);
 
-/// Draw the bar. Returns the command clicked, if any.
-pub fn titlebar(ui: &mut Ui, st: &CommandState, keys: &Keymap, title: &str) -> Option<Action> {
+/// Draw the bar. `progress` (0..=1) draws a progress line along its bottom edge. Returns the
+/// command clicked, if any.
+pub fn titlebar(
+    ui: &mut Ui,
+    st: &CommandState,
+    keys: &Keymap,
+    title: &str,
+    progress: Option<f32>,
+) -> Option<Action> {
     let full = ui.max_rect();
+    if !ui.input(|i| i.viewport().focused.unwrap_or(true)) {
+        ui.multiply_opacity(UNFOCUSED_OPACITY);
+    }
     // Behind everything, so it only gets the pointer where nothing else is.
     let bg = ui.interact(full, ui.id().with("titlebar_bg"), Sense::click_and_drag());
     let maximized = ui.input(|i| i.viewport().maximized.unwrap_or(false));
@@ -49,7 +64,7 @@ pub fn titlebar(ui: &mut Ui, st: &CommandState, keys: &Keymap, title: &str) -> O
     cmds.set_clip_rect(left.intersect(ui.clip_rect()));
     cmds.spacing_mut().item_spacing.x = 2.0;
     cmds.add_space(6.0);
-    let act = commands(&mut cmds, st, keys);
+    let (act, search_hovered) = commands(&mut cmds, st, keys);
 
     let used = cmds.min_rect().right();
     let mid_left = (used + 12.0).min(left.right());
@@ -57,16 +72,66 @@ pub fn titlebar(ui: &mut Ui, st: &CommandState, keys: &Keymap, title: &str) -> O
         egui::pos2(mid_left, full.top()),
         egui::pos2((left.right() - 12.0).max(mid_left), full.bottom()),
     );
-    title_text(ui, mid, full, title);
+    if search_hovered {
+        search_placeholder(ui, mid, full);
+    } else {
+        title_text(ui, mid, full, title);
+    }
+    if let Some(frac) = progress {
+        progress_line(ui, full, frac);
+    }
 
     let icons = cmds.min_rect();
-    move_or_maximize(
-        ui,
-        &bg,
-        |p| !icons.contains(p) && !right.contains(p),
-        maximized,
-    );
+    let empty = |p: egui::Pos2| !icons.contains(p) && !right.contains(p);
+    move_or_maximize(ui, &bg, empty, maximized);
+    if bg.secondary_clicked() {
+        if let Some(p) = bg.interact_pointer_pos().filter(|&p| empty(p)) {
+            window_menu(ui, p);
+        }
+    }
     act
+}
+
+/// The window manager's own window menu (keep above, move to desktop, …), where it offers one.
+fn window_menu(ui: &Ui, pos: egui::Pos2) {
+    #[cfg(target_os = "linux")]
+    {
+        let px = (pos.to_vec2() * ui.ctx().pixels_per_point()).to_pos2();
+        crate::ui::x11_wm::show_window_menu(px);
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = (ui, pos);
+}
+
+/// While the search icon is hovered: a greyed-out search box where the title goes, to show
+/// where search will live.
+fn search_placeholder(ui: &mut Ui, mid: Rect, full: Rect) {
+    let w = SEARCH_W.min(mid.width());
+    if w < 40.0 {
+        return;
+    }
+    let h = BUTTON.y - 4.0;
+    let cx = full
+        .center()
+        .x
+        .clamp(mid.left() + w / 2.0, mid.right() - w / 2.0);
+    let rect = Rect::from_center_size(egui::pos2(cx, full.center().y), Vec2::new(w, h));
+    let mut text = String::new();
+    let edit = egui::TextEdit::singleline(&mut text)
+        .hint_text(format!("{}  Search (coming later)", icon::MAGNIFYING_GLASS))
+        .desired_width(w);
+    ui.put(rect, |ui: &mut Ui| ui.add_enabled(false, edit));
+}
+
+/// A thin line along the bottom of the bar, `frac` of the way across.
+fn progress_line(ui: &Ui, full: Rect, frac: f32) {
+    let w = full.width() * frac.clamp(0.0, 1.0);
+    let line = Rect::from_min_size(
+        egui::pos2(full.left(), full.bottom() - PROGRESS_H),
+        Vec2::new(w, PROGRESS_H),
+    );
+    ui.painter()
+        .rect_filled(line, 0.0, ui.visuals().selection.bg_fill);
 }
 
 /// Drag empty bar space to move the window, double-click it to toggle maximised.
@@ -154,8 +219,13 @@ fn divider(ui: &mut Ui) {
     );
 }
 
-fn commands(ui: &mut Ui, st: &CommandState, keys: &Keymap) -> Option<Action> {
+/// The icons left of the title. Also returns whether the search icon is hovered.
+fn commands(ui: &mut Ui, st: &CommandState, keys: &Keymap) -> (Option<Action>, bool) {
     let mut act = main_menu(ui, st, keys);
+    // Placeholders for zoom history (see TODO.md).
+    icon_button(ui, icon::ARROW_LEFT, false, "Back (coming later)");
+    icon_button(ui, icon::ARROW_RIGHT, false, "Forward (coming later)");
+    divider(ui);
     let mut cmd = |ui: &mut Ui, glyph: &str, enabled: bool, c: Command, name: &str| {
         if icon_button(ui, glyph, enabled, &tip(keys, c, name)).clicked() {
             act = Some(c.action(false));
@@ -170,8 +240,13 @@ fn commands(ui: &mut Ui, st: &CommandState, keys: &Keymap) -> Option<Action> {
         "Reload",
     );
     divider(ui);
-    icon_button(ui, icon::MAGNIFYING_GLASS, false, "Search (coming later)");
-    act
+    let search = ui.add_enabled(
+        false,
+        Button::new(RichText::new(icon::MAGNIFYING_GLASS).size(ICON_SIZE))
+            .frame_when_inactive(false)
+            .min_size(BUTTON),
+    );
+    (act, search.contains_pointer())
 }
 
 /// The menu behind the first icon: every command the bar has, grouped.

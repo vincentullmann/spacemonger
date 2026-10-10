@@ -137,9 +137,25 @@ fn norm(m: Modifiers) -> (bool, bool, bool) {
     (m.alt, m.ctrl || m.command || m.mac_cmd, m.shift)
 }
 
-/// "Ctrl+Shift+H"
+/// "Ctrl+Shift+H", "Ctrl+,": punctuation as its symbol, other keys by name.
 pub fn shortcut_text(s: &KeyboardShortcut) -> String {
-    s.format(&ModifierNames::NAMES, cfg!(target_os = "macos"))
+    let names = ModifierNames::NAMES;
+    let mut text = names.format(&s.modifiers, cfg!(target_os = "macos"));
+    if !text.is_empty() {
+        text += names.concat;
+    }
+    // egui's symbols for the arrows are pictures; "Up" reads better there.
+    let key = s.logical_key;
+    let arrow = matches!(
+        key,
+        Key::ArrowUp | Key::ArrowDown | Key::ArrowLeft | Key::ArrowRight
+    );
+    text += if arrow {
+        key.name()
+    } else {
+        key.symbol_or_name()
+    };
+    text
 }
 
 /// Same key and modifiers, however the modifiers were recorded.
@@ -299,6 +315,15 @@ mod tests {
         assert!(all.iter().enumerate().all(|(i, c)| !all[..i].contains(c)));
         // Every default binding's command is listed.
         assert!(Keymap::default().binds.iter().all(|(c, _)| all.contains(c)));
+    }
+
+    #[test]
+    fn shortcut_text_uses_symbols_for_punctuation() {
+        let k = |m, key| shortcut_text(&KeyboardShortcut::new(m, key));
+        assert_eq!(k(Modifiers::CTRL, Key::Comma), "Ctrl+,");
+        assert_eq!(k(Modifiers::ALT, Key::ArrowUp), "Alt+Up");
+        assert_eq!(k(Modifiers::SHIFT, Key::H), "Shift+H");
+        assert_eq!(k(Modifiers::NONE, Key::F5), "F5");
     }
 
     #[test]
