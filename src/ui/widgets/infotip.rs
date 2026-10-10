@@ -36,24 +36,17 @@ pub fn infotip(ctx: &egui::Context, pos: Pos2, entry: &Entry, path: &Path, opts:
                 if let Some(c) = created {
                     rows.push(("Created", format::date(c)));
                 }
-                // With both dates the rows need saying which is which: a small two-column
-                // table keeps the values lined up.
-                if opts.show_modified && created.is_some() {
-                    egui::Grid::new("infotip_rows")
-                        .num_columns(2)
-                        .spacing([10.0, ui.spacing().item_spacing.y])
-                        .show(ui, |ui| {
-                            for (label, value) in rows {
-                                ui.label(text(label.to_string()));
-                                ui.label(text(value));
-                                ui.end_row();
-                            }
-                        });
-                } else {
-                    for (_, value) in rows {
-                        ui.label(text(value));
-                    }
-                }
+                // A small two-column table, so every value says what it is and they line up.
+                egui::Grid::new("infotip_rows")
+                    .num_columns(2)
+                    .spacing([10.0, ui.spacing().item_spacing.y])
+                    .show(ui, |ui| {
+                        for (label, value) in rows {
+                            ui.label(text(label.to_string()));
+                            ui.label(text(value));
+                            ui.end_row();
+                        }
+                    });
             });
         });
 }
