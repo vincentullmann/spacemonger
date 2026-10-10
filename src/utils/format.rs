@@ -1,30 +1,22 @@
 //! Size / date formatting (port of FormatService).
 
 use chrono::{Local, TimeZone};
+use humansize::{FormatSizeOptions, BINARY};
 use num_format::{Locale, ToFormattedString};
 
-/// "12.3 GB", or a percentage of `total` ("45.6%") when `percent` is set.
+/// Powers of 1024 ("KiB", "MiB", ...) with one decimal.
+fn size_format() -> FormatSizeOptions {
+    BINARY.decimal_places(1).decimal_zeroes(1)
+}
+
+/// "12.3 GiB" (rounded), or a percentage of `total` ("45.6%") when `percent` is set.
 pub fn size_string(size: u64, total: u64, percent: bool) -> String {
     if percent {
         let total = if total == 0 { u64::MAX } else { total };
         let v = (size as u128 * 1000 / total as u128) as u64;
         return format!("{}.{}%", v / 10, v % 10);
     }
-    const K: u64 = 1024;
-    const M: u64 = K * 1024;
-    const G: u64 = M * 1024;
-    let (unit, div, label) = if size < K {
-        (size, 1, "bytes")
-    } else if size < M {
-        (size, K, "KB")
-    } else if size < G {
-        (size, M, "MB")
-    } else {
-        (size, G, "GB")
-    };
-    let full = unit / div;
-    let frac = if div == 1 { 0 } else { 10 * (unit % div) / div };
-    format!("{full}.{frac} {label}")
+    humansize::format_size(size, size_format())
 }
 
 /// "1,234,567 bytes"
@@ -47,9 +39,11 @@ mod tests {
 
     #[test]
     fn sizes() {
-        assert_eq!(size_string(500, 0, false), "500.0 bytes");
-        assert_eq!(size_string(1536, 0, false), "1.5 KB");
-        assert_eq!(size_string(3 * 1024 * 1024 * 1024, 0, false), "3.0 GB");
+        assert_eq!(size_string(500, 0, false), "500.0 B");
+        assert_eq!(size_string(1536, 0, false), "1.5 KiB");
+        assert_eq!(size_string(1023 * 1024 + 1000, 0, false), "1024.0 KiB");
+        assert_eq!(size_string(3 * 1024 * 1024 * 1024, 0, false), "3.0 GiB");
+        assert_eq!(size_string(5 << 40, 0, false), "5.0 TiB");
         assert_eq!(size_string(456, 1000, true), "45.6%");
         assert_eq!(file_size(0), "0 bytes");
         assert_eq!(file_size(999), "999 bytes");
