@@ -269,10 +269,17 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
             form::check,
         );
         r.row(
-            "Show date",
-            "Show the modification date in the tip.",
-            &mut tt.show_date,
-            &d.show_date,
+            "Show modified date",
+            "Show when the entry was last modified.",
+            &mut tt.show_modified,
+            &d.show_modified,
+            form::check,
+        );
+        r.row(
+            "Show created date",
+            "Show when the entry was created (if the filesystem records it).",
+            &mut tt.show_created,
+            &d.show_created,
             form::check,
         );
         r.row(

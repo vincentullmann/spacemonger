@@ -205,7 +205,10 @@ pub struct Font {
 #[serde(default)]
 pub struct Tooltips {
     pub show_size: bool,
-    pub show_date: bool,
+    #[serde(alias = "show_date")]
+    pub show_modified: bool,
+    /// Read from disk when the tip shows (the scan doesn't keep it).
+    pub show_created: bool,
     /// The entry's full path on disk, under its name.
     pub show_path: bool,
     pub font_size: f32,
@@ -216,7 +219,8 @@ impl Default for Tooltips {
     fn default() -> Self {
         Self {
             show_size: true,
-            show_date: true,
+            show_modified: true,
+            show_created: false,
             show_path: false,
             font_size: 13.0,
             delay_ms: INFOTIP_DELAY.as_millis() as u32,
@@ -386,6 +390,9 @@ mod tests {
         // Fields added later fall back to defaults.
         m.set_string(KEY, "(general: (theme: Dark))".into());
         assert_eq!(Settings::load(Some(&m)), with(Theme::Dark, true));
+        // Renamed fields still load.
+        m.set_string(KEY, "(tooltips: (show_date: false))".into());
+        assert!(!Settings::load(Some(&m)).tooltips.show_modified);
     }
 
     #[test]
