@@ -208,7 +208,9 @@ impl SettingsWindow {
                             let adding = self.capture == Some((cmd, None));
                             if ui
                                 .add(
+                                    // Frameless, so it doesn't read as a key.
                                     egui::Button::new(if adding { "…" } else { "+" })
+                                        .frame(adding)
                                         .selected(adding),
                                 )
                                 .on_hover_text("Add a shortcut")
