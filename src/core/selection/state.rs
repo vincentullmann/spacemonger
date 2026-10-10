@@ -90,3 +90,46 @@ impl Selection {
         roots
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::rc::Rc;
+
+    fn r(folder: &[usize], index: usize) -> EntryRef {
+        EntryRef::new(Rc::from(folder), index)
+    }
+
+    #[test]
+    fn toggle_add_and_primary() {
+        let mut s = Selection::default();
+        s.add(r(&[], 0));
+        s.add(r(&[], 0));
+        assert_eq!(s.len(), 1);
+        assert!(s.is_only(&r(&[], 0)));
+        s.toggle(r(&[], 1));
+        assert_eq!(s.primary(), Some(&r(&[], 1)));
+        s.toggle(r(&[], 1));
+        assert_eq!(s.primary(), Some(&r(&[], 0)));
+    }
+
+    #[test]
+    fn extend_steps_back() {
+        let mut s = Selection::default();
+        s.set([r(&[], 0)]);
+        s.extend_to(r(&[], 1));
+        s.extend_to(r(&[], 2));
+        assert_eq!(s.len(), 3);
+        // Back onto the previous one: undo the last step.
+        s.extend_to(r(&[], 1));
+        assert_eq!(s.iter().cloned().collect::<Vec<_>>(), vec![r(&[], 0), r(&[], 1)]);
+    }
+
+    #[test]
+    fn roots_drop_nested_and_sort_last_first() {
+        let mut s = Selection::default();
+        s.set([r(&[0], 2), r(&[], 0), r(&[], 3), r(&[1], 0)]);
+        // [0, 2] is inside [0], which is selected.
+        assert_eq!(s.roots(), vec![r(&[], 3), r(&[1], 0), r(&[], 0)]);
+    }
+}

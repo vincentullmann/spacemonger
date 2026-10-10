@@ -50,3 +50,37 @@ pub fn hits(items: &[Item], a: (f32, f32), b: (f32, f32)) -> Vec<EntryRef> {
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::rc::Rc;
+
+    fn item(folder: &[usize], index: usize, x: f32, y: f32, w: f32, h: f32) -> Item {
+        Item {
+            folder: Rc::from(folder),
+            index: Some(index),
+            depth: folder.len() as i32,
+            is_folder: false,
+            is_free: false,
+            labeled: true,
+            x,
+            y,
+            w,
+            h,
+        }
+    }
+
+    #[test]
+    fn picks_boxes_fully_inside_and_skips_children_of_picked() {
+        let items = [
+            item(&[], 0, 0.0, 0.0, 50.0, 50.0),
+            item(&[0], 0, 5.0, 15.0, 20.0, 20.0),
+            item(&[], 1, 50.0, 0.0, 50.0, 50.0),
+        ];
+        assert_eq!(hits(&items, (-1.0, -1.0), (60.0, 60.0)), vec![EntryRef::new(Rc::from(&[][..]), 0)]);
+        assert_eq!(hits(&items, (1.0, 1.0), (60.0, 60.0)), vec![EntryRef::new(Rc::from(&[0][..]), 0)]);
+        let m = Marquee::new((40.0, -1.0), Selection::default());
+        assert_eq!(m.selection(&items, (101.0, 51.0)).len(), 1);
+    }
+}

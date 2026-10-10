@@ -52,3 +52,60 @@ impl Selection {
         *self = out;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Two rows of two boxes in every folder.
+    fn boxes(_: &[usize]) -> Vec<(usize, Rect)> {
+        vec![
+            (0, Rect::new(0.0, 0.0, 10.0, 10.0)),
+            (1, Rect::new(10.0, 0.0, 10.0, 10.0)),
+            (2, Rect::new(0.0, 10.0, 10.0, 10.0)),
+            (3, Rect::new(10.0, 10.0, 10.0, 10.0)),
+        ]
+    }
+
+    fn r(folder: &[usize], index: usize) -> EntryRef {
+        EntryRef::new(Rc::from(folder), index)
+    }
+
+    fn sel(items: &[EntryRef]) -> Selection {
+        let mut s = Selection::default();
+        s.set(items.iter().cloned());
+        s
+    }
+
+    #[test]
+    fn siblings_move_and_stay_at_edges() {
+        let mut s = sel(&[r(&[5], 0), r(&[5], 1)]);
+        s.navigate(Nav::Sibling(Dir::Down), boxes);
+        assert_eq!(s, sel(&[r(&[5], 2), r(&[5], 3)]));
+        s.navigate(Nav::Sibling(Dir::Right), boxes);
+        // 2 moves onto 3, which stays put: the two collapse into one.
+        assert_eq!(s, sel(&[r(&[5], 3)]));
+    }
+
+    #[test]
+    fn parent_and_first_child() {
+        let mut s = sel(&[r(&[1, 2], 3)]);
+        s.navigate(Nav::Parent, boxes);
+        assert_eq!(s, sel(&[r(&[1], 2)]));
+        s.navigate(Nav::FirstChild, boxes);
+        assert_eq!(s, sel(&[r(&[1, 2], 0)]));
+        let mut top = sel(&[r(&[], 0)]);
+        top.navigate(Nav::Parent, boxes);
+        assert_eq!(top, sel(&[r(&[], 0)]));
+    }
+
+    #[test]
+    fn extend_grows_from_primary() {
+        let mut s = sel(&[r(&[], 0)]);
+        s.navigate(Nav::Extend(Dir::Right), boxes);
+        s.navigate(Nav::Extend(Dir::Down), boxes);
+        assert_eq!(s, sel(&[r(&[], 0), r(&[], 1), r(&[], 3)]));
+        s.navigate(Nav::Extend(Dir::Up), boxes);
+        assert_eq!(s, sel(&[r(&[], 0), r(&[], 1)]));
+    }
+}
