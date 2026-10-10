@@ -34,7 +34,7 @@ impl SpaceMonger {
     }
 
     pub(super) fn poll_scan(&mut self) {
-        let Some(job) = &self.scan else { return };
+        let Some(job) = &mut self.scan else { return };
         match job.poll() {
             ScanStatus::Running => {}
             ScanStatus::Finished(Some(tree)) => {
