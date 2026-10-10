@@ -207,6 +207,13 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
             |ui, v| form::number(ui, v, 0.0..=6.0, 0.5, "px"),
         );
         r.row(
+            "Selection colour",
+            "Fill and outline of selected boxes; their labels switch to black or white to stay readable.",
+            &mut t.selection_color,
+            &d.selection_color,
+            |ui, v| form::auto_color(ui, v, Palette::theme_selection(dark), "theme"),
+        );
+        r.row(
             "Gap",
             "Space between neighbouring boxes.",
             &mut t.gap,

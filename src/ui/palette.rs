@@ -145,6 +145,17 @@ fn classic(table: &[Color32; 24], n: usize) -> Vec<Color32> {
     (0..n).map(|i| table[i % table.len()]).collect()
 }
 
+/// `text` on `fill`, unless the two are too close, then the opposite (near white / black).
+fn contrast_text(fill: Color32, text: Color32) -> Color32 {
+    let lum = fill.intensity();
+    let dark_text = text.intensity() < 0.5;
+    match (dark_text, lum) {
+        (true, l) if l < 0.35 => c(0xEE, 0xEE, 0xEE),
+        (false, l) if l > 0.65 => Color32::BLACK,
+        _ => text,
+    }
+}
+
 /// Everything the painters need to know about how things look.
 #[derive(Clone)]
 pub struct Palette {
@@ -157,6 +168,9 @@ pub struct Palette {
     pub borders: bool,
     /// Space between neighbouring boxes, in points.
     pub gap: f32,
+    /// Fill and outline of selected boxes, and their label colour.
+    pub selection: Color32,
+    pub selection_text: Color32,
     /// Border width in physical pixels.
     pub border_width: f32,
     /// Outline of the hovered box, and its width in physical pixels.
@@ -184,6 +198,7 @@ impl Palette {
             border_width,
             hover_border_color,
             hover_border_width,
+            selection_color,
             gap,
             hover,
         } = s.tiles;
@@ -199,12 +214,20 @@ impl Palette {
             (c(0xEE, 0xEE, 0xEE), Color32::BLACK)
         };
         let border = border_color.unwrap_or(Self::theme_border(dark));
+        // The theme's selection is its text colour with the background colour on it.
+        let selection = selection_color.unwrap_or(text);
+        let selection_text = match selection_color {
+            None => background,
+            Some(c) => contrast_text(c, text),
+        };
         Self {
             background,
             text,
             border,
             boxes,
             borders,
+            selection,
+            selection_text,
             border_width,
             hover_border: hover_border_color.unwrap_or(Self::HOVER_BORDER),
             hover_width: hover_border_width,
@@ -226,19 +249,22 @@ impl Palette {
         }
     }
 
+    /// The theme's selection colour (its text colour).
+    pub fn theme_selection(dark: bool) -> Color32 {
+        if dark {
+            c(0xD0, 0xD0, 0xC8)
+        } else {
+            Color32::BLACK
+        }
+    }
+
     /// Default outline of the hovered box.
     pub const HOVER_BORDER: Color32 = Color32::BLACK;
 
     /// Label colour on a box filled with `fill`: the theme's text colour, unless the fill is
     /// too close to it (custom colours), then the opposite.
     pub fn text_on(&self, fill: Color32) -> Color32 {
-        let lum = fill.intensity();
-        let dark_text = self.text.intensity() < 0.5;
-        match (dark_text, lum) {
-            (true, l) if l < 0.35 => c(0xEE, 0xEE, 0xEE),
-            (false, l) if l > 0.65 => Color32::BLACK,
-            _ => self.text,
-        }
+        contrast_text(fill, self.text)
     }
 
     /// Fill colour for a nesting depth.
@@ -253,6 +279,18 @@ impl Palette {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn selection_colour() {
+        let mut s = Settings::default();
+        let p = Palette::new(false, &s);
+        assert_eq!((p.selection, p.selection_text), (Color32::BLACK, p.background));
+        s.tiles.selection_color = Some(Color32::YELLOW);
+        let p = Palette::new(false, &s);
+        assert_eq!((p.selection, p.selection_text), (Color32::YELLOW, Color32::BLACK));
+        let p = Palette::new(true, &s);
+        assert_eq!(p.selection_text, Color32::BLACK);
+    }
 
     #[test]
     fn schemes_give_n_colours() {

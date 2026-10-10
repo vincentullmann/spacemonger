@@ -160,6 +160,8 @@ pub struct Tiles {
     pub border_width: f32,
     pub hover_border_color: Option<Color32>,
     pub hover_border_width: f32,
+    /// Fill and outline of selected boxes; `None` follows the theme.
+    pub selection_color: Option<Color32>,
     pub gap: u8,
     pub hover: u8,
 }
@@ -174,6 +176,7 @@ impl Default for Tiles {
             border_width: 1.0,
             hover_border_color: None,
             hover_border_width: 2.0,
+            selection_color: None,
             gap: 1,
             hover: 20,
         }

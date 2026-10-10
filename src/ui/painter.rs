@@ -149,7 +149,7 @@ impl<'a> MapPainter<'a> {
             fh += pal.border_width / self.ppp;
         }
         let border_color = if sel {
-            pal.text
+            pal.selection
         } else if hover {
             pal.hover_border
         } else {
@@ -189,7 +189,7 @@ impl<'a> MapPainter<'a> {
 
         if !it.is_free {
             let color = if sel {
-                pal.text
+                pal.selection
             } else if hover {
                 pal.depth(it.depth).lerp_to_gamma(Color32::WHITE, pal.hover)
             } else {
@@ -214,7 +214,7 @@ impl<'a> MapPainter<'a> {
             .painter
             .with_clip_rect(self.rect(x, y, w, h).intersect(self.painter.clip_rect()));
         let fg = if sel {
-            pal.background
+            pal.selection_text
         } else {
             pal.text_on(pal.depth(it.depth))
         };
