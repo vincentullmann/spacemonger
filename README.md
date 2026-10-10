@@ -50,18 +50,25 @@ cargo build --release
   selection visible.
 - Ctrl+arrow or Shift+arrow extends the selection from the last selected item to its
   neighbour; stepping back the way you came shrinks it again.
-- **⚙ Settings** (or `Ctrl+,`) opens the settings window. Every change shows in the main window
-  straight away and is saved between runs:
-  - General: theme (light / dark / follow system), animation length, scroll zoom speed, info tip
-    delay, frame-selection fill, delete confirmation.
-  - Layout & labels: label density, split bias, free space, file size/date lines, decimal units,
-    date format.
+- **⚙ Settings** (or `Ctrl+,`) opens the settings window, a dialog that stays in front of the
+  main window (on X11 it has no taskbar entry). Every change shows in the main window straight
+  away and is saved between runs. Each setting has a tooltip; changed ones are marked with a
+  dot and reset with ⟲ or right-click. Up / Down change the hovered or focused field.
+  - General: theme (light / dark / follow system), animation length, scroll zoom speed,
+    frame-selection fill, delete confirmation; Layout: split bias, free space.
   - Scan: ignore hidden (dot) files — applies at once, without a rescan; stay on one filesystem;
     count hard links once; exclude patterns (mock-up, not used yet).
-  - Display: colour scheme (Classic or a colorgrad preset) with any number of colours — editing
-    one makes the scheme Custom; dark-mode dimming, borders, gap, hover highlight; label font
-    (any system font via fontdb), size and drop shadow; path bar height and font size.
-  - Keys: click a shortcut to rebind it, right-click to remove, `+` to add; clashes show in red.
+  - Display:
+    - Font: any system font (via fontdb) for labels and the path bar.
+    - Tiles: colour scheme (Classic or a colorgrad preset; picking one resets the colour count)
+      with any number of colours — editing one makes the scheme Custom; borders (collapsed into
+      one line between neighbours at gap 0), gap, hover highlight.
+    - Tiles / Labels: font size (folder title bars grow with it), drop shadow, density, size and
+      date lines, size format (bytes, KiB or kB — used by labels and tips), date format.
+    - Path bar: font size (the bar's height follows it).
+    - Tooltips: size, date, full path, font size, delay.
+  - Keys, grouped (Scanning, Navigation, Selection & actions, Display): click a shortcut to
+    rebind it, right-click to remove, `+` to add; clashes show in red.
 
 ## Scope vs. the Java version
 
@@ -92,7 +99,8 @@ end. `utils/` holds generic helpers, `helpers/` app-specific glue.
 | `src/ui/dialogs/` | Drive picker, scan progress, delete confirm, error | |
 | `src/ui/painter.rs` | Box and label drawing | `FolderView` (drawing) |
 | `src/ui/palette.rs` | Colour schemes and drawing options | `ColorService` |
-| `src/ui/settings/` | Persisted settings, settings window (egui-probe) | |
+| `src/ui/settings/` | Persisted settings, settings window and its form rows | |
+| `src/ui/x11_sync.rs`, `x11_dialog.rs` | X11: smooth resizing; settings window as a dialog | |
 | `src/ui/fonts.rs` | System font lookup (fontdb) | |
 | `src/ui/keymap.rs`, `title.rs`, `error.rs` | Rebindable shortcuts, window title, user-facing errors | |
 | `src/utils/` | Size / date formatting, interpolation, text eliding | `FormatService` |
