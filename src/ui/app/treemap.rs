@@ -14,6 +14,11 @@ use std::time::Instant;
 impl SpaceMonger {
     pub(super) fn treemap(&mut self, ui: &mut egui::Ui) -> Option<Action> {
         let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
+        // Clickable widgets get a hand cursor, but the map is one big one: keep the arrow
+        // (panning sets its own below).
+        if resp.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Default);
+        }
         let ppp = ui.ctx().pixels_per_point();
         let d = MapPainter::new(
             &painter,

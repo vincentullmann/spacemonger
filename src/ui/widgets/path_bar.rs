@@ -96,8 +96,11 @@ pub fn path_bar(
             clicked = seg.map(|i| segs[i].1.clone());
         }
     }
+    // A hand only over the parents you can click (egui would show it over the whole bar).
     if boxes.iter().any(|&(bx, bw, seg)| hovered(bx, bw, seg)) {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    } else if resp.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Default);
     }
     clicked
 }

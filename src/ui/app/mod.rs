@@ -60,6 +60,10 @@ pub struct SpaceMonger {
 impl SpaceMonger {
     pub fn new(cc: &eframe::CreationContext<'_>, open_path: Option<PathBuf>) -> Self {
         let settings = Settings::load(cc.storage);
+        // Buttons, check boxes, drop-downs etc. show a hand cursor (both themes).
+        cc.egui_ctx.all_styles_mut(|s| {
+            s.visuals.interact_cursor = Some(egui::CursorIcon::PointingHand);
+        });
         let mut app = Self {
             tree: None,
             live: None,
