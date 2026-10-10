@@ -250,18 +250,11 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
                 |ui, v| form::number(ui, v, -3..=3, 1.0, ""),
             );
             r.row(
-                "Show size",
-                "Show the size under file names, where the box is big enough.",
-                &mut lb.show_size,
-                &dl.show_size,
-                form::check,
-            );
-            r.row(
-                "Show date",
-                "Show the modification date under file names, where the box is big enough.",
-                &mut lb.show_date,
-                &dl.show_date,
-                form::check,
+                "Show",
+                "What file labels show, as far as the box is big enough. Folders show their name.",
+                &mut lb.shown,
+                &dl.shown,
+                |ui, v| form::shown(ui, "label_shown", v),
             );
             r.row(
                 "Size format",
@@ -298,32 +291,11 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
     let (tt, d) = (&mut s.tooltips, Tooltips::default());
     group(ui, "Tooltips", |r| {
         r.row(
-            "Show full path",
-            "Show where the entry is on disk, under its name.",
-            &mut tt.show_path,
-            &d.show_path,
-            form::check,
-        );
-        r.row(
-            "Show size",
-            "Show the file or folder size in the tip.",
-            &mut tt.show_size,
-            &d.show_size,
-            form::check,
-        );
-        r.row(
-            "Show modified date",
-            "Show when the entry was last modified.",
-            &mut tt.show_modified,
-            &d.show_modified,
-            form::check,
-        );
-        r.row(
-            "Show created date",
-            "Show when the entry was created (if the filesystem records it).",
-            &mut tt.show_created,
-            &d.show_created,
-            form::check,
+            "Show",
+            "What the tip shows.",
+            &mut tt.shown,
+            &d.shown,
+            |ui, v| form::shown(ui, "tip_shown", v),
         );
         r.row(
             "Font size",

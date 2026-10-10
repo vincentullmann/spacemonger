@@ -105,8 +105,8 @@ pub struct Labels {
     pub shadow: bool,
     /// Minimum box size for a label: -3 sparse .. +3 dense.
     pub density: i32,
-    pub show_size: bool,
-    pub show_date: bool,
+    /// What file labels show.
+    pub shown: Shown,
     pub size_format: SizeFormat,
     pub date_format: String,
 }
@@ -117,8 +117,7 @@ impl Default for Labels {
             font_size: 10.0,
             shadow: false,
             density: 0,
-            show_size: true,
-            show_date: true,
+            shown: Shown::default(),
             size_format: SizeFormat::Bytes,
             date_format: DEFAULT_DATE_FORMAT.to_string(),
         }
@@ -213,17 +212,48 @@ pub struct Font {
     pub family: String,
 }
 
+/// Which details a file label or the tooltip shows.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(default)]
+pub struct Shown {
+    pub name: bool,
+    /// Full path on disk.
+    pub path: bool,
+    pub size: bool,
+    pub modified: bool,
+    pub created: bool,
+}
+
+impl Default for Shown {
+    fn default() -> Self {
+        Self {
+            name: true,
+            path: false,
+            size: true,
+            modified: true,
+            created: false,
+        }
+    }
+}
+
+impl Shown {
+    /// (label, field) for each detail, in the order they're shown.
+    pub fn fields(&mut self) -> [(&'static str, &mut bool); 5] {
+        [
+            ("Name", &mut self.name),
+            ("Path", &mut self.path),
+            ("Size", &mut self.size),
+            ("Modified", &mut self.modified),
+            ("Created", &mut self.created),
+        ]
+    }
+}
+
 /// The name / size / date tip shown when hovering a box.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct Tooltips {
-    pub show_size: bool,
-    #[serde(alias = "show_date")]
-    pub show_modified: bool,
-    /// Read from disk when the tip shows (the scan doesn't keep it).
-    pub show_created: bool,
-    /// The entry's full path on disk, under its name.
-    pub show_path: bool,
+    pub shown: Shown,
     pub font_size: f32,
     pub delay_ms: u32,
 }
@@ -231,10 +261,7 @@ pub struct Tooltips {
 impl Default for Tooltips {
     fn default() -> Self {
         Self {
-            show_size: true,
-            show_modified: true,
-            show_created: false,
-            show_path: false,
+            shown: Shown::default(),
             font_size: 13.0,
             delay_ms: INFOTIP_DELAY.as_millis() as u32,
         }
@@ -400,9 +427,6 @@ mod tests {
         // Fields added later fall back to defaults.
         m.set_string(KEY, "(general: (theme: Dark))".into());
         assert_eq!(Settings::load(Some(&m)), with(Theme::Dark, true));
-        // Renamed fields still load.
-        m.set_string(KEY, "(tooltips: (show_date: false))".into());
-        assert!(!Settings::load(Some(&m)).tooltips.show_modified);
     }
 
     #[test]

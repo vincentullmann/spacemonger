@@ -1,7 +1,7 @@
 //! Colours and drawing options for the treemap and path bar. The "Classic" scheme is the
 //! original ColorService "Rainbow" palette; others are sampled from colorgrad presets.
 
-use crate::ui::settings::{Settings, Tiles};
+use crate::ui::settings::{Settings, Shown, Tiles};
 use colorgrad::Gradient;
 use eframe::egui::Color32;
 use serde::{Deserialize, Serialize};
@@ -180,10 +180,8 @@ pub struct Palette {
     pub hover: f32,
     /// Drop shadow behind labels.
     pub shadow: bool,
-    /// Size line in file boxes.
-    pub show_size: bool,
-    /// Date line in file boxes.
-    pub show_date: bool,
+    /// What file labels show.
+    pub shown: Shown,
     /// Label font size relative to the original 10 pt (spaces the label lines).
     pub text_scale: f32,
 }
@@ -234,8 +232,7 @@ impl Palette {
             gap: gap as f32,
             hover: hover as f32 / 100.0,
             shadow,
-            show_size: s.labels.show_size,
-            show_date: s.labels.show_date,
+            shown: s.labels.shown,
             text_scale: size / 10.0,
         }
     }
@@ -284,10 +281,16 @@ mod tests {
     fn selection_colour() {
         let mut s = Settings::default();
         let p = Palette::new(false, &s);
-        assert_eq!((p.selection, p.selection_text), (Color32::BLACK, p.background));
+        assert_eq!(
+            (p.selection, p.selection_text),
+            (Color32::BLACK, p.background)
+        );
         s.tiles.selection_color = Some(Color32::YELLOW);
         let p = Palette::new(false, &s);
-        assert_eq!((p.selection, p.selection_text), (Color32::YELLOW, Color32::BLACK));
+        assert_eq!(
+            (p.selection, p.selection_text),
+            (Color32::YELLOW, Color32::BLACK)
+        );
         let p = Palette::new(true, &s);
         assert_eq!(p.selection_text, Color32::BLACK);
     }

@@ -260,26 +260,54 @@ impl<'a> MapPainter<'a> {
             y + (h - th) / 2.0
         };
 
-        // Size and / or date lines under a file's name, where the box is tall enough.
+        // The details chosen for file labels, under the name, as far as the box is tall
+        // enough. Folders only show their name in the title bar.
         let k = pal.text_scale;
-        let size = pal.show_size.then(|| format::file_size(entry.actual));
-        let date = pal.show_date.then(|| format::date(entry.mtime));
-        let (lines, name_dy): (Vec<(String, f32)>, f32) = match (size, date) {
-            (Some(s), Some(d)) if h >= 36.0 * k => (vec![(s, 1.0), (d, 11.0 * k)], -12.0 * k),
-            (Some(l), None) | (None, Some(l)) if h >= 24.0 * k => (vec![(l, 6.0 * k)], -6.0 * k),
-            _ => (Vec::new(), 0.0),
-        };
-        if !it.is_folder && w >= 48.0 && !lines.is_empty() {
-            for (s, dy) in lines {
-                let (sw, _) = self.text_width(&s);
-                let sx = if sw > w - 2.0 {
-                    x + 3.0
-                } else {
-                    x + (w - sw) / 2.0
-                };
-                self.text(&p, &s, sx, ty + dy, fg);
+        let shown = &pal.shown;
+        let show_name = it.is_folder || shown.name;
+        let mut extras: Vec<String> = Vec::new();
+        if !it.is_folder && w >= 48.0 {
+            if shown.path {
+                extras.push(tree.full_path(&it.folder, it.index).display().to_string());
             }
-            ty += name_dy;
+            if shown.size {
+                extras.push(format::file_size(entry.actual));
+            }
+            if shown.modified {
+                extras.push(format::date(entry.mtime));
+            }
+            if shown.created && entry.created != 0 {
+                extras.push(format::date(entry.created));
+            }
+        }
+        let lines = |extras: &Vec<String>| extras.len() + show_name as usize;
+        while lines(&extras) > 1 && h < 12.0 * k * lines(&extras) as f32 {
+            extras.pop();
+        }
+        // Offsets from the centred line: the name a little apart from the details below it.
+        let n = extras.len() as f32;
+        let (name_dy, first, step) = match (show_name, extras.len()) {
+            (true, 0) => (0.0, 0.0, 0.0),
+            (true, 1) => (-6.0 * k, 6.0 * k, 0.0),
+            (true, 2) => (-12.0 * k, 1.0, 10.0 * k),
+            (true, _) => {
+                let name_dy = -(6.0 * k + 5.0 * k * (n - 1.0));
+                (name_dy, name_dy + 13.0 * k, 10.0 * k)
+            }
+            (false, _) => (0.0, -5.0 * k * (n - 1.0), 10.0 * k),
+        };
+        for (i, s) in extras.iter().enumerate() {
+            let (sw, _) = self.text_width(s);
+            let sx = if sw > w - 2.0 {
+                x + 3.0
+            } else {
+                x + (w - sw) / 2.0
+            };
+            self.text(&p, s, sx, ty + first + step * i as f32, fg);
+        }
+        ty += name_dy;
+        if !show_name {
+            return;
         }
         self.text(&p, &entry.name, tx, ty, fg);
     }

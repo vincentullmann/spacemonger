@@ -1,6 +1,7 @@
 //! Small building blocks for the settings pages: labelled rows with a reset button, and the input
 //! widgets they hold (numbers with a unit, drop-downs, colour lists, ...).
 
+use super::Shown;
 use crate::ui::fonts;
 use eframe::egui::{self, emath::Numeric, Color32, Response, RichText, Ui};
 use std::ops::RangeInclusive;
@@ -203,6 +204,32 @@ pub fn choice<T: PartialEq + Copy>(
         *v = options[j].0;
     }
     r
+}
+
+/// A drop-down of check boxes for which details to show; the button lists the ones on.
+pub fn shown(ui: &mut Ui, id: &str, v: &mut Shown) -> Response {
+    let mut copy = *v;
+    let on: Vec<&str> = copy
+        .fields()
+        .into_iter()
+        .filter(|(_, f)| **f)
+        .map(|(l, _)| l)
+        .collect();
+    let text = if on.is_empty() {
+        "Nothing".to_string()
+    } else {
+        on.join(", ")
+    };
+    egui::ComboBox::from_id_salt(id)
+        .selected_text(text)
+        .width(260.0)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .show_ui(ui, |ui| {
+            for (label, field) in v.fields() {
+                ui.checkbox(field, label);
+            }
+        })
+        .response
 }
 
 /// Up / Down presses this frame: +1 for each Up, -1 for each Down (consumed).
