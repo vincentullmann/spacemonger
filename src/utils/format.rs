@@ -1,10 +1,6 @@
 //! Size / date formatting (port of FormatService).
 
-use chrono::{Datelike, Local, TimeZone, Timelike};
-
-const MONTHS: [&str; 12] = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
+use chrono::{Local, TimeZone};
 
 /// "12.3 GB", or a percentage of `total` ("45.6%") when `percent` is set.
 pub fn size_string(size: u64, total: u64, percent: bool) -> String {
@@ -50,15 +46,7 @@ pub fn date(secs: i64) -> String {
         .timestamp_opt(secs, 0)
         .single()
         .unwrap_or_else(|| Local.timestamp_opt(0, 0).unwrap());
-    format!(
-        "{:02} {} {:04}   {}:{:02}:{:02}",
-        dt.day(),
-        MONTHS[dt.month0() as usize],
-        dt.year(),
-        dt.hour(),
-        dt.minute(),
-        dt.second()
-    )
+    dt.format("%d %b %Y   %-H:%M:%S").to_string()
 }
 
 #[cfg(test)]
@@ -74,5 +62,13 @@ mod tests {
         assert_eq!(file_size(0), "0 bytes");
         assert_eq!(file_size(999), "999 bytes");
         assert_eq!(file_size(1234567), "1,234,567 bytes");
+    }
+
+    #[test]
+    fn dates() {
+        let secs = Local.with_ymd_and_hms(2024, 3, 5, 4, 7, 9).unwrap().timestamp();
+        assert_eq!(date(secs), "05 Mar 2024   4:07:09");
+        let secs = Local.with_ymd_and_hms(2024, 12, 25, 14, 0, 0).unwrap().timestamp();
+        assert_eq!(date(secs), "25 Dec 2024   14:00:00");
     }
 }
