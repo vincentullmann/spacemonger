@@ -2458,6 +2458,7 @@ dependencies = [
  "rfd",
  "serde",
  "sysinfo",
+ "thiserror 2.0.21",
  "trash",
 ]
 

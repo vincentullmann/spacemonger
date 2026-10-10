@@ -12,6 +12,7 @@ use crate::core::layout::{Item, LayoutParams, Reshape};
 use crate::core::model::{Entry, EntryRef, Tree};
 use crate::core::selection::{Marquee, Selection};
 use crate::ui::dialogs::DriveDialog;
+use crate::ui::error::AppError;
 use crate::ui::keymap::action_for_keys;
 use crate::ui::palette::Palette;
 use crate::ui::settings::Settings;
@@ -48,7 +49,7 @@ pub struct SpaceMonger {
     scan: Option<ScanJob>,
     /// Entries waiting for the delete confirmation, with their paths.
     confirm_delete: Option<(Vec<EntryRef>, Vec<PathBuf>)>,
-    error: Option<String>,
+    error: Option<AppError>,
     title: String,
     font: FontId,
 }
@@ -81,8 +82,8 @@ impl SpaceMonger {
         };
         match open_path {
             Some(p) => match drive_for_path(&p) {
-                Some(d) => app.start_scan(d, false, &cc.egui_ctx),
-                None => app.error = Some(format!("Cannot open {}", p.display())),
+                Ok(d) => app.start_scan(d, false, &cc.egui_ctx),
+                Err(e) => app.error = Some(e.into()),
             },
             None => app.open_dialog(),
         }

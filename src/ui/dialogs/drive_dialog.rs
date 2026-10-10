@@ -1,6 +1,6 @@
 //! "Select Drive to View": pick a mounted volume or type / browse to a folder.
 
-use crate::core::fs::{drive_for_path, volumes, Drive};
+use crate::core::fs::{drive_for_path, volumes, Drive, FsError};
 use crate::utils::format;
 use eframe::egui::{self, Id};
 use std::path::PathBuf;
@@ -18,7 +18,7 @@ pub struct DriveDialogOutcome {
     pub chosen: Option<(Drive, bool)>,
     /// Closed without choosing.
     pub closed: bool,
-    pub error: Option<String>,
+    pub error: Option<FsError>,
 }
 
 impl DriveDialog {
@@ -70,8 +70,8 @@ impl DriveDialog {
                     && !self.path.is_empty()
                 {
                     match drive_for_path(&PathBuf::from(self.path.trim())) {
-                        Some(d) => out.chosen = Some((d, false)),
-                        None => out.error = Some(format!("Not a readable folder: {}", self.path)),
+                        Ok(d) => out.chosen = Some((d, false)),
+                        Err(e) => out.error = Some(e),
                     }
                 }
             });

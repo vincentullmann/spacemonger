@@ -5,6 +5,7 @@ use crate::core::actions::Action;
 use crate::core::fs::{Drive, ScanJob, ScanStatus};
 use crate::core::model::EntryRef;
 use crate::ui::dialogs::{confirm_delete, error_dialog, scan_dialog, DriveDialog};
+use crate::ui::error::AppError;
 use eframe::egui;
 use std::path::PathBuf;
 
@@ -106,8 +107,8 @@ impl SpaceMonger {
         roots.reverse();
         for r in roots {
             let p = t.path_of(&r);
-            if let Err(e) = open::that_detached(&p) {
-                self.error = Some(format!("Cannot open {}:\n{e}", p.display()));
+            if let Err(source) = open::that_detached(&p) {
+                self.error = Some(AppError::Open { path: p, source });
                 break;
             }
         }
@@ -116,7 +117,7 @@ impl SpaceMonger {
     /// Move to trash. `refs` come from `Selection::roots`, so removing them in order never
     /// shifts a later one.
     fn delete_confirmed(&mut self, refs: Vec<EntryRef>, paths: Vec<PathBuf>) {
-        let mut errors = Vec::new();
+        let mut failed = Vec::new();
         for (r, path) in refs.into_iter().zip(paths) {
             match trash::delete(&path) {
                 Ok(()) => {
@@ -124,13 +125,13 @@ impl SpaceMonger {
                         t.remove(&r.folder, r.index);
                     }
                 }
-                Err(e) => errors.push(format!("{}:\n{e}", path.display())),
+                Err(e) => failed.push((path, e)),
             }
         }
         self.selection.clear();
         self.invalidate();
-        if !errors.is_empty() {
-            self.error = Some(format!("Failed to move to trash:\n\n{}", errors.join("\n\n")));
+        if !failed.is_empty() {
+            self.error = Some(AppError::Trash(failed));
         }
     }
 
@@ -138,8 +139,8 @@ impl SpaceMonger {
     pub(super) fn dialogs(&mut self, ctx: &egui::Context) {
         if let Some(dlg) = &mut self.dialog {
             let out = dlg.show(ctx);
-            if out.error.is_some() {
-                self.error = out.error;
+            if let Some(e) = out.error {
+                self.error = Some(e.into());
             }
             if let Some((d, is_drive)) = out.chosen {
                 self.dialog = None;
@@ -165,7 +166,7 @@ impl SpaceMonger {
             }
         }
         if let Some(msg) = &self.error {
-            if error_dialog(ctx, msg) {
+            if error_dialog(ctx, &msg.to_string()) {
                 self.error = None;
             }
         }

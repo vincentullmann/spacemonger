@@ -2,6 +2,7 @@
 
 pub mod app;
 pub mod dialogs;
+pub mod error;
 pub mod keymap;
 pub mod painter;
 pub mod palette;

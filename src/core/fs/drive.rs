@@ -1,5 +1,6 @@
 //! Scannable locations: mounted volumes or an arbitrary folder.
 
+use super::FsError;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -53,10 +54,10 @@ pub fn volumes() -> Vec<Drive> {
 }
 
 /// Build a `Drive` for an arbitrary folder, using the stats of the volume it lives on.
-pub fn drive_for_path(path: &Path) -> Option<Drive> {
-    let path = fs::canonicalize(path).ok()?;
+pub fn drive_for_path(path: &Path) -> Result<Drive, FsError> {
+    let path = fs::canonicalize(path).map_err(|source| FsError::Io { path: path.to_path_buf(), source })?;
     if !path.is_dir() {
-        return None;
+        return Err(FsError::NotAFolder(path));
     }
     let disks = sysinfo::Disks::new_with_refreshed_list();
     let best = disks
@@ -68,7 +69,7 @@ pub fn drive_for_path(path: &Path) -> Option<Drive> {
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| path.display().to_string());
-    Some(Drive {
+    Ok(Drive {
         name,
         total: best.map_or(0, |d| d.total_space()),
         free: best.map_or(0, |d| d.available_space()),
@@ -78,3 +79,19 @@ pub fn drive_for_path(path: &Path) -> Option<Drive> {
 }
 
 // ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn drive_for_path_errors() {
+        let missing = Path::new("/definitely/not/here");
+        assert!(matches!(drive_for_path(missing), Err(FsError::Io { .. })));
+        let file = std::env::temp_dir().join(format!("sm_test_file_{}", std::process::id()));
+        fs::write(&file, b"x").unwrap();
+        let err = drive_for_path(&file).unwrap_err();
+        assert!(err.to_string().starts_with("Not a folder: "));
+        fs::remove_file(&file).unwrap();
+    }
+}
