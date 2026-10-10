@@ -30,11 +30,67 @@ fn database() -> &'static (fontdb::Database, Vec<String>) {
             .collect();
         names.sort_by_key(|n| n.to_lowercase());
         names.dedup();
+        // Only fonts egui can draw (outline glyphs, not bitmap / colour-only ones) and that
+        // cover the letters of their own name, so the picker can show each in its own font.
+        names.retain(|n| shows_own_name(&db, n));
         (db, names)
     })
 }
 
-/// Family names of the installed fonts, sorted.
+/// Whether the regular face of `name` has outline glyphs for every letter of the name.
+fn shows_own_name(db: &fontdb::Database, name: &str) -> bool {
+    use skrifa::raw::tables::cmap::PlatformId;
+    use skrifa::raw::types::Tag;
+    use skrifa::raw::TableProvider;
+    use skrifa::{FontRef, GlyphNameSource, MetadataProvider};
+    let query = fontdb::Query {
+        families: &[fontdb::Family::Name(name)],
+        ..Default::default()
+    };
+    let Some(id) = db.query(&query) else {
+        return false;
+    };
+    db.with_face_data(id, |data, index| {
+        let Ok(font) = FontRef::from_index(data, index) else {
+            return false;
+        };
+        let outlines = [b"glyf", b"CFF ", b"CFF2"]
+            .iter()
+            .any(|t| font.table_data(Tag::new(t)).is_some());
+        // Symbol fonts map plain letters to pictures (Windows symbol cmap, or a Mac-only one).
+        let symbol = font.cmap().is_ok_and(|cmap| {
+            let recs = cmap.encoding_records();
+            recs.iter()
+                .any(|r| r.platform_id() == PlatformId::Windows && r.encoding_id() == 0)
+                || !recs
+                    .iter()
+                    .any(|r| matches!(r.platform_id(), PlatformId::Windows | PlatformId::Unicode))
+        });
+        let charmap = font.charmap();
+        // Others (like the URW dingbats) map letters to symbols under a Unicode cmap; their
+        // glyph names give them away: the glyph for "a" isn't called "a…".
+        let names = font.glyph_names();
+        let letters: Vec<char> = name.chars().filter(char::is_ascii_alphabetic).collect();
+        let misnamed = names.source() != GlyphNameSource::Synthesized
+            && !letters.is_empty()
+            && letters.iter().all(|&c| {
+                let glyph = charmap.map(c);
+                !glyph
+                    .and_then(|g| names.get(g))
+                    .is_some_and(|n| n.as_str().starts_with(c))
+            });
+        outlines
+            && !symbol
+            && !misnamed
+            && name
+                .chars()
+                .filter(|c| !c.is_whitespace())
+                .all(|c| charmap.map(c).is_some())
+    })
+    .unwrap_or(false)
+}
+
+/// Family names of the installed fonts that can show their own name, sorted.
 pub fn system_families() -> &'static [String] {
     &database().1
 }

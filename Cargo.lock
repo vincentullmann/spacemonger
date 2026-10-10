@@ -2691,6 +2691,7 @@ dependencies = [
  "rayon",
  "rfd",
  "serde",
+ "skrifa",
  "thiserror 2.0.21",
  "trash",
  "x11-dl",
