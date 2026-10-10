@@ -2,6 +2,7 @@
 //! selection. Nothing in here may depend on egui.
 
 pub mod actions;
+pub mod camera;
 pub mod fs;
 pub mod geometry;
 pub mod layout;

@@ -2,8 +2,8 @@
 
 mod marquee;
 mod navigation;
-mod selection;
+mod state;
 
 pub use marquee::Marquee;
 pub use navigation::Nav;
-pub use selection::Selection;
+pub use state::Selection;

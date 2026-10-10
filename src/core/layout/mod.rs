@@ -18,6 +18,7 @@ mod neighbours;
 mod params;
 mod query;
 mod reshape;
+mod scene;
 mod split;
 mod treemap;
 
@@ -27,6 +28,7 @@ pub use neighbours::{neighbour, Dir};
 pub use params::LayoutParams;
 pub use query::{child_boxes, content_of, covering, hit_test, locate};
 pub use reshape::Reshape;
+pub use scene::Scene;
 pub use treemap::build;
 
 #[cfg(test)]
