@@ -29,6 +29,10 @@ impl<'a> MapPainter<'a> {
         }
     }
 
+    pub fn palette(&self) -> &Palette {
+        &self.pal
+    }
+
     /// Screen position to view coordinates.
     pub fn local(&self, p: Pos2) -> (f32, f32) {
         (p.x - self.origin.x, p.y - self.origin.y)
@@ -60,6 +64,21 @@ impl<'a> MapPainter<'a> {
 
     fn text(&self, p: &Painter, s: &str, x: f32, y: f32, c: Color32) {
         let pos = self.snap(self.origin + Vec2::new(x, y));
+        if self.pal.shadow {
+            // Dark shadow under light text, light under dark.
+            let shadow = if c.intensity() > 0.5 {
+                Color32::from_black_alpha(170)
+            } else {
+                Color32::from_white_alpha(150)
+            };
+            p.text(
+                pos + Vec2::splat(1.0),
+                Align2::LEFT_TOP,
+                s,
+                self.font.clone(),
+                shadow,
+            );
+        }
         p.text(pos, Align2::LEFT_TOP, s, self.font.clone(), c);
     }
 
@@ -67,7 +86,7 @@ impl<'a> MapPainter<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn cell(&self, x: f32, y: f32, w: f32, h: f32, color: Color32, hover: bool, label: &str) {
         let fill = if hover {
-            color.lerp_to_gamma(Color32::WHITE, 0.2)
+            color.lerp_to_gamma(Color32::WHITE, self.pal.hover)
         } else {
             color
         };
@@ -92,7 +111,7 @@ impl<'a> MapPainter<'a> {
             label,
             x + 6.0,
             y + 1.0 + (h - 1.0 - th) / 2.0,
-            self.pal.text,
+            self.pal.text_on(fill),
         );
     }
 
@@ -110,7 +129,7 @@ impl<'a> MapPainter<'a> {
             .rect_stroke(r, 0.0, Stroke::new(1.0, c), egui::StrokeKind::Inside);
     }
 
-    /// Flat box: a single fill with a 1px gap to its neighbours, plus its label.
+    /// Flat box: a single fill with a gap to its neighbours (1px by default), plus its label.
     pub fn item(&self, tree: &Tree, it: &Item, sel: bool, hover: bool) {
         let pal = &self.pal;
         let (x, y, w, h) = (it.x, it.y, it.w + 1.0, it.h + 1.0);
@@ -119,14 +138,19 @@ impl<'a> MapPainter<'a> {
             let color = if sel {
                 pal.text
             } else if hover {
-                pal.depth(it.depth).lerp_to_gamma(Color32::WHITE, 0.2)
+                pal.depth(it.depth).lerp_to_gamma(Color32::WHITE, pal.hover)
             } else {
                 pal.depth(it.depth)
             };
-            self.fill(color, x + 1.0, y + 1.0, w - 2.0, h - 2.0);
+            // The box gives up `gap` of its width and height to the space between neighbours,
+            // most of it on the top / left (all of it for the default 1).
+            let g = pal.gap;
+            let off = (g / 2.0).ceil();
+            let (fx, fy, fw, fh) = (x + off, y + off, it.w - g, it.h - g);
+            self.fill(color, fx, fy, fw, fh);
 
             // 1 physical pixel border just inside the fill (2 when hovered).
-            if w > 4.0 && h > 4.0 {
+            if w > 4.0 && h > 4.0 && fw > 0.0 && fh > 0.0 && (pal.borders || sel || hover) {
                 let border_color = if sel {
                     pal.text
                 } else if hover {
@@ -135,7 +159,7 @@ impl<'a> MapPainter<'a> {
                     pal.border
                 };
                 let border_width = if hover { 2.0 } else { 1.0 };
-                let r = self.rect(x + 1.0, y + 1.0, w - 2.0, h - 2.0);
+                let r = self.rect(fx, fy, fw, fh);
                 self.painter.rect_stroke(
                     r,
                     0.0,
@@ -154,7 +178,11 @@ impl<'a> MapPainter<'a> {
         let p = self
             .painter
             .with_clip_rect(self.rect(x, y, w, h).intersect(self.painter.clip_rect()));
-        let fg = if sel { pal.background } else { pal.text };
+        let fg = if sel {
+            pal.background
+        } else {
+            pal.text_on(pal.depth(it.depth))
+        };
 
         if it.is_free {
             let ts = tree.total_space.max(1);
@@ -180,7 +208,7 @@ impl<'a> MapPainter<'a> {
                 y + (h - lh) / 2.0
             };
             for (line, dy) in lines.iter().zip([-18.0, -6.0, 6.0, 15.0]) {
-                self.text(&p, line, tx, ty + dy, pal.text);
+                self.text(&p, line, tx, ty + dy * pal.text_scale, pal.text);
             }
             return;
         }
@@ -197,10 +225,11 @@ impl<'a> MapPainter<'a> {
             y + (h - th) / 2.0
         };
 
-        if !it.is_folder && h >= 36.0 && w >= 48.0 {
+        let k = pal.text_scale;
+        if pal.details && !it.is_folder && h >= 36.0 * k && w >= 48.0 {
             for (s, dy) in [
                 (format::file_size(entry.actual), 1.0),
-                (format::date(entry.mtime), 11.0),
+                (format::date(entry.mtime), 11.0 * k),
             ] {
                 let (sw, _) = self.text_width(&s);
                 let sx = if sw > w - 2.0 {
@@ -210,7 +239,7 @@ impl<'a> MapPainter<'a> {
                 };
                 self.text(&p, &s, sx, ty + dy, fg);
             }
-            ty -= 12.0;
+            ty -= 12.0 * k;
         }
         self.text(&p, &entry.name, tx, ty, fg);
     }

@@ -6,6 +6,7 @@ use crate::core::fs::{Drive, ScanJob, ScanStatus};
 use crate::core::model::EntryRef;
 use crate::ui::dialogs::{confirm_delete, error_dialog, scan_dialog, DriveDialog};
 use crate::ui::error::AppError;
+use crate::ui::settings::Theme;
 use eframe::egui;
 use std::path::PathBuf;
 
@@ -17,7 +18,7 @@ impl SpaceMonger {
     /// Scan `drive` (a whole volume if `is_drive`, otherwise a folder), dropping the current tree.
     pub(super) fn start_scan(&mut self, drive: Drive, is_drive: bool, ctx: &egui::Context) {
         if !is_drive {
-            self.show_free = false;
+            self.settings.layout.show_free = false;
         }
         if let Some(job) = self.scan.take() {
             job.cancel();
@@ -31,7 +32,11 @@ impl SpaceMonger {
         self.invalidate();
 
         let ctx = ctx.clone();
-        self.scan = Some(ScanJob::spawn(drive.clone(), move || ctx.request_repaint()));
+        self.scan = Some(ScanJob::spawn(
+            drive.clone(),
+            self.settings.scan_options(),
+            move || ctx.request_repaint(),
+        ));
         self.drive = Some(drive);
     }
 
@@ -39,12 +44,16 @@ impl SpaceMonger {
         let Some(job) = &mut self.scan else { return };
         match job.poll() {
             ScanStatus::Running => {
-                if let Some(t) = job.take_snapshot() {
+                if let Some(mut t) = job.take_snapshot() {
+                    t.set_dotfiles_hidden(self.settings.scan.ignore_hidden);
                     self.live = Some(t);
                     self.invalidate();
                 }
             }
-            ScanStatus::Finished(tree) => {
+            ScanStatus::Finished(mut tree) => {
+                if let Some(t) = &mut tree {
+                    t.set_dotfiles_hidden(self.settings.scan.ignore_hidden);
+                }
                 self.tree = tree;
                 self.live = None;
                 self.scan = None;
@@ -58,9 +67,9 @@ impl SpaceMonger {
             Action::Open => self.open_dialog(),
             Action::Reload => {
                 if let Some(d) = self.drive.clone() {
-                    let show_free = self.show_free;
+                    let show_free = self.settings.layout.show_free;
                     self.start_scan(d, true, ctx);
-                    self.show_free = show_free;
+                    self.settings.layout.show_free = show_free;
                 }
             }
             Action::ZoomFull => self.zoom_to(&[]),
@@ -71,7 +80,7 @@ impl SpaceMonger {
                 }
             }
             Action::ToggleFree => {
-                self.show_free = !self.show_free;
+                self.settings.layout.show_free = !self.settings.layout.show_free;
                 self.invalidate();
             }
             Action::RunOpen => self.open_selection(),
@@ -80,7 +89,11 @@ impl SpaceMonger {
                 let refs = self.selection.roots();
                 if !refs.is_empty() {
                     let paths = refs.iter().map(|r| t.path_of(r)).collect();
-                    self.confirm_delete = Some((refs, paths));
+                    if self.settings.general.confirm_delete {
+                        self.confirm_delete = Some((refs, paths));
+                    } else {
+                        self.delete_confirmed(refs, paths);
+                    }
                 }
             }
             Action::Hide => {
@@ -99,7 +112,11 @@ impl SpaceMonger {
                     self.invalidate();
                 }
             }
-            Action::ToggleDark => self.dark = !self.dark,
+            Action::ToggleDark => {
+                let dark = self.dark(ctx);
+                self.settings.general.theme = if dark { Theme::Light } else { Theme::Dark };
+            }
+            Action::Settings => self.settings_window.open = true,
             Action::ClearSelection => self.selection.clear(),
             Action::Frame => self.frame_selection(),
             Action::Nav(n) => self.navigate(n),

@@ -12,7 +12,6 @@ pub fn toolbar(ui: &mut egui::Ui, st: &CommandState) -> Option<Action> {
         has_sel,
         show_free,
         hidden,
-        dark,
     } = *st;
     ui.horizontal(|ui| {
         let mut act = None;
@@ -46,12 +45,7 @@ pub fn toolbar(ui: &mut egui::Ui, st: &CommandState) -> Option<Action> {
         };
         btn(ui, hidden > 0, egui::Button::new(unhide), Action::UnhideAll);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            btn(
-                ui,
-                true,
-                b(if dark { "☀" } else { "🌙" }),
-                Action::ToggleDark,
-            );
+            btn(ui, true, b("⚙ Settings"), Action::Settings);
         });
         act
     })

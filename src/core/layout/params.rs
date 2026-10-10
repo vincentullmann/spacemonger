@@ -10,11 +10,13 @@ pub struct LayoutParams {
     /// -20 (prefer vertical splits) .. +20 (prefer horizontal splits).
     pub bias: i32,
     pub show_free: bool,
+    /// Leave out entries named `.something` (matches [`crate::core::model::Tree::dotfiles_hidden`]).
+    pub hide_dotfiles: bool,
 }
 
 impl Default for LayoutParams {
     fn default() -> Self {
-        Self { density: 0, bias: 0, show_free: true }
+        Self { density: 0, bias: 0, show_free: true, hide_dotfiles: false }
     }
 }
 

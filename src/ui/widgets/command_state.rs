@@ -10,5 +10,4 @@ pub struct CommandState {
     pub show_free: bool,
     /// Number of hidden entries.
     pub hidden: usize,
-    pub dark: bool,
 }

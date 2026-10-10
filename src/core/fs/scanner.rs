@@ -1,4 +1,4 @@
-//! Parallel scanner: stays on one filesystem and counts hard links once.
+//! Parallel scanner: by default stays on one filesystem and counts hard links once.
 
 use super::live::{Chain, LiveDir};
 use super::metadata::meta;
@@ -11,6 +11,24 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+/// What the scanner follows and counts.
+#[derive(Clone, Copy, Debug)]
+pub struct ScanOptions {
+    /// Don't descend into other mounted filesystems.
+    pub one_filesystem: bool,
+    /// Count a file with several hard links once.
+    pub hardlinks_once: bool,
+}
+
+impl Default for ScanOptions {
+    fn default() -> Self {
+        Self {
+            one_filesystem: true,
+            hardlinks_once: true,
+        }
+    }
+}
+
 /// Shared state between the scanner threads and the UI.
 pub struct ScanControl {
     pub cancelled: AtomicBool,
@@ -22,10 +40,17 @@ pub struct ScanControl {
     seen: DashSet<(u64, u64)>,
     /// The tree so far, while the scan runs.
     live: Mutex<Option<Arc<LiveDir>>>,
+    pub opts: ScanOptions,
 }
 
 impl Default for ScanControl {
     fn default() -> Self {
+        Self::new(ScanOptions::default())
+    }
+}
+
+impl ScanControl {
+    pub fn new(opts: ScanOptions) -> Self {
         Self {
             cancelled: AtomicBool::new(false),
             files: AtomicU64::new(0),
@@ -34,11 +59,10 @@ impl Default for ScanControl {
             current: Mutex::new(String::new()),
             seen: DashSet::new(),
             live: Mutex::new(None),
+            opts,
         }
     }
-}
 
-impl ScanControl {
     pub fn cancel(&self) {
         self.cancelled.store(true, Ordering::Relaxed);
     }
@@ -92,13 +116,13 @@ fn scan_dir(path: &Path, dev: u64, ctl: &ScanControl, chain: &Chain) {
         let Some(m) = meta(&child) else { continue };
         let name = name.to_string_lossy().to_string();
         if m.is_dir {
-            if m.dev != dev || !ctl.first_sighting(m.dev, m.ino) {
+            if (ctl.opts.one_filesystem && m.dev != dev) || !ctl.first_sighting(m.dev, m.ino) {
                 continue; // other filesystem, or already seen via a bind mount
             }
             dirs.push(LiveDir::new(name, m.mtime));
             dir_paths.push(child);
         } else if m.is_file {
-            if m.nlink > 1 && !ctl.first_sighting(m.dev, m.ino) {
+            if ctl.opts.hardlinks_once && m.nlink > 1 && !ctl.first_sighting(m.dev, m.ino) {
                 continue; // hard link already counted
             }
             files.push(Entry {
@@ -121,7 +145,15 @@ fn scan_dir(path: &Path, dev: u64, ctl: &ScanControl, chain: &Chain) {
     chain.add_bytes(file_bytes);
 
     dirs.par_iter().zip(dir_paths).for_each(|(dir, p)| {
-        scan_dir(&p, dev, ctl, &Chain { dir, parent: Some(chain) });
+        scan_dir(
+            &p,
+            dev,
+            ctl,
+            &Chain {
+                dir,
+                parent: Some(chain),
+            },
+        );
         ctl.folders.fetch_add(1, Ordering::Relaxed);
     });
 }
@@ -145,6 +177,7 @@ fn make_tree(drive: &Drive, mut root: Folder, ctl: &ScanControl) -> Tree {
         num_files: ctl.files.load(Ordering::Relaxed),
         num_folders: ctl.folders.load(Ordering::Relaxed),
         hidden_count: 0,
+        dotfiles_hidden: false,
     }
 }
 
@@ -157,7 +190,17 @@ pub fn scan(drive: &Drive, ctl: &ScanControl) -> Option<Tree> {
         .ok()?;
     let root = Arc::new(LiveDir::new(String::new(), root_meta.mtime));
     *ctl.live() = Some(root.clone());
-    pool.install(|| scan_dir(&drive.root, root_meta.dev, ctl, &Chain { dir: &root, parent: None }));
+    pool.install(|| {
+        scan_dir(
+            &drive.root,
+            root_meta.dev,
+            ctl,
+            &Chain {
+                dir: &root,
+                parent: None,
+            },
+        )
+    });
     // Taking it back waits out any snapshot in progress, leaving the scan the only owner.
     ctl.live().take();
     if ctl.is_cancelled() {
@@ -189,7 +232,12 @@ mod tests {
         assert_eq!(tree.num_folders, 2);
 
         // root: [free?, a, top] sorted by size; find "a"
-        let ai = tree.root.entries.iter().position(|e| e.name == "a").unwrap();
+        let ai = tree
+            .root
+            .entries
+            .iter()
+            .position(|e| e.name == "a")
+            .unwrap();
         let a_size = tree.root.entries[ai].size;
         assert!(a_size >= 100_000);
         assert_eq!(

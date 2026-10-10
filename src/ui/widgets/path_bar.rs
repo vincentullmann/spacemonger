@@ -1,6 +1,5 @@
 //! Breadcrumb bar: one treemap-style box per folder from the scan root to the current view.
 
-use crate::constants::BAR_H;
 use crate::core::model::Tree;
 use crate::ui::painter::MapPainter;
 use crate::ui::palette::Palette;
@@ -12,9 +11,11 @@ pub fn path_bar(
     ui: &mut egui::Ui,
     tree: &Tree,
     zoom: &[usize],
-    pal: Palette,
+    pal: &Palette,
     font: &FontId,
+    bar_h: f32,
 ) -> Option<Vec<usize>> {
+    let bar_h = bar_h.round();
     // (label, zoom path, colour). Folders keep the colour they have in the treemap.
     let mut segs = vec![(
         tree.root_path.display().to_string(),
@@ -31,19 +32,17 @@ pub fn path_bar(
         }
     }
 
-    let (resp, painter) = ui.allocate_painter(
-        Vec2::new(ui.available_width(), BAR_H as f32),
-        Sense::click(),
-    );
+    let (resp, painter) =
+        ui.allocate_painter(Vec2::new(ui.available_width(), bar_h), Sense::click());
     let d = MapPainter::new(
         &painter,
         resp.rect.min,
         ui.ctx().pixels_per_point(),
-        pal,
+        pal.clone(),
         font.clone(),
     );
     let w = resp.rect.width() as i32;
-    d.fill(pal.background, 0.0, 0.0, w as f32, BAR_H as f32);
+    d.fill(pal.background, 0.0, 0.0, w as f32, bar_h);
 
     let pad = 12;
     let widths: Vec<i32> = segs
@@ -92,7 +91,7 @@ pub fn path_bar(
             Some(i) => (segs[i].0.as_str(), segs[i].2),
             None => ("…", pal.background),
         };
-        d.cell(bx as f32, 0.0, bw as f32, BAR_H as f32, color, hover, label);
+        d.cell(bx as f32, 0.0, bw as f32, bar_h, color, hover, label);
         if hover && resp.clicked() {
             clicked = seg.map(|i| segs[i].1.clone());
         }

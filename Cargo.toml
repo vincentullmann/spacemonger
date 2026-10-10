@@ -22,6 +22,9 @@ filesize = "0.2"
 thiserror = "2"
 lfs-core = "0.20"
 kurbo = "0.13.1"
+egui-probe = { version = "0.13", features = ["derive"] }
+colorgrad = { version = "0.9", default-features = false, features = ["std", "preset"] }
+fontdb = "0.24"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 raw-window-handle = "0.6"

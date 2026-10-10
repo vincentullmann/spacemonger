@@ -1,6 +1,6 @@
 //! A scan running on a background thread, with a second thread taking snapshots of it.
 
-use super::{scan, Drive, ScanControl};
+use super::{scan, Drive, ScanControl, ScanOptions};
 use crate::constants::LIVE_SCAN_INTERVAL;
 use crate::core::model::Tree;
 use poll_promise::Promise;
@@ -26,8 +26,12 @@ pub struct ScanJob {
 impl ScanJob {
     /// Start scanning `drive`. `on_update` runs on a background thread whenever a new snapshot
     /// or the result is ready.
-    pub fn spawn(drive: Drive, on_update: impl Fn() + Send + Sync + 'static) -> Self {
-        let ctl = Arc::new(ScanControl::default());
+    pub fn spawn(
+        drive: Drive,
+        opts: ScanOptions,
+        on_update: impl Fn() + Send + Sync + 'static,
+    ) -> Self {
+        let ctl = Arc::new(ScanControl::new(opts));
         let latest = Arc::new(Mutex::new(None));
         let done = Arc::new(AtomicBool::new(false));
         let on_update = Arc::new(on_update);
@@ -36,7 +40,9 @@ impl ScanJob {
         let (d, c, fin, notify) = (drive.clone(), ctl.clone(), done.clone(), on_update.clone());
         std::thread::spawn(move || {
             // A panicking scan counts as a failed one rather than taking the UI down with it.
-            let tree = catch_unwind(AssertUnwindSafe(|| scan(&d, &c))).ok().flatten();
+            let tree = catch_unwind(AssertUnwindSafe(|| scan(&d, &c)))
+                .ok()
+                .flatten();
             fin.store(true, Ordering::Relaxed);
             tx.send(tree);
             notify();
@@ -54,7 +60,12 @@ impl ScanJob {
             }
         });
 
-        Self { drive, ctl, result, latest }
+        Self {
+            drive,
+            ctl,
+            result,
+            latest,
+        }
     }
 
     /// Check for the result. `Finished` hands the tree over, so it's returned only once.

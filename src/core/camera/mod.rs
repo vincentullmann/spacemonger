@@ -14,7 +14,7 @@ mod state;
 pub use anchor::Anchor;
 pub use animation::Anim;
 pub use fit::Fit;
-pub use state::Camera;
+pub use state::{Camera, CameraParams};
 
 #[cfg(test)]
 mod tests;

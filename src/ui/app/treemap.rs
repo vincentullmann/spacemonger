@@ -1,7 +1,6 @@
 //! The treemap panel: pointer input, layout, painting, menu and tips.
 
 use super::SpaceMonger;
-use crate::constants::{INFOTIP_DELAY, WHEEL_ZOOM};
 use crate::core::actions::Action;
 use crate::core::geometry::{Point, Size, Vec2};
 use crate::core::layout::{self, hit_test};
@@ -20,8 +19,8 @@ impl SpaceMonger {
             &painter,
             resp.rect.min,
             ppp,
-            self.palette(),
-            self.font.clone(),
+            self.palette(ui.ctx()),
+            self.settings.map_font(),
         );
         let (w, h) = (resp.rect.width(), resp.rect.height());
         let mods = ui.input(|i| i.modifiers);
@@ -81,7 +80,7 @@ impl SpaceMonger {
             && self.tree.is_some()
         {
             let (dy, pinch) = ui.input(|i| (i.smooth_scroll_delta.y, i.zoom_delta()));
-            let k = pinch as f64 * (dy as f64 * WHEEL_ZOOM).exp();
+            let k = pinch as f64 * (dy as f64 * self.settings.wheel_zoom()).exp();
             if (k - 1.0).abs() > 1e-6 {
                 if let Some(p) = resp.hover_pos() {
                     let (x, y) = d.local(p);
@@ -156,8 +155,7 @@ impl SpaceMonger {
     }
 
     fn paint(&self, d: &MapPainter, w: f32, h: f32) {
-        let pal = self.palette();
-        d.fill(pal.background, 0.0, 0.0, w, h);
+        d.fill(d.palette().background, 0.0, 0.0, w, h);
         if let Some(tree) = self.shown_tree() {
             // Parents come before children, so a selected folder's children stay visible.
             for (i, it) in self.items.iter().enumerate() {
@@ -219,9 +217,9 @@ impl SpaceMonger {
         else {
             return;
         };
-        let held = self.hover_since.elapsed();
-        if held < INFOTIP_DELAY {
-            ui.ctx().request_repaint_after(INFOTIP_DELAY - held);
+        let (held, delay) = (self.hover_since.elapsed(), self.settings.infotip_delay());
+        if held < delay {
+            ui.ctx().request_repaint_after(delay - held);
             return;
         }
         let it = &self.items[hi];

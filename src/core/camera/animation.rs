@@ -1,7 +1,6 @@
 //! Animated camera moves.
 
 use super::Fit;
-use crate::constants::ANIM_DURATION;
 use crate::core::geometry::{Point, Rect, Size, Vec2};
 use crate::core::layout::{Reshape, Scene};
 use crate::utils::math::{ease_out_cubic, geo_lerp};
@@ -12,6 +11,8 @@ use std::time::Instant;
 /// changing shape on the way.
 pub struct Anim {
     pub start: Instant,
+    /// Length in seconds; 0 or less finishes at once.
+    pub duration: f32,
     pub target: Vec<usize>,
     pub from_cam: Rect,
     /// Target folder's natural centre at start / end.
@@ -30,13 +31,20 @@ pub struct Anim {
 
 impl Anim {
     pub fn done(&self) -> bool {
-        self.start.elapsed().as_secs_f32() >= ANIM_DURATION
+        self.progress() >= 1.0
+    }
+
+    /// 0..=1 through the move.
+    fn progress(&self) -> f64 {
+        if self.duration <= 0.0 {
+            return 1.0;
+        }
+        (self.start.elapsed().as_secs_f32() / self.duration).min(1.0) as f64
     }
 
     /// Camera and reshapes partway through the move, in a `view`-sized window.
     pub fn state(&self, scene: &Scene, view: Size) -> (Rect, Vec<Reshape>) {
-        let t = (self.start.elapsed().as_secs_f32() / ANIM_DURATION).min(1.0) as f64;
-        let e = ease_out_cubic(t);
+        let e = ease_out_cubic(self.progress());
         let (c0, c1) = (self.from_cam, self.end_cam);
 
         // Even zoom about the fixed point of the whole move (a plain pan if there's no zoom).

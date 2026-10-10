@@ -17,5 +17,6 @@ pub enum Action {
     ToggleDark,
     ClearSelection,
     Frame,
+    Settings,
     Nav(Nav),
 }

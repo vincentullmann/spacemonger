@@ -1,7 +1,7 @@
 //! Camera state and the direct manipulations: pan, wheel zoom, reveal.
 
 use super::{Anchor, Anim, Fit};
-use crate::constants::MAX_ZOOM;
+use crate::constants::{ANIM_DURATION, FRAME_FILL, MAX_ZOOM};
 use crate::core::geometry::{Point, Rect, Size, TranslateScale, Vec2};
 use crate::core::layout::{self, child_boxes, Item, Reshape, Scene};
 use crate::core::model::Kind;
@@ -20,6 +20,22 @@ pub struct Camera {
     pub anim: Option<Anim>,
     /// Anchor held during a window resize, and when the last resize step happened.
     pub(super) resize_anchor: Option<(Option<Anchor>, Instant)>,
+    pub params: CameraParams,
+}
+
+/// User-tunable camera behaviour.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CameraParams {
+    /// Length of a camera move in seconds; 0 jumps straight there.
+    pub anim_duration: f32,
+    /// Framing the selection: share of the view its bounding box may take up.
+    pub frame_fill: f64,
+}
+
+impl Default for CameraParams {
+    fn default() -> Self {
+        Self { anim_duration: ANIM_DURATION, frame_fill: FRAME_FILL }
+    }
 }
 
 impl Camera {

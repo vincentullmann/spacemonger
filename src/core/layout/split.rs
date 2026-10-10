@@ -5,7 +5,7 @@ use crate::core::geometry::Rect;
 use crate::core::model::{Entry, Folder, Kind};
 
 pub(super) fn weight(e: &Entry, p: LayoutParams) -> u64 {
-    if e.hidden || (matches!(e.kind, Kind::Free) && !p.show_free) {
+    if e.hidden || (matches!(e.kind, Kind::Free) && !p.show_free) || (p.hide_dotfiles && e.name.starts_with('.')) {
         0
     } else {
         e.size

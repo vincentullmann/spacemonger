@@ -10,8 +10,14 @@ pub struct Tree {
     pub free_space: u64,
     pub num_files: u64,
     pub num_folders: u64,
-    /// Number of entries currently hidden from the view.
+    /// Number of entries currently hidden from the view by the user.
     pub hidden_count: usize,
+    /// Entries named `.something` are left out (see [`Tree::set_dotfiles_hidden`]).
+    pub dotfiles_hidden: bool,
+}
+
+fn is_dotfile(e: &Entry) -> bool {
+    e.name.starts_with('.')
 }
 
 impl Tree {
@@ -64,29 +70,51 @@ impl Tree {
         self.hidden_count += 1;
     }
 
-    /// Bring back every hidden entry and restore ancestor sizes.
+    /// Bring back every entry the user hid and restore ancestor sizes.
     pub fn unhide_all(&mut self) {
-        fn walk(f: &mut Folder) -> u64 {
-            let mut restored = 0;
+        fn walk(f: &mut Folder) {
             for e in &mut f.entries {
-                let inner = match &mut e.kind {
-                    Kind::Dir(c) => walk(c),
-                    _ => 0,
-                };
-                e.size += inner;
-                e.actual += inner;
-                if e.hidden {
-                    e.hidden = false;
-                    restored += e.size;
-                } else {
-                    restored += inner;
+                e.hidden = false;
+                if let Kind::Dir(c) = &mut e.kind {
+                    walk(c);
                 }
             }
-            f.total += restored;
-            restored
         }
         walk(&mut self.root);
         self.hidden_count = 0;
+        self.recompute_sizes();
+    }
+
+    /// Leave out (or bring back) entries whose name starts with a dot.
+    pub fn set_dotfiles_hidden(&mut self, on: bool) {
+        if self.dotfiles_hidden != on {
+            self.dotfiles_hidden = on;
+            self.recompute_sizes();
+        }
+    }
+
+    /// Whether an entry is left out of folder sizes and the layout.
+    pub fn is_left_out(&self, e: &Entry) -> bool {
+        e.hidden || (self.dotfiles_hidden && is_dotfile(e))
+    }
+
+    /// Recompute every folder's size from the entries that are still shown.
+    fn recompute_sizes(&mut self) {
+        fn walk(f: &mut Folder, dots: bool) -> u64 {
+            let mut total = 0;
+            for e in &mut f.entries {
+                if let Kind::Dir(c) = &mut e.kind {
+                    e.size = walk(c, dots);
+                    e.actual = e.size;
+                }
+                if !(e.hidden || (dots && is_dotfile(e))) {
+                    total += e.size;
+                }
+            }
+            f.total = total;
+            total
+        }
+        walk(&mut self.root, self.dotfiles_hidden);
     }
 
     fn folder_at_mut(&mut self, path: &[usize]) -> Option<&mut Folder> {
@@ -165,6 +193,7 @@ mod tests {
             num_files: 3,
             num_folders: 1,
             hidden_count: 0,
+            dotfiles_hidden: false,
         };
         t.hide(&[0], 0); // d/f
         assert_eq!((t.root.total, t.root.entries[0].size), (12, 5));
@@ -176,5 +205,35 @@ mod tests {
         assert_eq!(t.folder_at(&[0]).unwrap().total, 15);
         assert_eq!(t.hidden_count, 0);
         assert!(!t.root.entries[0].hidden);
+    }
+
+    #[test]
+    fn dotfiles_leave_and_come_back() {
+        let sub = Folder { entries: vec![file(".git", 10), file("g", 5)], total: 15 };
+        let root = Folder {
+            entries: vec![
+                Entry { name: "d".into(), size: 15, actual: 15, mtime: 0, kind: Kind::Dir(Box::new(sub)), hidden: false },
+                file(".x", 7),
+            ],
+            total: 22,
+        };
+        let mut t = Tree {
+            root,
+            root_path: PathBuf::from("/"),
+            total_space: 0,
+            free_space: 0,
+            num_files: 3,
+            num_folders: 1,
+            hidden_count: 0,
+            dotfiles_hidden: false,
+        };
+        t.set_dotfiles_hidden(true);
+        assert_eq!((t.root.total, t.root.entries[0].size), (5, 5));
+        t.hide(&[0], 1); // d/g
+        assert_eq!(t.root.total, 0);
+        t.unhide_all();
+        assert_eq!(t.root.total, 5);
+        t.set_dotfiles_hidden(false);
+        assert_eq!((t.root.total, t.root.entries[0].size), (22, 15));
     }
 }

@@ -1,7 +1,7 @@
 //! Camera moves that frame something: zoom to a folder, frame a set of entries, zoom out.
 
 use super::{Anim, Camera, Fit};
-use crate::constants::{FRAME_FILL, MAX_ZOOM};
+use crate::constants::MAX_ZOOM;
 use crate::core::geometry::{Rect, RectExt};
 use crate::core::layout::{self, Reshape, Scene};
 use std::time::Instant;
@@ -19,10 +19,11 @@ impl Camera {
                 .filter(|b| b.width() > 1e-9 && b.height() > 1e-9)
         };
         // Folder frames don't scale with the camera, so converge on it.
+        let fill = self.params.frame_fill;
         let mut cam = self.cam?;
         for _ in 0..40 {
             let b = bbox(cam)?;
-            let k = (FRAME_FILL * vw / b.width()).min(FRAME_FILL * vh / b.height()).min(MAX_ZOOM * vw / cam.width());
+            let k = (fill * vw / b.width()).min(fill * vh / b.height()).min(MAX_ZOOM * vw / cam.width());
             let bc = b.center();
             let off = self.view.to_rect().center() - bc;
             cam = Self::scaled(cam, bc, k) + off;
@@ -81,6 +82,7 @@ impl Camera {
         }
         self.anim = Some(Anim {
             start: Instant::now(),
+            duration: self.params.anim_duration,
             target: path.to_vec(),
             from_cam: cam0,
             n0: n0.center(),
@@ -104,6 +106,7 @@ impl Camera {
         }
         self.anim = Some(Anim {
             start: Instant::now(),
+            duration: self.params.anim_duration,
             target: Vec::new(),
             from_cam: cam0,
             n0: cam0.center(),

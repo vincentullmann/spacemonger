@@ -13,15 +13,14 @@ use crate::core::model::{Entry, EntryRef, Tree};
 use crate::core::selection::{Marquee, Selection};
 use crate::ui::dialogs::DriveDialog;
 use crate::ui::error::AppError;
-use crate::ui::keymap::action_for_keys;
+use crate::ui::fonts;
 use crate::ui::palette::Palette;
-use crate::ui::settings::Settings;
+use crate::ui::settings::{Settings, SettingsWindow};
 use crate::ui::title::window_title;
 use crate::ui::widgets::{path_bar, toolbar, CommandState};
-use eframe::egui::{self, FontId, Vec2};
+use eframe::egui::{self, Vec2};
 use std::path::PathBuf;
 use std::time::Instant;
-
 
 pub struct SpaceMonger {
     tree: Option<Tree>,
@@ -43,10 +42,10 @@ pub struct SpaceMonger {
     hovered: Option<usize>,
     hover_since: Instant,
 
-    show_free: bool,
-    dark: bool,
-    applied_dark: Option<bool>,
-    params: LayoutParams,
+    settings: Settings,
+    settings_window: SettingsWindow,
+    /// Settings as of the last frame, to react to what changed.
+    applied: Option<Settings>,
 
     dialog: Option<DriveDialog>,
     scan: Option<ScanJob>,
@@ -54,7 +53,6 @@ pub struct SpaceMonger {
     confirm_delete: Option<(Vec<EntryRef>, Vec<PathBuf>)>,
     error: Option<AppError>,
     title: String,
-    font: FontId,
 }
 
 impl SpaceMonger {
@@ -73,17 +71,16 @@ impl SpaceMonger {
             marquee: None,
             hovered: None,
             hover_since: Instant::now(),
-            show_free: settings.show_free,
-            dark: settings.dark,
-            applied_dark: None,
-            params: LayoutParams::default(),
+            settings,
+            settings_window: SettingsWindow::default(),
+            applied: None,
             dialog: None,
             scan: None,
             confirm_delete: None,
             error: None,
             title: String::new(),
-            font: FontId::proportional(10.0),
         };
+        app.apply_settings(&cc.egui_ctx);
         match open_path {
             Some(p) => match drive_for_path(&p) {
                 Ok(d) => app.start_scan(d, false, &cc.egui_ctx),
@@ -94,8 +91,43 @@ impl SpaceMonger {
         app
     }
 
-    fn palette(&self) -> Palette {
-        Palette::new(self.dark)
+    /// Dark colours in effect (the theme may follow the system).
+    fn dark(&self, ctx: &egui::Context) -> bool {
+        ctx.theme() == egui::Theme::Dark
+    }
+
+    fn palette(&self, ctx: &egui::Context) -> Palette {
+        Palette::new(self.dark(ctx), &self.settings)
+    }
+
+    /// Push changed settings out to egui, the camera, the tree and the layout.
+    fn apply_settings(&mut self, ctx: &egui::Context) {
+        let s = &self.settings;
+        let old = self.applied.as_ref();
+        if old.is_none_or(|o| o.general.theme != s.general.theme) {
+            ctx.set_theme(s.general.theme);
+        }
+        if old.is_none_or(|o| o.font.family != s.font.family) {
+            fonts::apply(ctx, &s.font.family);
+        }
+        if old.is_none_or(|o| {
+            o.layout.decimal_units != s.layout.decimal_units
+                || o.layout.date_format != s.layout.date_format
+        }) {
+            crate::utils::format::set_options(s.format_options());
+        }
+        self.camera.params = s.camera_params();
+        if let Some(t) = &mut self.tree {
+            if t.dotfiles_hidden != s.scan.ignore_hidden {
+                t.set_dotfiles_hidden(s.scan.ignore_hidden);
+                self.selection.clear();
+                self.generation += 1;
+            }
+        }
+        if old.is_some_and(|o| o.layout != s.layout) {
+            self.generation += 1;
+        }
+        self.applied = Some(self.settings.clone());
     }
 
     /// Force a layout rebuild (the tree or layout settings changed).
@@ -104,7 +136,8 @@ impl SpaceMonger {
     }
 
     fn params(&self) -> LayoutParams {
-        LayoutParams { show_free: self.show_free, ..self.params }
+        let dots = self.shown_tree().is_some_and(|t| t.dotfiles_hidden);
+        self.settings.layout_params(dots)
     }
 
     /// The tree to draw: the scanned one, or a running scan's snapshot.
@@ -119,7 +152,9 @@ impl SpaceMonger {
     /// Index into `items` of the primary selection, if it's laid out.
     fn selected_item(&self) -> Option<usize> {
         let r = self.selection.primary()?;
-        self.items.iter().position(|it| it.index == Some(r.index) && it.folder == r.folder)
+        self.items
+            .iter()
+            .position(|it| it.index == Some(r.index) && it.folder == r.folder)
     }
 
     fn item_ref(&self, idx: usize) -> Option<EntryRef> {
@@ -133,9 +168,8 @@ impl SpaceMonger {
             zoomed: self.camera.zoomed(),
             sel_folder: self.selected_entry().is_some_and(|e| e.child().is_some()),
             has_sel: !self.selection.is_empty(),
-            show_free: self.show_free,
+            show_free: self.settings.layout.show_free,
             hidden: self.tree.as_ref().map_or(0, |t| t.hidden_count),
-            dark: self.dark,
         }
     }
 
@@ -148,25 +182,28 @@ impl eframe::App for SpaceMonger {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         #[cfg(target_os = "linux")]
-        crate::ui::x11_sync::install(frame, &ctx, self.palette().background);
+        {
+            let bg = self.palette(&ctx).background;
+            crate::ui::x11_sync::install(frame, &ctx, bg);
+            crate::ui::x11_sync::set_background(bg);
+        }
         #[cfg(not(target_os = "linux"))]
         let _ = frame;
-        if self.applied_dark != Some(self.dark) {
-            self.applied_dark = Some(self.dark);
-            ctx.set_visuals(if self.dark { egui::Visuals::dark() } else { egui::Visuals::light() });
-            #[cfg(target_os = "linux")]
-            crate::ui::x11_sync::set_background(self.palette().background);
-        }
         self.poll_scan();
 
         let st = self.command_state();
-        let mut act = egui::Panel::top("toolbar").show(ui, |ui| toolbar(ui, &st)).inner;
-        let pal = self.palette();
+        let mut act = egui::Panel::top("toolbar")
+            .show(ui, |ui| toolbar(ui, &st))
+            .inner;
+        let pal = self.palette(&ctx);
+        let (bar_font, bar_h) = (self.settings.bar_font(), self.settings.path_bar.height);
         let tm = egui::CentralPanel::no_frame()
             .frame(egui::Frame::NONE.fill(pal.background))
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing = Vec2::ZERO;
-                let target = self.shown_tree().and_then(|t| path_bar(ui, t, &self.zoom, pal, &self.font));
+                let target = self
+                    .shown_tree()
+                    .and_then(|t| path_bar(ui, t, &self.zoom, &pal, &bar_font, bar_h));
                 if let Some(target) = target.filter(|_| self.tree.is_some()) {
                     self.zoom_to(&target);
                 }
@@ -175,14 +212,18 @@ impl eframe::App for SpaceMonger {
             .inner;
         act = act.or(tm);
 
-        if !self.modal_open() {
-            act = act.or(ctx.input(action_for_keys));
+        if !self.modal_open() && !self.settings_window.capturing() && !ctx.text_edit_focused() {
+            act = act.or(ctx.input(|i| self.settings.keys.action_for_keys(i)));
         }
         if let Some(a) = act {
             self.run(a, &ctx);
         }
 
         self.dialogs(&ctx);
+        self.settings_window.show(&ctx, &mut self.settings);
+        if self.applied.as_ref() != Some(&self.settings) {
+            self.apply_settings(&ctx);
+        }
 
         let title = window_title(self.tree.as_ref(), &self.selection, &self.zoom);
         if title != self.title {
@@ -202,11 +243,13 @@ impl eframe::App for SpaceMonger {
         crate::ui::x11_sync::acknowledge();
     }
 
-    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        self.palette().background.to_normalized_gamma_f32()
+    fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {
+        Palette::new(visuals.dark_mode, &self.settings)
+            .background
+            .to_normalized_gamma_f32()
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        Settings { dark: self.dark, show_free: self.show_free }.save(storage);
+        self.settings.save(storage);
     }
 }
