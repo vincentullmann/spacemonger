@@ -1,7 +1,7 @@
 //! The contents of the General, Scan and Display tabs.
 
 use super::form::{self, group};
-use super::{Font, General, Labels, Layout, PathBar, Scan, Settings, Theme, Tiles, Tooltips};
+use super::{General, Labels, Layout, PathBar, Scan, Settings, Text, Theme, Tiles, Tooltips};
 use crate::ui::palette::{Palette, Scheme};
 use crate::utils::format::SizeFormat;
 use eframe::egui::Ui;
@@ -136,14 +136,28 @@ pub fn scan(ui: &mut Ui, s: &mut Settings) {
 
 pub fn display(ui: &mut Ui, s: &mut Settings) {
     let dark = ui.visuals().dark_mode;
-    let (f, d) = (&mut s.font, Font::default());
-    group(ui, "Font", |r| {
+    let (f, d) = (&mut s.text, Text::default());
+    group(ui, "Text", |r| {
         r.row(
-            "Family",
+            "Font",
             "Font for box labels and the path bar. Default is the built-in font.",
             &mut f.family,
             &d.family,
             form::font_family,
+        );
+        r.row(
+            "Size format",
+            "How file sizes are shown in labels and tips. Totals (title bar, free space) use binary or decimal units.",
+            &mut f.size_format,
+            &d.size_format,
+            |ui, v| form::choice(ui, "size_format", v, &SIZE_FORMATS),
+        );
+        r.row(
+            "Date format",
+            "strftime pattern for dates, e.g. %Y-%m-%d %H:%M. An invalid pattern falls back to the default.",
+            &mut f.date_format,
+            &d.date_format,
+            |ui, v| ui.text_edit_singleline(v),
         );
     });
 
@@ -255,20 +269,6 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
                 &mut lb.shown,
                 &dl.shown,
                 |ui, v| form::shown(ui, "label_shown", v),
-            );
-            r.row(
-                "Size format",
-                "How file sizes are shown in labels and tips. Totals (title bar, free space) use binary or decimal units.",
-                &mut lb.size_format,
-                &dl.size_format,
-                |ui, v| form::choice(ui, "size_format", v, &SIZE_FORMATS),
-            );
-            r.row(
-                "Date format",
-                "strftime pattern for dates, e.g. %Y-%m-%d %H:%M. An invalid pattern falls back to the default.",
-                &mut lb.date_format,
-                &dl.date_format,
-                |ui, v| ui.text_edit_singleline(v),
             );
         });
     });

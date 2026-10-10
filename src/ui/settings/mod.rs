@@ -33,7 +33,8 @@ pub struct Settings {
     pub scan: Scan,
     pub tiles: Tiles,
     pub labels: Labels,
-    pub font: Font,
+    #[serde(alias = "font")]
+    pub text: Text,
     pub path_bar: PathBar,
     pub tooltips: Tooltips,
     pub keys: Keymap,
@@ -107,8 +108,6 @@ pub struct Labels {
     pub density: i32,
     /// What file labels show.
     pub shown: Shown,
-    pub size_format: SizeFormat,
-    pub date_format: String,
 }
 
 impl Default for Labels {
@@ -118,8 +117,6 @@ impl Default for Labels {
             shadow: false,
             density: 0,
             shown: Shown::default(),
-            size_format: SizeFormat::Bytes,
-            date_format: DEFAULT_DATE_FORMAT.to_string(),
         }
     }
 }
@@ -205,11 +202,24 @@ impl Tiles {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+/// How text in the map, path bar and tips looks: font, size and date formats.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
-pub struct Font {
+pub struct Text {
     /// System font family for labels and the path bar; empty for the built-in font.
     pub family: String,
+    pub size_format: SizeFormat,
+    pub date_format: String,
+}
+
+impl Default for Text {
+    fn default() -> Self {
+        Self {
+            family: String::new(),
+            size_format: SizeFormat::Bytes,
+            date_format: DEFAULT_DATE_FORMAT.to_string(),
+        }
+    }
 }
 
 /// Which details a file label or the tooltip shows.
@@ -352,8 +362,8 @@ impl Settings {
 
     pub fn format_options(&self) -> FormatOptions {
         FormatOptions {
-            size: self.labels.size_format,
-            date_format: self.labels.date_format.clone(),
+            size: self.text.size_format,
+            date_format: self.text.date_format.clone(),
         }
     }
 

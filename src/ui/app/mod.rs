@@ -110,8 +110,8 @@ impl SpaceMonger {
         if old.is_none_or(|o| o.general.theme != s.general.theme) {
             ctx.set_theme(s.general.theme);
         }
-        if old.is_none_or(|o| o.font.family != s.font.family) {
-            fonts::apply(ctx, &s.font.family);
+        if old.is_none_or(|o| o.text.family != s.text.family) {
+            fonts::apply(ctx, &s.text.family);
         }
         if old.is_none_or(|o| o.format_options() != s.format_options()) {
             crate::utils::format::set_options(s.format_options());
