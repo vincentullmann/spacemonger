@@ -22,7 +22,7 @@ pub fn infotip(ctx: &egui::Context, pos: Pos2, entry: &Entry, path: &Path, opts:
                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
                 ui.label(text(entry.name.clone()).strong());
                 if opts.show_path {
-                    ui.label(text(path.display().to_string()).weak());
+                    ui.label(text(path.display().to_string()));
                 }
                 if opts.show_size {
                     ui.label(text(format::file_size(entry.actual)));
