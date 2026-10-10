@@ -2409,6 +2409,7 @@ dependencies = [
  "chrono",
  "eframe",
  "humansize",
+ "indexmap",
  "num-format",
  "open",
  "rayon",

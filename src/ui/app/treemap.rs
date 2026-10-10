@@ -9,7 +9,6 @@ use crate::core::selection::{Marquee, Selection};
 use crate::ui::painter::MapPainter;
 use crate::ui::widgets::{context_menu, infotip};
 use eframe::egui::{self, Modifiers, PointerButton, Response, Sense};
-use std::collections::HashSet;
 use std::time::Instant;
 
 impl SpaceMonger {
@@ -132,10 +131,9 @@ impl SpaceMonger {
         let pal = self.palette();
         d.fill(pal.background, 0.0, 0.0, w, h);
         if let Some(tree) = &self.tree {
-            let sel: HashSet<&EntryRef> = self.selection.iter().collect();
             // Parents come before children, so a selected folder's children stay visible.
             for (i, it) in self.items.iter().enumerate() {
-                let is_sel = it.index.is_some_and(|k| sel.contains(&EntryRef::new(it.folder.clone(), k)));
+                let is_sel = it.index.is_some_and(|k| self.selection.contains(&EntryRef::new(it.folder.clone(), k)));
                 d.item(tree, it, is_sel, self.hovered == Some(i));
             }
         }

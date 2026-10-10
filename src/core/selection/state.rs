@@ -1,13 +1,14 @@
 //! The set of selected entries.
 
 use crate::core::model::EntryRef;
+use indexmap::IndexSet;
 use std::collections::HashSet;
 
 /// Selected entries in the order they were picked; the last one is the primary (used by
-/// Zoom In, the window title and Shift+arrow extension).
+/// Zoom In, the window title and Shift+arrow extension). Equality ignores order.
 #[derive(Clone, Default, Debug, PartialEq)]
 pub struct Selection {
-    items: Vec<EntryRef>,
+    items: IndexSet<EntryRef>,
 }
 
 impl Selection {
@@ -33,7 +34,7 @@ impl Selection {
 
     /// Is `r` the one and only selected entry?
     pub fn is_only(&self, r: &EntryRef) -> bool {
-        self.items.len() == 1 && self.items[0] == *r
+        self.items.len() == 1 && self.items.contains(r)
     }
 
     pub fn clear(&mut self) {
@@ -47,18 +48,13 @@ impl Selection {
 
     /// Add an entry unless it's already in (Shift+click).
     pub fn add(&mut self, r: EntryRef) {
-        if !self.items.contains(&r) {
-            self.items.push(r);
-        }
+        self.items.insert(r);
     }
 
     /// Add an entry, or take it out if it's already in (Ctrl+click).
     pub fn toggle(&mut self, r: EntryRef) {
-        match self.items.iter().position(|x| *x == r) {
-            Some(k) => {
-                self.items.remove(k);
-            }
-            None => self.items.push(r),
+        if !self.items.shift_remove(&r) {
+            self.items.insert(r);
         }
     }
 
@@ -69,8 +65,8 @@ impl Selection {
         if len >= 2 && self.items[len - 2] == target {
             self.items.pop();
         } else {
-            self.items.retain(|x| *x != target);
-            self.items.push(target);
+            self.items.shift_remove(&target);
+            self.items.insert(target);
         }
     }
 
