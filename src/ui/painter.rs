@@ -1,0 +1,156 @@
+//! Treemap-style drawing on pixel-snapped coordinates (port of
+//! FolderView.minimalDrawDisplayFolder & friends).
+
+use crate::core::layout::Item;
+use crate::core::model::Tree;
+use crate::helpers::egui::snap;
+use crate::ui::palette::Palette;
+use crate::utils::format;
+use eframe::egui::{self, Align2, Color32, FontId, Painter, Pos2, Stroke, Vec2};
+
+/// Draws boxes and labels in view coordinates relative to `origin` (snapped to the pixel grid).
+pub struct MapPainter<'a> {
+    painter: &'a Painter,
+    origin: Pos2,
+    ppp: f32,
+    pal: Palette,
+    font: FontId,
+}
+
+impl<'a> MapPainter<'a> {
+    /// A painter whose view origin is `min` (the allocated rect's top-left).
+    pub fn new(painter: &'a Painter, min: Pos2, ppp: f32, pal: Palette, font: FontId) -> Self {
+        Self { painter, origin: snap(min, ppp), ppp, pal, font }
+    }
+
+    /// Screen position to view coordinates.
+    pub fn local(&self, p: Pos2) -> (f32, f32) {
+        (p.x - self.origin.x, p.y - self.origin.y)
+    }
+
+    fn snap(&self, p: Pos2) -> Pos2 {
+        snap(p, self.ppp)
+    }
+
+    /// Screen rect for a view-coordinate box, snapped to the pixel grid.
+    pub fn rect(&self, x: f32, y: f32, w: f32, h: f32) -> egui::Rect {
+        let r = egui::Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, h)).translate(self.origin.to_vec2());
+        egui::Rect::from_min_max(self.snap(r.min), self.snap(r.max))
+    }
+
+    pub fn fill(&self, c: Color32, x: f32, y: f32, w: f32, h: f32) {
+        if w > 0.0 && h > 0.0 {
+            self.painter.rect_filled(self.rect(x, y, w, h), 0.0, c);
+        }
+    }
+
+    pub fn text_width(&self, s: &str) -> (f32, f32) {
+        let g = self.painter.layout_no_wrap(s.to_string(), self.font.clone(), Color32::WHITE);
+        (g.size().x.ceil(), g.size().y.ceil())
+    }
+
+    fn text(&self, p: &Painter, s: &str, x: f32, y: f32, c: Color32) {
+        let pos = self.snap(self.origin + Vec2::new(x, y));
+        p.text(pos, Align2::LEFT_TOP, s, self.font.clone(), c);
+    }
+
+    /// A path-bar box in the treemap's style: fill, thin border (2px black on hover), label on the left.
+    #[allow(clippy::too_many_arguments)]
+    pub fn cell(&self, x: f32, y: f32, w: f32, h: f32, color: Color32, hover: bool, label: &str) {
+        let fill = if hover { color.lerp_to_gamma(Color32::WHITE, 0.2) } else { color };
+        self.fill(fill, x + 1.0, y + 1.0, w - 1.0, h - 1.0);
+        let (bc, bw) = if hover { (Color32::BLACK, 2.0) } else { (self.pal.border, 1.0) };
+        self.painter.rect_stroke(
+            self.rect(x + 1.0, y + 1.0, w - 1.0, h - 1.0),
+            0.0,
+            Stroke::new(bw / self.ppp, bc),
+            egui::StrokeKind::Inside,
+        );
+        let (_, th) = self.text_width(label);
+        let p = self.painter.with_clip_rect(self.rect(x, y, w, h).intersect(self.painter.clip_rect()));
+        self.text(&p, label, x + 6.0, y + 1.0 + (h - 1.0 - th) / 2.0, self.pal.text);
+    }
+
+    /// Rectangle-selection overlay between two view points.
+    pub fn marquee(&self, a: (f32, f32), b: (f32, f32)) {
+        let r = self.rect(a.0.min(b.0), a.1.min(b.1), (a.0 - b.0).abs(), (a.1 - b.1).abs());
+        let c = self.pal.text;
+        self.painter.rect_filled(r, 0.0, c.gamma_multiply(0.12));
+        self.painter.rect_stroke(r, 0.0, Stroke::new(1.0, c), egui::StrokeKind::Inside);
+    }
+
+    /// Flat box: a single fill with a 1px gap to its neighbours, plus its label.
+    pub fn item(&self, tree: &Tree, it: &Item, sel: bool, hover: bool) {
+        let pal = &self.pal;
+        let (x, y, w, h) = (it.x, it.y, it.w + 1.0, it.h + 1.0);
+
+        if !it.is_free {
+            let color = if sel {
+                pal.text
+            } else if hover {
+                pal.depth(it.depth).lerp_to_gamma(Color32::WHITE, 0.2)
+            } else {
+                pal.depth(it.depth)
+            };
+            self.fill(color, x + 1.0, y + 1.0, w - 2.0, h - 2.0);
+
+            // 1 physical pixel border just inside the fill (2 when hovered).
+            if w > 4.0 && h > 4.0 {
+                let border_color = if sel {
+                    pal.text
+                } else if hover {
+                    Color32::BLACK
+                } else {
+                    pal.border
+                };
+                let border_width = if hover { 2.0 } else { 1.0 };
+                let r = self.rect(x + 1.0, y + 1.0, w - 2.0, h - 2.0);
+                self.painter.rect_stroke(
+                    r,
+                    0.0,
+                    Stroke::new(border_width / self.ppp, border_color),
+                    egui::StrokeKind::Inside,
+                );
+            }
+        }
+
+        if !it.labeled {
+            return;
+        }
+        let Some(entry) = it.index.and_then(|i| tree.entry_at(&it.folder, i)) else { return };
+        let p = self.painter.with_clip_rect(self.rect(x, y, w, h).intersect(self.painter.clip_rect()));
+        let fg = if sel { pal.background } else { pal.text };
+
+        if it.is_free {
+            let ts = tree.total_space.max(1);
+            let fp = tree.free_space as u128 * 1000 / ts as u128;
+            let lines = [
+                format!("<Free Space: {}.{}%>", fp / 10, fp % 10),
+                format!("{} Free", format::size_string(tree.free_space, tree.total_space, false)),
+                format!("Files Total:  {}", tree.num_files),
+                format!("Folders Total:  {}", tree.num_folders),
+            ];
+            let (lw, lh) = self.text_width(&lines[0]);
+            let tx = if lw > w - 2.0 { x + 2.0 } else { x + (w - lw) / 2.0 };
+            let ty = if lh > h - 2.0 { y + 1.0 } else { y + (h - lh) / 2.0 };
+            for (line, dy) in lines.iter().zip([-18.0, -6.0, 6.0, 15.0]) {
+                self.text(&p, line, tx, ty + dy, pal.text);
+            }
+            return;
+        }
+
+        let (tw, th) = self.text_width(&entry.name);
+        let tx = if tw > w - 2.0 || it.is_folder { x + 3.0 } else { x + (w - tw) / 2.0 };
+        let mut ty = if th > h - 2.0 || it.is_folder { y + 2.0 } else { y + (h - th) / 2.0 };
+
+        if !it.is_folder && h >= 36.0 && w >= 48.0 {
+            for (s, dy) in [(format::file_size(entry.actual), 1.0), (format::date(entry.mtime), 11.0)] {
+                let (sw, _) = self.text_width(&s);
+                let sx = if sw > w - 2.0 { x + 3.0 } else { x + (w - sw) / 2.0 };
+                self.text(&p, &s, sx, ty + dy, fg);
+            }
+            ty -= 12.0;
+        }
+        self.text(&p, &entry.name, tx, ty, fg);
+    }
+}
