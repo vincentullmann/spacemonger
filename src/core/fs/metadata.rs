@@ -25,6 +25,7 @@ pub(super) fn meta(path: &Path) -> Option<Meta> {
         .ok()
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
         .map_or(0, |d| d.as_secs() as i64);
+    let alloc = filesize::file_real_size_fast(path, &m).unwrap_or(m.len());
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
@@ -35,7 +36,7 @@ pub(super) fn meta(path: &Path) -> Option<Meta> {
             ino: m.ino(),
             nlink: m.nlink(),
             len: m.len(),
-            alloc: m.blocks() * 512,
+            alloc,
             mtime,
         })
     }
@@ -48,7 +49,7 @@ pub(super) fn meta(path: &Path) -> Option<Meta> {
             ino: 0,
             nlink: 1,
             len: m.len(),
-            alloc: m.len(),
+            alloc,
             mtime,
         })
     }

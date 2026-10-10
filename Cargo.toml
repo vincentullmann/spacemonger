@@ -19,6 +19,7 @@ serde = { version = "1", features = ["derive"] }
 indexmap = "2"
 dashmap = "6"
 poll-promise = "0.3"
+filesize = "0.2"
 
 [profile.release]
 opt-level = 3
