@@ -1,7 +1,7 @@
 //! Colours and drawing options for the treemap and path bar. The "Classic" scheme is the
 //! original ColorService "Rainbow" palette; others are sampled from colorgrad presets.
 
-use crate::ui::settings::{Font, Settings, Tiles};
+use crate::ui::settings::{Settings, Tiles};
 use colorgrad::Gradient;
 use eframe::egui::Color32;
 use serde::{Deserialize, Serialize};
@@ -178,7 +178,7 @@ impl Palette {
             gap,
             hover,
         } = s.tiles;
-        let Font { size, shadow, .. } = s.font;
+        let (size, shadow) = (s.labels.font_size, s.labels.shadow);
         // Only the classic scheme has dark-mode colours of its own.
         let boxes = match (dark, scheme) {
             (true, Scheme::Classic) => classic(&BOX_DARK, colors.len()),

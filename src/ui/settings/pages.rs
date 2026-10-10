@@ -134,6 +134,17 @@ pub fn scan(ui: &mut Ui, s: &mut Settings) {
 }
 
 pub fn display(ui: &mut Ui, s: &mut Settings) {
+    let (f, d) = (&mut s.font, Font::default());
+    group(ui, "Font", |r| {
+        r.row(
+            "Family",
+            "Font for box labels and the path bar. Default is the built-in font.",
+            &mut f.family,
+            &d.family,
+            form::font_family,
+        );
+    });
+
     let before = s.tiles.clone();
     let (t, d) = (&mut s.tiles, Tiles::default());
     // The colours' default is the scheme's own set (Classic's for Custom).
@@ -187,6 +198,20 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
     let (lb, d) = (&mut s.labels, Labels::default());
     subgroup(ui, "Labels", |r| {
         r.row(
+            "Font size",
+            "Text size of the labels in boxes.",
+            &mut lb.font_size,
+            &d.font_size,
+            |ui, v| form::number(ui, v, 6.0..=32.0, 0.5, "px"),
+        );
+        r.row(
+            "Drop shadow",
+            "Draw a soft shadow behind label text.",
+            &mut lb.shadow,
+            &d.shadow,
+            form::check,
+        );
+        r.row(
             "Density",
             "Smallest box that gets a label (and shows a folder's contents): higher labels smaller boxes.",
             &mut lb.density,
@@ -194,21 +219,21 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
             |ui, v| form::number(ui, v, -3..=3, 1.0, ""),
         );
         r.row(
-            "File size",
+            "Show size",
             "Show the size under file names, where the box is big enough.",
             &mut lb.show_size,
             &d.show_size,
             form::check,
         );
         r.row(
-            "Date",
+            "Show date",
             "Show the modification date under file names, where the box is big enough.",
             &mut lb.show_date,
             &d.show_date,
             form::check,
         );
         r.row(
-            "File sizes",
+            "Size format",
             "How file sizes are shown in labels and tips. Totals (title bar, free space) use binary or decimal units.",
             &mut lb.size_format,
             &d.size_format,
@@ -220,31 +245,6 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
             &mut lb.date_format,
             &d.date_format,
             |ui, v| ui.text_edit_singleline(v),
-        );
-    });
-
-    let (f, d) = (&mut s.font, Font::default());
-    group(ui, "Font", |r| {
-        r.row(
-            "Family",
-            "Font for box labels and the path bar. Default is the built-in font.",
-            &mut f.family,
-            &d.family,
-            form::font_family,
-        );
-        r.row(
-            "Size",
-            "Label text size in boxes.",
-            &mut f.size,
-            &d.size,
-            |ui, v| form::number(ui, v, 6.0..=32.0, 0.5, "px"),
-        );
-        r.row(
-            "Drop shadow",
-            "Draw a soft shadow behind label text.",
-            &mut f.shadow,
-            &d.shadow,
-            form::check,
         );
     });
 

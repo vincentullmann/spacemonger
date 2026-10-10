@@ -102,6 +102,8 @@ impl Default for Layout {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct Labels {
+    pub font_size: f32,
+    pub shadow: bool,
     /// Minimum box size for a label: -3 sparse .. +3 dense.
     pub density: i32,
     pub show_size: bool,
@@ -113,6 +115,8 @@ pub struct Labels {
 impl Default for Labels {
     fn default() -> Self {
         Self {
+            font_size: 10.0,
+            shadow: false,
             density: 0,
             show_size: true,
             show_date: true,
@@ -190,23 +194,11 @@ impl Tiles {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 #[serde(default)]
 pub struct Font {
-    /// System font family; empty for the built-in font.
+    /// System font family for labels and the path bar; empty for the built-in font.
     pub family: String,
-    pub size: f32,
-    pub shadow: bool,
-}
-
-impl Default for Font {
-    fn default() -> Self {
-        Self {
-            family: String::new(),
-            size: 10.0,
-            shadow: false,
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -302,7 +294,7 @@ impl Settings {
 
     /// Label font for the treemap.
     pub fn map_font(&self) -> egui::FontId {
-        egui::FontId::new(self.font.size, fonts::map_family())
+        egui::FontId::new(self.labels.font_size, fonts::map_family())
     }
 
     /// Label font for the path bar.
