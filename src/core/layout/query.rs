@@ -58,7 +58,7 @@ pub fn locate(root: &Folder, cam: Rect, path: &[usize], p: LayoutParams, ovs: &[
         b = r;
         if k + 1 < path.len() {
             folder = folder.entries[target].child()?;
-            area = content(r);
+            area = content(r, p.title_h);
         }
     }
     Some(b)
@@ -69,17 +69,17 @@ pub fn content_of(root: &Folder, cam: Rect, path: &[usize], p: LayoutParams, ovs
     if path.is_empty() {
         Some(root_content(cam))
     } else {
-        locate(root, cam, path, p, ovs).map(content)
+        locate(root, cam, path, p, ovs).map(|b| content(b, p.title_h))
     }
 }
 
 /// Deepest folder whose content area covers the whole view.
-pub fn covering(items: &[Item], view: Size) -> Vec<usize> {
+pub fn covering(items: &[Item], view: Size, title_h: f64) -> Vec<usize> {
     let view = root_content(view.to_rect());
     items
         .iter()
         .filter(|it| it.is_folder && it.labeled && it.index.is_some())
-        .filter(|it| content(it.rect()).covers(&view))
+        .filter(|it| content(it.rect(), title_h).covers(&view))
         .max_by_key(|it| it.folder.len())
         .and_then(Item::path)
         .unwrap_or_default()
@@ -87,10 +87,10 @@ pub fn covering(items: &[Item], view: Size) -> Vec<usize> {
 
 /// Item under the point, ignoring folder content areas, anonymous blocks and free space.
 /// Searches from the end, so reshaped folders (drawn last, on top) win over what's beneath.
-pub fn hit_test(items: &[Item], px: f32, py: f32) -> Option<usize> {
+pub fn hit_test(items: &[Item], px: f32, py: f32, title_h: f64) -> Option<usize> {
     // The last item containing the point is the deepest one on top.
     let i = items.iter().rposition(|it| it.contains(px, py))?;
     let it = &items[i];
-    let in_content = it.is_folder && it.labeled && !it.on_frame(px, py);
+    let in_content = it.is_folder && it.labeled && !it.on_frame(px, py, title_h as f32);
     (it.index.is_some() && !it.is_free && !in_content).then_some(i)
 }

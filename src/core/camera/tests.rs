@@ -55,7 +55,7 @@ fn zoom_to_folder_fills_view_and_clears_selection() {
     assert!(c.zoomed());
     let cam = c.cam.unwrap();
     let b = scene.locate(cam, &[0], &c.ovs_at(cam)).unwrap();
-    assert!(close(content(b), root_content(c.full_view())), "folder content fills the view");
+    assert!(close(content(b, 12.0), root_content(c.full_view())), "folder content fills the view");
 
     // Fitted, so Zoom Out goes to the parent; zooming there is back to the full view.
     assert_eq!(c.zoom_out_target(&scene, &[0]), Some(vec![]));

@@ -71,7 +71,7 @@ fn areas_roughly_proportional() {
     // tiles don't overlap and hit-testing finds them
     let a = items.iter().position(|i| i.index == Some(0)).unwrap();
     let it = &items[a];
-    assert_eq!(hit_test(&items, it.x + it.w / 2.0, it.y + it.h / 2.0), Some(a));
+    assert_eq!(hit_test(&items, it.x + it.w / 2.0, it.y + it.h / 2.0, 12.0), Some(a));
 }
 
 #[test]
@@ -84,7 +84,7 @@ fn small_boxes_are_items_without_labels() {
     let s1 = items.iter().position(|i| i.index == Some(1)).expect("small file laid out");
     assert!(!items[s1].labeled);
     let it = &items[s1];
-    assert_eq!(hit_test(&items, it.x + it.w / 2.0, it.y + it.h / 2.0), Some(s1));
+    assert_eq!(hit_test(&items, it.x + it.w / 2.0, it.y + it.h / 2.0, 12.0), Some(s1));
 }
 
 fn nested() -> Folder {
@@ -124,7 +124,7 @@ fn override_fills_view_and_draws_on_top() {
     let (vw, vh) = (400.0, 300.0);
     let view = Size::new(vw, vh);
     let cam = full(vw, vh);
-    assert!(covering(&build(&f, cam, view, p, &[]), view).is_empty());
+    assert!(covering(&build(&f, cam, view, p, &[]), view, 12.0).is_empty());
     // Reshape "sub" so its content exactly fills the view.
     let n = locate(&f, cam, &[0], p, &[]).unwrap();
     let t = xywh(-3.0, -12.0, vw + 5.0, vh + 14.0);
@@ -132,10 +132,10 @@ fn override_fills_view_and_draws_on_top() {
     let b = locate(&f, cam, &[0], p, std::slice::from_ref(&ov)).unwrap();
     assert!((b.x0 - t.x0).abs() < 1e-9 && (b.width() - t.width()).abs() < 1e-9 && (b.height() - t.height()).abs() < 1e-9);
     let items = build(&f, cam, view, p, std::slice::from_ref(&ov));
-    assert_eq!(covering(&items, view), vec![0]);
+    assert_eq!(covering(&items, view, 12.0), vec![0]);
     // The reshaped folder and its children come last and win hit tests.
     let x = items.iter().position(|it| it.index == Some(0) && it.folder.len() == 1).unwrap();
-    assert_eq!(hit_test(&items, 200.0, 150.0), Some(x));
+    assert_eq!(hit_test(&items, 200.0, 150.0, 12.0), Some(x));
     let sub = items.iter().position(|it| it.index == Some(0) && it.folder.is_empty()).unwrap();
     assert!(sub > items.iter().position(|it| it.index == Some(1) && it.folder.is_empty()).unwrap());
 }

@@ -12,11 +12,13 @@ pub struct LayoutParams {
     pub show_free: bool,
     /// Leave out entries named `.something` (matches [`crate::core::model::Tree::dotfiles_hidden`]).
     pub hide_dotfiles: bool,
+    /// Height of a folder's title bar (grows with the label font).
+    pub title_h: f64,
 }
 
 impl Default for LayoutParams {
     fn default() -> Self {
-        Self { density: 0, bias: 0, show_free: true, hide_dotfiles: false }
+        Self { density: 0, bias: 0, show_free: true, hide_dotfiles: false, title_h: super::content::TITLE_H }
     }
 }
 

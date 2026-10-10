@@ -44,11 +44,12 @@ impl SpaceMonger {
         self.update_marquee(&resp, &d);
 
         // Hover.
+        let title_h = self.settings.title_h();
         let hit = resp
             .hover_pos()
             .and_then(|p| {
                 let (x, y) = d.local(p);
-                hit_test(&self.items, x, y)
+                hit_test(&self.items, x, y, title_h)
             })
             .filter(|_| interactive && self.camera.anim.is_none() && !resp.dragged());
         if hit != self.hovered {
@@ -134,7 +135,7 @@ impl SpaceMonger {
                 Some(t) => layout::build(&t.root, cam, view, p, &key.4),
                 None => Vec::new(),
             };
-            self.zoom = layout::covering(&self.items, view);
+            self.zoom = layout::covering(&self.items, view, p.title_h);
             self.layout_key = Some(key);
             self.hovered = None;
         }
@@ -184,10 +185,11 @@ impl SpaceMonger {
 
     /// Click, right-click and double-click selection.
     fn clicks(&mut self, resp: &Response, d: &MapPainter, mods: Modifiers) -> Option<Action> {
+        let title_h = self.settings.title_h();
         let pointer_hit = |items: &[layout::Item]| {
             resp.interact_pointer_pos().and_then(|p| {
                 let (x, y) = d.local(p);
-                hit_test(items, x, y)
+                hit_test(items, x, y, title_h)
             })
         };
         if resp.clicked() {

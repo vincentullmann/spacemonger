@@ -93,7 +93,8 @@ pub fn build(root: &Folder, cam: Rect, view: Size, p: LayoutParams, ovs: &[Resha
         if let (Some(child), true) = (e.child(), labeled) {
             let mut cp = df.folder.to_vec();
             cp.push(df.index);
-            layout_folder(&mut cx, child, Rc::from(cp), content(df.r), df.depth + 1);
+            let area = content(df.r, cx.p.title_h);
+            layout_folder(&mut cx, child, Rc::from(cp), area, df.depth + 1);
         }
     }
     out
@@ -138,7 +139,8 @@ fn place(cx: &mut Ctx, folder: &Folder, path: &Rc<[usize]>, list: &[usize], r: R
         if let (Some(child), true) = (e.child(), labeled) {
             let mut cp = path.to_vec();
             cp.push(i);
-            layout_folder(cx, child, Rc::from(cp), content(r), depth + 1);
+            let area = content(r, cx.p.title_h);
+            layout_folder(cx, child, Rc::from(cp), area, depth + 1);
         }
     } else if cx.on_screen(r) {
         // A few pixels across: merge into one anonymous block.

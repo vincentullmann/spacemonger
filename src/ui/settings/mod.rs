@@ -259,7 +259,13 @@ impl Settings {
             bias: self.layout.bias,
             show_free: self.layout.show_free,
             hide_dotfiles,
+            title_h: self.title_h(),
         }
+    }
+
+    /// Folder title bar height: 12px for the default 10px labels, growing with the font.
+    pub fn title_h(&self) -> f64 {
+        (self.labels.font_size as f64 * 1.2).ceil()
     }
 
     pub fn camera_params(&self) -> CameraParams {

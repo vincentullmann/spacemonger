@@ -57,9 +57,9 @@ impl Camera {
         self.view.to_rect()
     }
 
-    /// Box a folder needs so its content exactly fills the view.
-    pub fn fill_box(&self) -> Rect {
-        Rect::new(-3.0, -12.0, self.view.width + 2.0, self.view.height + 2.0)
+    /// Box a folder (with a `title_h` title bar) needs so its content exactly fills the view.
+    pub fn fill_box(&self, title_h: f64) -> Rect {
+        Rect::new(-3.0, -title_h, self.view.width + 2.0, self.view.height + 2.0)
     }
 
     pub fn scale_of(&self, c: Rect) -> f64 {
@@ -122,7 +122,7 @@ impl Camera {
         // ...and a fully fitted folder's content too.
         if let Some(f) = self.fit.as_ref().filter(|f| f.blend(self.scale_of(c)) >= 1.0) {
             if let Some(b) = scene.locate(c, &f.reshape.path, std::slice::from_ref(&f.reshape)) {
-                let k = layout::content(b);
+                let k = layout::content(b, scene.params.title_h);
                 let view = layout::root_content(self.full_view());
                 let (fxlo, fxhi) = (view.x1 - k.x1, view.x0 - k.x0);
                 let (fylo, fyhi) = (view.y1 - k.y1, view.y0 - k.y0);

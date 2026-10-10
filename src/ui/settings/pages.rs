@@ -199,7 +199,7 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
     subgroup(ui, "Labels", |r| {
         r.row(
             "Font size",
-            "Text size of the labels in boxes.",
+            "Text size of the labels in boxes. Folder title bars grow with it.",
             &mut lb.font_size,
             &d.font_size,
             |ui, v| form::number(ui, v, 6.0..=32.0, 0.5, "px"),

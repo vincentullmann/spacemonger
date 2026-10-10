@@ -2,12 +2,14 @@
 
 use crate::core::geometry::{Insets, Rect};
 
-/// A folder box's 3px frame and 12px title bar.
-const FOLDER_FRAME: Insets = Insets::new(3.0, 12.0, 3.0, 3.0);
+/// Width of a folder box's frame (left, right, bottom).
+pub const FOLDER_FRAME: f64 = 3.0;
+/// Default height of a folder box's title bar (for 10px labels).
+pub const TITLE_H: f64 = 12.0;
 
-/// Content area of a folder box: inside its frame and title bar.
-pub fn content(b: Rect) -> Rect {
-    b - FOLDER_FRAME
+/// Content area of a folder box: inside its 3px frame and `title_h` title bar.
+pub fn content(b: Rect, title_h: f64) -> Rect {
+    b - Insets::new(FOLDER_FRAME, title_h, FOLDER_FRAME, FOLDER_FRAME)
 }
 
 /// Content area of the scan root when its box (the camera) is `cam`.

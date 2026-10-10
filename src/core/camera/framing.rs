@@ -37,7 +37,7 @@ impl Camera {
     /// Even-zoom camera at which the folder's natural box has the window's area and sits in
     /// the middle (as far as the root allows), plus the reshape that makes it fill the window.
     pub(super) fn solve_fit(&self, scene: &Scene, path: &[usize]) -> Option<(Rect, Fit)> {
-        let t = self.fill_box();
+        let t = self.fill_box(scene.params.title_h);
         let mut cam = self.cam?;
         for _ in 0..40 {
             let n = scene.locate(cam, path, &[])?;
@@ -74,7 +74,7 @@ impl Camera {
             (c, Some(f))
         };
         let Some(n1) = scene.locate(end_cam, path, &[]) else { return };
-        let b1 = if path.is_empty() { end_cam } else { self.fill_box() };
+        let b1 = if path.is_empty() { end_cam } else { self.fill_box(scene.params.title_h) };
         let same = |a: f64, b: f64| (a - b).abs() < 0.5;
         if end_cam == cam0 && old.is_none() && same(b0.x0, b1.x0) && same(b0.width(), b1.width()) && same(b0.height(), b1.height()) {
             self.fit = end_fit;
