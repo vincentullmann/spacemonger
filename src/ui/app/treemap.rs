@@ -44,7 +44,7 @@ impl SpaceMonger {
         self.update_marquee(&resp, &d);
 
         // Hover.
-        let title_h = self.settings.title_h();
+        let title_h = self.title_h;
         let hit = resp
             .hover_pos()
             .and_then(|p| {
@@ -185,7 +185,7 @@ impl SpaceMonger {
 
     /// Click, right-click and double-click selection.
     fn clicks(&mut self, resp: &Response, d: &MapPainter, mods: Modifiers) -> Option<Action> {
-        let title_h = self.settings.title_h();
+        let title_h = self.title_h;
         let pointer_hit = |items: &[layout::Item]| {
             resp.interact_pointer_pos().and_then(|p| {
                 let (x, y) = d.local(p);

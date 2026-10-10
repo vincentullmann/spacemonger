@@ -44,6 +44,8 @@ pub struct SpaceMonger {
 
     settings: Settings,
     settings_window: SettingsWindow,
+    /// Folder title bar height for the current label font.
+    title_h: f64,
     /// Settings as of the last frame, to react to what changed.
     applied: Option<Settings>,
 
@@ -73,6 +75,7 @@ impl SpaceMonger {
             hover_since: Instant::now(),
             settings,
             settings_window: SettingsWindow::default(),
+            title_h: crate::core::layout::TITLE_H,
             applied: None,
             dialog: None,
             scan: None,
@@ -121,7 +124,7 @@ impl SpaceMonger {
                 self.generation += 1;
             }
         }
-        if old.is_some_and(|o| o.layout_params(false) != s.layout_params(false)) {
+        if old.is_some_and(|o| o.layout_params(false, 0.0) != s.layout_params(false, 0.0)) {
             self.generation += 1;
         }
         self.applied = Some(self.settings.clone());
@@ -134,7 +137,7 @@ impl SpaceMonger {
 
     fn params(&self) -> LayoutParams {
         let dots = self.shown_tree().is_some_and(|t| t.dotfiles_hidden);
-        self.settings.layout_params(dots)
+        self.settings.layout_params(dots, self.title_h)
     }
 
     /// The tree to draw: the scanned one, or a running scan's snapshot.
@@ -187,6 +190,13 @@ impl eframe::App for SpaceMonger {
         }
         #[cfg(not(target_os = "linux"))]
         let _ = frame;
+        // Folder title bars fit the label font as it renders (its line height, not just its
+        // size), so a taller system font doesn't get cut off.
+        let title_h = fonts::title_height(&ctx, &self.settings.map_font());
+        if title_h != self.title_h {
+            self.title_h = title_h;
+            self.invalidate();
+        }
         self.poll_scan();
 
         let st = self.command_state();

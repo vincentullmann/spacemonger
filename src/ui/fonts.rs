@@ -10,6 +10,14 @@ pub fn map_family() -> FontFamily {
     FontFamily::Name("map".into())
 }
 
+/// Height of a folder's title bar for labels in `font`: 12px for egui's default font at 10px,
+/// in proportion to the font's line height otherwise (fonts differ in how tall a line is).
+pub fn title_height(ctx: &egui::Context, font: &egui::FontId) -> f64 {
+    let base = egui::FontId::proportional(10.0);
+    let (row, base_row) = ctx.fonts_mut(|f| (f.row_height(font), f.row_height(&base)));
+    (crate::core::layout::TITLE_H * row as f64 / base_row as f64).ceil()
+}
+
 /// System fonts, loaded on first use (takes a moment on systems with many fonts).
 fn database() -> &'static (fontdb::Database, Vec<String>) {
     static DB: OnceLock<(fontdb::Database, Vec<String>)> = OnceLock::new();

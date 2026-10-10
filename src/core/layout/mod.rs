@@ -22,7 +22,7 @@ mod scene;
 mod split;
 mod treemap;
 
-pub use content::{content, root_content};
+pub use content::{content, root_content, TITLE_H};
 pub use item::Item;
 pub use neighbours::{neighbour, Dir};
 pub use params::LayoutParams;

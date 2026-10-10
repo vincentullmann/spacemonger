@@ -290,13 +290,15 @@ impl Settings {
         s
     }
 
-    pub fn layout_params(&self, hide_dotfiles: bool) -> LayoutParams {
+    /// Layout settings; `title_h` is the folder title bar height for the label font (see
+    /// [`fonts::title_height`]).
+    pub fn layout_params(&self, hide_dotfiles: bool, title_h: f64) -> LayoutParams {
         LayoutParams {
             density: self.labels.density,
             bias: self.layout.bias,
             show_free: self.layout.show_free,
             hide_dotfiles,
-            title_h: self.title_h(),
+            title_h,
         }
     }
 
@@ -305,11 +307,6 @@ impl Settings {
         (self.path_bar.font_size * BAR_H_PER_PX)
             .round()
             .max(BAR_H as f32 / 2.0)
-    }
-
-    /// Folder title bar height: 12px for the default 10px labels, growing with the font.
-    pub fn title_h(&self) -> f64 {
-        (self.labels.font_size as f64 * 1.2).ceil()
     }
 
     pub fn camera_params(&self) -> CameraParams {
