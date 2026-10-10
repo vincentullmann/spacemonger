@@ -86,6 +86,20 @@ pub enum Scheme {
 }
 
 impl Scheme {
+    /// How many colours the scheme starts with: the stops it's defined by, or 8 for the
+    /// continuous gradients. `None` for `Custom`.
+    pub fn native_count(self) -> Option<usize> {
+        match self {
+            Scheme::Classic => Some(8),
+            Scheme::Viridis => Some(9),
+            Scheme::Spectral | Scheme::Plasma => Some(11),
+            Scheme::Turbo | Scheme::Sinebow | Scheme::Rainbow | Scheme::Warm | Scheme::Cool => {
+                Some(8)
+            }
+            Scheme::Custom => None,
+        }
+    }
+
     /// `n` colours for this scheme, or `None` for `Custom`.
     pub fn colors(self, n: usize) -> Option<Vec<Color32>> {
         use colorgrad::preset;

@@ -177,11 +177,19 @@ impl Default for Tiles {
 
 impl Tiles {
     /// Keep scheme and colours consistent after an edit that started from `before`: a new
-    /// scheme or colour count resamples the scheme; editing a colour makes it "Custom".
+    /// scheme starts over with its own colour count, a new count resamples the scheme, and
+    /// editing a colour makes it "Custom".
     pub fn reconcile(&mut self, before: &Tiles) {
-        let n = self.colors.len().max(1);
-        if self.scheme != before.scheme || self.colors.len() != before.colors.len() {
-            if let Some(c) = self.scheme.colors(n) {
+        if self.scheme != before.scheme {
+            if let Some(c) = self
+                .scheme
+                .native_count()
+                .and_then(|n| self.scheme.colors(n))
+            {
+                self.colors = c;
+            }
+        } else if self.colors.len() != before.colors.len() {
+            if let Some(c) = self.scheme.colors(self.colors.len().max(1)) {
                 self.colors = c;
             }
         } else if self.colors != before.colors {
@@ -452,6 +460,12 @@ mod tests {
     fn tiles_reconcile() {
         let before = Tiles::default();
         let mut t = before.clone();
+        t.scheme = Scheme::Spectral;
+        t.reconcile(&before);
+        assert_eq!(t.colors, Scheme::Spectral.colors(11).unwrap());
+
+        // A new scheme resets the count, even after colours were added.
+        let before = t.clone();
         t.scheme = Scheme::Turbo;
         t.reconcile(&before);
         assert_eq!(t.colors, Scheme::Turbo.colors(8).unwrap());
