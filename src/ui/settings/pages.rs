@@ -2,7 +2,7 @@
 
 use super::form::{self, group};
 use super::{Font, General, Labels, Layout, PathBar, Scan, Settings, Theme, Tiles, Tooltips};
-use crate::ui::palette::Scheme;
+use crate::ui::palette::{Palette, Scheme};
 use crate::utils::format::SizeFormat;
 use eframe::egui::Ui;
 
@@ -135,6 +135,7 @@ pub fn scan(ui: &mut Ui, s: &mut Settings) {
 }
 
 pub fn display(ui: &mut Ui, s: &mut Settings) {
+    let dark = ui.visuals().dark_mode;
     let (f, d) = (&mut s.font, Font::default());
     group(ui, "Font", |r| {
         r.row(
@@ -176,6 +177,34 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
             &mut t.borders,
             &d.borders,
             form::check,
+        );
+        r.row(
+            "Border colour",
+            "Colour of the box outlines. Follows the theme until you pick one.",
+            &mut t.border_color,
+            &d.border_color,
+            |ui, v| form::auto_color(ui, v, Palette::theme_border(dark), "theme"),
+        );
+        r.row(
+            "Border width",
+            "Width of the box outlines, in screen pixels.",
+            &mut t.border_width,
+            &d.border_width,
+            |ui, v| form::number(ui, v, 0.0..=6.0, 0.5, "px"),
+        );
+        r.row(
+            "Hover border colour",
+            "Outline of the box under the mouse.",
+            &mut t.hover_border_color,
+            &d.hover_border_color,
+            |ui, v| form::auto_color(ui, v, Palette::HOVER_BORDER, "default"),
+        );
+        r.row(
+            "Hover border width",
+            "Width of the outline of the box under the mouse, in screen pixels.",
+            &mut t.hover_border_width,
+            &d.hover_border_width,
+            |ui, v| form::number(ui, v, 0.0..=6.0, 0.5, "px"),
         );
         r.row(
             "Gap",

@@ -82,7 +82,8 @@ impl<'a> MapPainter<'a> {
         p.text(pos, Align2::LEFT_TOP, s, self.font.clone(), c);
     }
 
-    /// A path-bar box in the treemap's style: fill, thin border (2px black on hover), label on the left.
+    /// A path-bar box in the treemap's style: fill, border (the hover outline when hovered), label
+    /// on the left.
     #[allow(clippy::too_many_arguments)]
     pub fn cell(&self, x: f32, y: f32, w: f32, h: f32, color: Color32, hover: bool, label: &str) {
         let fill = if hover {
@@ -92,9 +93,9 @@ impl<'a> MapPainter<'a> {
         };
         self.fill(fill, x + 1.0, y + 1.0, w - 1.0, h - 1.0);
         let (bc, bw) = if hover {
-            (Color32::BLACK, 2.0)
+            (self.pal.hover_border, self.pal.hover_width)
         } else {
-            (self.pal.border, 1.0)
+            (self.pal.border, self.pal.border_width)
         };
         self.painter.rect_stroke(
             self.rect(x + 1.0, y + 1.0, w - 1.0, h - 1.0),
@@ -129,8 +130,9 @@ impl<'a> MapPainter<'a> {
         (it.x + off, it.y + off, it.w - g, it.h - g)
     }
 
-    /// An item's border: 1 physical pixel just inside its fill (2 when hovered). With collapsed
-    /// borders the box reaches one pixel further right and down, onto the neighbour's line.
+    /// An item's border just inside its fill (the hover outline when hovered), its width in
+    /// physical pixels. With collapsed borders the box reaches one border width further right
+    /// and down, onto the neighbour's line.
     pub fn outline(&self, it: &Item, sel: bool, hover: bool) {
         let pal = &self.pal;
         let (fx, fy, mut fw, mut fh) = self.fill_box(it);
@@ -143,17 +145,21 @@ impl<'a> MapPainter<'a> {
             return;
         }
         if self.collapsed() {
-            fw += 1.0 / self.ppp;
-            fh += 1.0 / self.ppp;
+            fw += pal.border_width / self.ppp;
+            fh += pal.border_width / self.ppp;
         }
         let border_color = if sel {
             pal.text
         } else if hover {
-            Color32::BLACK
+            pal.hover_border
         } else {
             pal.border
         };
-        let border_width = if hover { 2.0 } else { 1.0 };
+        let border_width = if hover {
+            pal.hover_width
+        } else {
+            pal.border_width
+        };
         self.painter.rect_stroke(
             self.rect(fx, fy, fw, fh),
             0.0,

@@ -157,6 +157,11 @@ pub struct Palette {
     pub borders: bool,
     /// Space between neighbouring boxes, in points.
     pub gap: f32,
+    /// Border width in physical pixels.
+    pub border_width: f32,
+    /// Outline of the hovered box, and its width in physical pixels.
+    pub hover_border: Color32,
+    pub hover_width: f32,
     /// How far a hovered box blends towards white (0..=1).
     pub hover: f32,
     /// Drop shadow behind labels.
@@ -175,6 +180,10 @@ impl Palette {
             scheme,
             ref colors,
             borders,
+            border_color,
+            border_width,
+            hover_border_color,
+            hover_border_width,
             gap,
             hover,
         } = s.tiles;
@@ -184,21 +193,21 @@ impl Palette {
             (true, Scheme::Classic) => classic(&BOX_DARK, colors.len()),
             _ => colors.clone(),
         };
-        let (background, text, border) = if dark {
-            (
-                c(0x16, 0x17, 0x18),
-                c(0xD0, 0xD0, 0xC8),
-                c(0x10, 0x10, 0x10),
-            )
+        let (background, text) = if dark {
+            (c(0x16, 0x17, 0x18), c(0xD0, 0xD0, 0xC8))
         } else {
-            (c(0xEE, 0xEE, 0xEE), Color32::BLACK, c(0x55, 0x55, 0x55))
+            (c(0xEE, 0xEE, 0xEE), Color32::BLACK)
         };
+        let border = border_color.unwrap_or(Self::theme_border(dark));
         Self {
             background,
             text,
             border,
             boxes,
             borders,
+            border_width,
+            hover_border: hover_border_color.unwrap_or(Self::HOVER_BORDER),
+            hover_width: hover_border_width,
             gap: gap as f32,
             hover: hover as f32 / 100.0,
             shadow,
@@ -207,6 +216,18 @@ impl Palette {
             text_scale: size / 10.0,
         }
     }
+
+    /// The theme's border colour (when the settings don't pick one).
+    pub fn theme_border(dark: bool) -> Color32 {
+        if dark {
+            c(0x10, 0x10, 0x10)
+        } else {
+            c(0x55, 0x55, 0x55)
+        }
+    }
+
+    /// Default outline of the hovered box.
+    pub const HOVER_BORDER: Color32 = Color32::BLACK;
 
     /// Label colour on a box filled with `fill`: the theme's text colour, unless the fill is
     /// too close to it (custom colours), then the opposite.

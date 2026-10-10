@@ -164,7 +164,11 @@ pub fn number<T: Numeric>(
 ) -> Response {
     let (lo, hi) = (range.start().to_f64(), range.end().to_f64());
     ui.spacing_mut().slider_width = 140.0;
-    let r = ui.add(egui::Slider::new(v, range).step_by(step).drag_value_speed(step));
+    let r = ui.add(
+        egui::Slider::new(v, range)
+            .step_by(step)
+            .drag_value_speed(step),
+    );
     // Focused, the slider steps with the arrow keys itself; hovered, Up / Down do too.
     if r.hovered() && !r.has_focus() {
         let d = arrow_steps(ui);
@@ -219,6 +223,20 @@ fn arrow_index(ui: &Ui, r: &Response, i: usize, n: usize) -> Option<usize> {
     }
     let d = -arrow_steps(ui);
     (d != 0).then(|| (i as i32 + d).clamp(0, n as i32 - 1) as usize)
+}
+
+/// A colour that's automatic until picked: shows `fallback` while it's `None` (with `hint`,
+/// e.g. "theme"), and becomes `Some` once edited; reset goes back to automatic.
+pub fn auto_color(ui: &mut Ui, v: &mut Option<Color32>, fallback: Color32, hint: &str) -> Response {
+    let mut c = v.unwrap_or(fallback);
+    let r = ui.color_edit_button_srgba(&mut c);
+    if r.changed() {
+        *v = Some(c);
+    }
+    if v.is_none() {
+        ui.weak(hint);
+    }
+    r
 }
 
 /// One swatch per colour, plus buttons to drop / add one.
