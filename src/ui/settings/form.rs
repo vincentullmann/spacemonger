@@ -154,7 +154,7 @@ impl Rows<'_> {
     }
 }
 
-/// A number field with its unit after it.
+/// A slider with its number field, and the unit after them.
 pub fn number<T: Numeric>(
     ui: &mut Ui,
     v: &mut T,
@@ -163,8 +163,9 @@ pub fn number<T: Numeric>(
     unit: &str,
 ) -> Response {
     let (lo, hi) = (range.start().to_f64(), range.end().to_f64());
-    let r = ui.add(egui::DragValue::new(v).range(range).speed(step));
-    // Focused, the field steps with Up / Down itself; hovered, we do the same.
+    ui.spacing_mut().slider_width = 140.0;
+    let r = ui.add(egui::Slider::new(v, range).step_by(step).drag_value_speed(step));
+    // Focused, the slider steps with the arrow keys itself; hovered, Up / Down do too.
     if r.hovered() && !r.has_focus() {
         let d = arrow_steps(ui);
         if d != 0 {
