@@ -146,13 +146,6 @@ fn classic(table: &[Color32; 24], n: usize) -> Vec<Color32> {
     (0..n).map(|i| table[i % table.len()]).collect()
 }
 
-/// Darken a colour for dark mode by `amount` (0..=1).
-fn dim(c: Color32, amount: f32) -> Color32 {
-    let k = 1.0 - amount.clamp(0.0, 1.0);
-    let f = |v: u8| (v as f32 * k).round() as u8;
-    Color32::from_rgb(f(c.r()), f(c.g()), f(c.b()))
-}
-
 /// Everything the painters need to know about how things look.
 #[derive(Clone)]
 pub struct Palette {
@@ -180,19 +173,15 @@ impl Palette {
         let Tiles {
             scheme,
             ref colors,
-            dark_dim,
             borders,
             gap,
             hover,
         } = s.tiles;
         let Font { size, shadow, .. } = s.font;
+        // Only the classic scheme has dark-mode colours of its own.
         let boxes = match (dark, scheme) {
             (true, Scheme::Classic) => classic(&BOX_DARK, colors.len()),
-            (true, _) => colors
-                .iter()
-                .map(|&c| dim(c, dark_dim as f32 / 100.0))
-                .collect(),
-            (false, _) => colors.clone(),
+            _ => colors.clone(),
         };
         let (background, text, border) = if dark {
             (

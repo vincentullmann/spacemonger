@@ -151,9 +151,6 @@ pub struct Tiles {
     /// One colour per nesting level, repeating.
     #[egui_probe(name = "Colours", with colors_probe)]
     pub colors: Vec<Color32>,
-    /// How much darker the colours get in dark mode (the classic scheme has its own table).
-    #[egui_probe(name = "Dark mode dimming (%)", range = 0..=90)]
-    pub dark_dim: u8,
     #[egui_probe(name = "Borders")]
     pub borders: bool,
     #[egui_probe(name = "Gap (px)", range = 0..=8)]
@@ -167,7 +164,6 @@ impl Default for Tiles {
         Self {
             scheme: Scheme::Classic,
             colors: Scheme::Classic.colors(8).unwrap_or_default(),
-            dark_dim: 45,
             borders: true,
             gap: 1,
             hover: 20,
