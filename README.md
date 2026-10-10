@@ -39,7 +39,8 @@ cargo build --release
 - Right-click for the same commands as a context menu.
 - **Free Space** toggles the free-space block (off by default when scanning a folder).
 - Hovering shows the full name (when truncated) and a size/date tip.
-- Keys: Enter = zoom in, Backspace = zoom out, H = hide, Shift+H = unhide all, Delete = delete, F5 = rescan, Esc = clear selection,
+- Default keys (all rebindable in Settings → Keys): Enter = zoom in, Backspace = zoom out, H = hide, Shift+H = unhide all,
+  Delete = delete, F5 = rescan, Esc = clear selection, Ctrl+O = open, Ctrl+, = settings,
   F = frame selection (a single folder fills the view; several items are framed by their bounding
   box; nothing selected = Zoom Full; the selection is kept).
 - Arrow keys move the selection (every selected item at once) to the neighbouring box in that
@@ -49,15 +50,26 @@ cargo build --release
   selection visible.
 - Ctrl+arrow or Shift+arrow extends the selection from the last selected item to its
   neighbour; stepping back the way you came shrinks it again.
-- Dark mode toggle at the right of the toolbar. Dark mode and free-space state persist.
+- **⚙ Settings** (or `Ctrl+,`) opens the settings window. Every change shows in the main window
+  straight away and is saved between runs:
+  - General: theme (light / dark / follow system), animation length, scroll zoom speed, info tip
+    delay, frame-selection fill, delete confirmation.
+  - Layout & labels: label density, split bias, free space, file size/date lines, decimal units,
+    date format.
+  - Scan: ignore hidden (dot) files — applies at once, without a rescan; stay on one filesystem;
+    count hard links once; exclude patterns (mock-up, not used yet).
+  - Display: colour scheme (Classic or a colorgrad preset) with any number of colours — editing
+    one makes the scheme Custom; dark-mode dimming, borders, gap, hover highlight; label font
+    (any system font via fontdb), size and drop shadow; path bar height and font size.
+  - Keys: click a shortcut to rebind it, right-click to remove, `+` to add; clashes show in red.
 
 ## Scope vs. the Java version
 
 Ported: parallel scanner (stays on one filesystem, de-duplicates hard links), the original
 greedy split-treemap layout, rainbow palette (light and dark) drawn flat, zoom animation, name/info tips, context menu, drive picker, trash/open, title-bar info.
 
-Not ported: settings dialog (density, bias, colour schemes, tip options use the Java
-defaults), translations, About dialog, toolbar bitmaps.
+Not ported: the Java settings dialog as such (there is a new one, see above), translations,
+About dialog, toolbar bitmaps.
 
 ## Layout
 
@@ -79,9 +91,12 @@ end. `utils/` holds generic helpers, `helpers/` app-specific glue.
 | `src/ui/widgets/` | Toolbar, path bar, context menu, info tip | |
 | `src/ui/dialogs/` | Drive picker, scan progress, delete confirm, error | |
 | `src/ui/painter.rs` | Box and label drawing | `FolderView` (drawing) |
-| `src/ui/palette.rs` | Colour palettes | `ColorService` |
-| `src/ui/keymap.rs`, `title.rs`, `settings.rs`, `error.rs` | Shortcuts, window title, persisted settings, user-facing errors | |
+| `src/ui/palette.rs` | Colour schemes and drawing options | `ColorService` |
+| `src/ui/settings/` | Persisted settings, settings window (egui-probe) | |
+| `src/ui/fonts.rs` | System font lookup (fontdb) | |
+| `src/ui/keymap.rs`, `title.rs`, `error.rs` | Rebindable shortcuts, window title, user-facing errors | |
 | `src/utils/` | Size / date formatting, interpolation, text eliding | `FormatService` |
 | `src/helpers/` | egui conveniences | |
 
-`cargo test` covers scanning / removal, layout, camera moves, selection and formatting.
+`cargo test` covers scanning / removal, layout, camera moves, selection, formatting, settings
+migration, colour schemes and key lookup.
