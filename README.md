@@ -53,23 +53,25 @@ cargo build --release
 - **⚙ Settings** (or `Ctrl+,`) opens the settings window, a dialog that stays in front of the
   main window (on X11 it has no taskbar entry). Every change shows in the main window straight
   away and is saved between runs. Each setting has a tooltip; changed ones are marked with a
-  dot and reset with ⟲ or right-click on the label. Numbers have a slider and a field; Up / Down
+  dot and reset with ⟲ or right-click on the label. Clickable widgets show a hand cursor. Numbers have a slider and a field; Up / Down
   change the hovered or focused field. Groups collapse.
   - General: theme (light / dark / follow system), animation length, scroll zoom speed,
     frame-selection fill, delete confirmation; Layout: split bias, free space.
   - Scan: ignore hidden (dot) files — applies at once, without a rescan; stay on one filesystem;
     count hard links once; exclude patterns (mock-up, not used yet).
   - Display:
-    - Font: any system font (via fontdb, each listed in its own font) for labels and the path bar.
+    - Text: any system font (via fontdb; listed in its own font, leaving out symbol fonts and
+      fonts that can't draw their name) for labels and the path bar; size format (bytes, KiB or
+      kB, optionally with the bytes); date format.
     - Tiles: colour scheme (Classic or a colorgrad preset; picking one resets the colour count)
       with any number of colours — editing one makes the scheme Custom; borders (collapsed into
-      one line between neighbours at gap 0) with colour and width, hover outline colour and
-      width, selection colour, gap, hover highlight.
-    - Tiles / Labels: font size (folder title bars grow with it), drop shadow, density, size and
-      date lines, size format (bytes, KiB or kB, optionally with the bytes — used by labels and tips), date format.
+      one line between neighbours at gap 0) and the hover outline, each a colour and width;
+      selection colour, gap, hover highlight.
+    - Tiles / Labels: font size (folder title bars fit the font's line height), drop shadow,
+      density, and which details file labels show — name, path, size, modified, created — from
+      a multi-select drop-down.
     - Path bar: font size (the bar's height follows it).
-    - Tooltips (a small labelled table): full path, size, modified and created date, font size,
-      delay.
+    - Tooltips (a small labelled table): the same multi-select of details, font size, delay.
   - Keys, grouped (Scanning, Navigation, Selection & actions, Display): click a shortcut to
     rebind it, right-click to remove, `+` to add; clashes show in red.
 
