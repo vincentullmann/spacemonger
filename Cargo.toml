@@ -13,6 +13,7 @@ trash = "5.2"
 open = "5.4"
 rfd = "0.17"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+num-format = "0.4"
 
 [profile.release]
 opt-level = 3

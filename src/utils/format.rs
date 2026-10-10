@@ -1,6 +1,7 @@
 //! Size / date formatting (port of FormatService).
 
 use chrono::{Local, TimeZone};
+use num_format::{Locale, ToFormattedString};
 
 /// "12.3 GB", or a percentage of `total` ("45.6%") when `percent` is set.
 pub fn size_string(size: u64, total: u64, percent: bool) -> String {
@@ -28,16 +29,7 @@ pub fn size_string(size: u64, total: u64, percent: bool) -> String {
 
 /// "1,234,567 bytes"
 pub fn file_size(size: u64) -> String {
-    let digits = size.to_string();
-    let mut out = String::with_capacity(digits.len() + digits.len() / 3 + 6);
-    for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(c);
-    }
-    out.push_str(" bytes");
-    out
+    format!("{} bytes", size.to_formatted_string(&Locale::en))
 }
 
 /// "05 Mar 2024   14:07:09" in local time.
