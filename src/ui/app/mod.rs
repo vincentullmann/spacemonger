@@ -22,6 +22,7 @@ use eframe::egui::{self, FontId, Vec2};
 use std::path::PathBuf;
 use std::time::Instant;
 
+
 pub struct SpaceMonger {
     tree: Option<Tree>,
     /// Snapshot of a running scan, drawn (but not interactive) until the scan finishes.
@@ -144,11 +145,17 @@ impl SpaceMonger {
 }
 
 impl eframe::App for SpaceMonger {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        #[cfg(target_os = "linux")]
+        crate::ui::x11_sync::install(frame, &ctx, self.palette().background);
+        #[cfg(not(target_os = "linux"))]
+        let _ = frame;
         if self.applied_dark != Some(self.dark) {
             self.applied_dark = Some(self.dark);
             ctx.set_visuals(if self.dark { egui::Visuals::dark() } else { egui::Visuals::light() });
+            #[cfg(target_os = "linux")]
+            crate::ui::x11_sync::set_background(self.palette().background);
         }
         self.poll_scan();
 
@@ -182,6 +189,17 @@ impl eframe::App for SpaceMonger {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
             self.title = title;
         }
+
+        // This frame is drawn at the window's current size: let the WM move on once it's shown.
+        #[cfg(target_os = "linux")]
+        crate::ui::x11_sync::frame_drawn(&ctx);
+    }
+
+    /// Runs once before every [`Self::ui`]. eframe 0.36 has no `update`; this is that hook.
+    fn logic(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // The previous frame is on screen now; release the window manager's resize step.
+        #[cfg(target_os = "linux")]
+        crate::ui::x11_sync::acknowledge();
     }
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {

@@ -8,7 +8,13 @@ use eframe::egui::{InputState, Key};
 /// The action for this frame's key presses, if any.
 pub fn action_for_keys(i: &InputState) -> Option<Action> {
     let extend = i.modifiers.shift || i.modifiers.command;
-    let arrow = |d| Action::Nav(if extend { Nav::Extend(d) } else { Nav::Sibling(d) });
+    let arrow = |d| {
+        Action::Nav(if extend {
+            Nav::Extend(d)
+        } else {
+            Nav::Sibling(d)
+        })
+    };
     if i.key_pressed(Key::Backspace) {
         Some(Action::ZoomOut)
     } else if i.key_pressed(Key::Enter) {

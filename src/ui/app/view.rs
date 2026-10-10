@@ -38,7 +38,12 @@ impl SpaceMonger {
     /// is framed by its bounding box. Nothing selected frames the whole map. The selection stays.
     pub(super) fn frame_selection(&mut self) {
         let roots = self.selection.roots();
-        let folder = |r: &EntryRef| self.tree.as_ref().and_then(|t| t.entry(r)).is_some_and(|e| e.child().is_some());
+        let folder = |r: &EntryRef| {
+            self.tree
+                .as_ref()
+                .and_then(|t| t.entry(r))
+                .is_some_and(|e| e.child().is_some())
+        };
         let single_folder = matches!(roots.as_slice(), [r] if folder(r));
         let paths: Vec<Vec<usize>> = roots.iter().map(EntryRef::path).collect();
         self.finish_anim();
@@ -54,7 +59,9 @@ impl SpaceMonger {
     /// Zoom into the item at `idx` if it's a folder.
     pub(super) fn zoom_in_item(&mut self, idx: usize) {
         let it = &self.items[idx];
-        let Some(target) = it.path().filter(|_| it.is_folder) else { return };
+        let Some(target) = it.path().filter(|_| it.is_folder) else {
+            return;
+        };
         self.zoom_to(&target);
     }
 
@@ -80,7 +87,9 @@ impl SpaceMonger {
 
     /// Pan so the primary selection is in view.
     fn reveal_primary(&mut self) {
-        let Some(path) = self.selection.primary().map(EntryRef::path) else { return };
+        let Some(path) = self.selection.primary().map(EntryRef::path) else {
+            return;
+        };
         let (camera, scene, _) = self.camera_ctx();
         camera.reveal(&scene, &path);
     }

@@ -20,6 +20,12 @@ fn main() -> eframe::Result {
 
     let options = eframe::NativeOptions {
         viewport,
+        // Linux: OpenGL. With wgpu (Vulkan) the swapchain goes `Outdated` on every size step of
+        // a drag-resize, so eframe drops that frame and the window only catches up once the
+        // drag pauses. GL just draws at the current size, so the treemap follows the drag.
+        #[cfg(target_os = "linux")]
+        renderer: eframe::Renderer::Glow,
+        glow_options: eframe::egui_glow::GlowConfiguration { vsync: false, ..Default::default() },
         // We only repaint on input, so vsync buys nothing; without it a resize
         // never blocks waiting for a frame and the treemap redraws live.
         wgpu_options: eframe::egui_wgpu::WgpuConfiguration {

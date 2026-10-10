@@ -15,13 +15,18 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { dark: false, show_free: true }
+        Self {
+            dark: false,
+            show_free: true,
+        }
     }
 }
 
 impl Settings {
     pub fn load(storage: Option<&dyn eframe::Storage>) -> Self {
-        let Some(storage) = storage else { return Self::default() };
+        let Some(storage) = storage else {
+            return Self::default();
+        };
         eframe::get_value(storage, KEY).unwrap_or_else(|| Self::load_legacy(storage))
     }
 
@@ -72,10 +77,26 @@ mod tests {
         // Old string keys still load.
         m.set_string("dark", "true".into());
         m.set_string("show_free", "false".into());
-        assert_eq!(Settings::load(Some(&m)), Settings { dark: true, show_free: false });
+        assert_eq!(
+            Settings::load(Some(&m)),
+            Settings {
+                dark: true,
+                show_free: false
+            }
+        );
         // New key wins once saved.
-        Settings { dark: false, show_free: false }.save(&mut m);
-        assert_eq!(Settings::load(Some(&m)), Settings { dark: false, show_free: false });
+        Settings {
+            dark: false,
+            show_free: false,
+        }
+        .save(&mut m);
+        assert_eq!(
+            Settings::load(Some(&m)),
+            Settings {
+                dark: false,
+                show_free: false
+            }
+        );
         assert!(m.get_string("dark").is_none());
     }
 }

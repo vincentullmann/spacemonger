@@ -20,7 +20,13 @@ pub struct MapPainter<'a> {
 impl<'a> MapPainter<'a> {
     /// A painter whose view origin is `min` (the allocated rect's top-left).
     pub fn new(painter: &'a Painter, min: Pos2, ppp: f32, pal: Palette, font: FontId) -> Self {
-        Self { painter, origin: snap(min, ppp), ppp, pal, font }
+        Self {
+            painter,
+            origin: snap(min, ppp),
+            ppp,
+            pal,
+            font,
+        }
     }
 
     /// Screen position to view coordinates.
@@ -34,7 +40,8 @@ impl<'a> MapPainter<'a> {
 
     /// Screen rect for a view-coordinate box, snapped to the pixel grid.
     pub fn rect(&self, x: f32, y: f32, w: f32, h: f32) -> egui::Rect {
-        let r = egui::Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, h)).translate(self.origin.to_vec2());
+        let r = egui::Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, h))
+            .translate(self.origin.to_vec2());
         egui::Rect::from_min_max(self.snap(r.min), self.snap(r.max))
     }
 
@@ -45,7 +52,9 @@ impl<'a> MapPainter<'a> {
     }
 
     pub fn text_width(&self, s: &str) -> (f32, f32) {
-        let g = self.painter.layout_no_wrap(s.to_string(), self.font.clone(), Color32::WHITE);
+        let g = self
+            .painter
+            .layout_no_wrap(s.to_string(), self.font.clone(), Color32::WHITE);
         (g.size().x.ceil(), g.size().y.ceil())
     }
 
@@ -57,9 +66,17 @@ impl<'a> MapPainter<'a> {
     /// A path-bar box in the treemap's style: fill, thin border (2px black on hover), label on the left.
     #[allow(clippy::too_many_arguments)]
     pub fn cell(&self, x: f32, y: f32, w: f32, h: f32, color: Color32, hover: bool, label: &str) {
-        let fill = if hover { color.lerp_to_gamma(Color32::WHITE, 0.2) } else { color };
+        let fill = if hover {
+            color.lerp_to_gamma(Color32::WHITE, 0.2)
+        } else {
+            color
+        };
         self.fill(fill, x + 1.0, y + 1.0, w - 1.0, h - 1.0);
-        let (bc, bw) = if hover { (Color32::BLACK, 2.0) } else { (self.pal.border, 1.0) };
+        let (bc, bw) = if hover {
+            (Color32::BLACK, 2.0)
+        } else {
+            (self.pal.border, 1.0)
+        };
         self.painter.rect_stroke(
             self.rect(x + 1.0, y + 1.0, w - 1.0, h - 1.0),
             0.0,
@@ -67,16 +84,30 @@ impl<'a> MapPainter<'a> {
             egui::StrokeKind::Inside,
         );
         let (_, th) = self.text_width(label);
-        let p = self.painter.with_clip_rect(self.rect(x, y, w, h).intersect(self.painter.clip_rect()));
-        self.text(&p, label, x + 6.0, y + 1.0 + (h - 1.0 - th) / 2.0, self.pal.text);
+        let p = self
+            .painter
+            .with_clip_rect(self.rect(x, y, w, h).intersect(self.painter.clip_rect()));
+        self.text(
+            &p,
+            label,
+            x + 6.0,
+            y + 1.0 + (h - 1.0 - th) / 2.0,
+            self.pal.text,
+        );
     }
 
     /// Rectangle-selection overlay between two view points.
     pub fn marquee(&self, a: (f32, f32), b: (f32, f32)) {
-        let r = self.rect(a.0.min(b.0), a.1.min(b.1), (a.0 - b.0).abs(), (a.1 - b.1).abs());
+        let r = self.rect(
+            a.0.min(b.0),
+            a.1.min(b.1),
+            (a.0 - b.0).abs(),
+            (a.1 - b.1).abs(),
+        );
         let c = self.pal.text;
         self.painter.rect_filled(r, 0.0, c.gamma_multiply(0.12));
-        self.painter.rect_stroke(r, 0.0, Stroke::new(1.0, c), egui::StrokeKind::Inside);
+        self.painter
+            .rect_stroke(r, 0.0, Stroke::new(1.0, c), egui::StrokeKind::Inside);
     }
 
     /// Flat box: a single fill with a 1px gap to its neighbours, plus its label.
@@ -117,8 +148,12 @@ impl<'a> MapPainter<'a> {
         if !it.labeled {
             return;
         }
-        let Some(entry) = it.index.and_then(|i| tree.entry_at(&it.folder, i)) else { return };
-        let p = self.painter.with_clip_rect(self.rect(x, y, w, h).intersect(self.painter.clip_rect()));
+        let Some(entry) = it.index.and_then(|i| tree.entry_at(&it.folder, i)) else {
+            return;
+        };
+        let p = self
+            .painter
+            .with_clip_rect(self.rect(x, y, w, h).intersect(self.painter.clip_rect()));
         let fg = if sel { pal.background } else { pal.text };
 
         if it.is_free {
@@ -126,13 +161,24 @@ impl<'a> MapPainter<'a> {
             let fp = tree.free_space as u128 * 1000 / ts as u128;
             let lines = [
                 format!("<Free Space: {}.{}%>", fp / 10, fp % 10),
-                format!("{} Free", format::size_string(tree.free_space, tree.total_space, false)),
+                format!(
+                    "{} Free",
+                    format::size_string(tree.free_space, tree.total_space, false)
+                ),
                 format!("Files Total:  {}", tree.num_files),
                 format!("Folders Total:  {}", tree.num_folders),
             ];
             let (lw, lh) = self.text_width(&lines[0]);
-            let tx = if lw > w - 2.0 { x + 2.0 } else { x + (w - lw) / 2.0 };
-            let ty = if lh > h - 2.0 { y + 1.0 } else { y + (h - lh) / 2.0 };
+            let tx = if lw > w - 2.0 {
+                x + 2.0
+            } else {
+                x + (w - lw) / 2.0
+            };
+            let ty = if lh > h - 2.0 {
+                y + 1.0
+            } else {
+                y + (h - lh) / 2.0
+            };
             for (line, dy) in lines.iter().zip([-18.0, -6.0, 6.0, 15.0]) {
                 self.text(&p, line, tx, ty + dy, pal.text);
             }
@@ -140,13 +186,28 @@ impl<'a> MapPainter<'a> {
         }
 
         let (tw, th) = self.text_width(&entry.name);
-        let tx = if tw > w - 2.0 || it.is_folder { x + 3.0 } else { x + (w - tw) / 2.0 };
-        let mut ty = if th > h - 2.0 || it.is_folder { y + 2.0 } else { y + (h - th) / 2.0 };
+        let tx = if tw > w - 2.0 || it.is_folder {
+            x + 3.0
+        } else {
+            x + (w - tw) / 2.0
+        };
+        let mut ty = if th > h - 2.0 || it.is_folder {
+            y + 2.0
+        } else {
+            y + (h - th) / 2.0
+        };
 
         if !it.is_folder && h >= 36.0 && w >= 48.0 {
-            for (s, dy) in [(format::file_size(entry.actual), 1.0), (format::date(entry.mtime), 11.0)] {
+            for (s, dy) in [
+                (format::file_size(entry.actual), 1.0),
+                (format::date(entry.mtime), 11.0),
+            ] {
                 let (sw, _) = self.text_width(&s);
-                let sx = if sw > w - 2.0 { x + 3.0 } else { x + (w - sw) / 2.0 };
+                let sx = if sw > w - 2.0 {
+                    x + 3.0
+                } else {
+                    x + (w - sw) / 2.0
+                };
                 self.text(&p, &s, sx, ty + dy, fg);
             }
             ty -= 12.0;
