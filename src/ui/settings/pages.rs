@@ -3,12 +3,19 @@
 use super::form::{self, group, subgroup};
 use super::{Font, General, Labels, Layout, PathBar, Scan, Settings, Theme, Tiles};
 use crate::ui::palette::Scheme;
+use crate::utils::format::SizeFormat;
 use eframe::egui::Ui;
 
 const THEMES: [(Theme, &str); 3] = [
     (Theme::Light, "Light"),
     (Theme::Dark, "Dark"),
     (Theme::System, "Follow system"),
+];
+
+const SIZE_FORMATS: [(SizeFormat, &str); 3] = [
+    (SizeFormat::Bytes, "Bytes (1,234,567 bytes)"),
+    (SizeFormat::Binary, "Binary (1.2 MiB)"),
+    (SizeFormat::Decimal, "Decimal (1.2 MB)"),
 ];
 
 const SCHEMES: [(Scheme, &str); 10] = [
@@ -201,11 +208,11 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
             form::check,
         );
         r.row(
-            "Decimal units (kB, MB)",
-            "Sizes in powers of 1000 (kB, MB) instead of 1024 (KiB, MiB).",
-            &mut lb.decimal_units,
-            &d.decimal_units,
-            form::check,
+            "File sizes",
+            "How file sizes are shown in labels and tips. Totals (title bar, free space) use binary or decimal units.",
+            &mut lb.size_format,
+            &d.size_format,
+            |ui, v| form::choice(ui, "size_format", v, &SIZE_FORMATS),
         );
         r.row(
             "Date format",

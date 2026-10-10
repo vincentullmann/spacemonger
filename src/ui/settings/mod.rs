@@ -13,7 +13,7 @@ use crate::core::layout::LayoutParams;
 use crate::ui::fonts;
 use crate::ui::keymap::Keymap;
 use crate::ui::palette::Scheme;
-use crate::utils::format::{FormatOptions, DEFAULT_DATE_FORMAT};
+use crate::utils::format::{FormatOptions, SizeFormat, DEFAULT_DATE_FORMAT};
 use eframe::egui::{self, Color32};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -106,7 +106,7 @@ pub struct Labels {
     pub density: i32,
     pub show_size: bool,
     pub show_date: bool,
-    pub decimal_units: bool,
+    pub size_format: SizeFormat,
     pub date_format: String,
 }
 
@@ -116,7 +116,7 @@ impl Default for Labels {
             density: 0,
             show_size: true,
             show_date: true,
-            decimal_units: false,
+            size_format: SizeFormat::Bytes,
             date_format: DEFAULT_DATE_FORMAT.to_string(),
         }
     }
@@ -286,7 +286,7 @@ impl Settings {
 
     pub fn format_options(&self) -> FormatOptions {
         FormatOptions {
-            decimal_units: self.labels.decimal_units,
+            size: self.labels.size_format,
             date_format: self.labels.date_format.clone(),
         }
     }

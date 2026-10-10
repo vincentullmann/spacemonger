@@ -3,24 +3,39 @@
 use chrono::{Local, TimeZone};
 use humansize::{FormatSizeOptions, BINARY, DECIMAL};
 use num_format::{Locale, ToFormattedString};
+use serde::{Deserialize, Serialize};
 use std::fmt::Write as _;
 use std::sync::RwLock;
 
 /// Default `strftime` pattern for dates.
 pub const DEFAULT_DATE_FORMAT: &str = "%d %b %Y   %-H:%M:%S";
 
+/// How file sizes are written.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum SizeFormat {
+    /// "1,234,567 bytes"; totals elsewhere use binary units.
+    #[default]
+    Bytes,
+    /// Powers of 1024: "1.2 MiB".
+    Binary,
+    /// Powers of 1000: "1.2 MB".
+    Decimal,
+}
+
 /// App-wide formatting choices (set from the settings).
 #[derive(Clone, Debug, PartialEq)]
 pub struct FormatOptions {
-    /// Powers of 1000 ("kB", "MB") instead of 1024 ("KiB", "MiB").
-    pub decimal_units: bool,
+    pub size: SizeFormat,
     /// `strftime` pattern; an invalid one falls back to [`DEFAULT_DATE_FORMAT`].
     pub date_format: String,
 }
 
 impl Default for FormatOptions {
     fn default() -> Self {
-        Self { decimal_units: false, date_format: DEFAULT_DATE_FORMAT.to_string() }
+        Self {
+            size: SizeFormat::Bytes,
+            date_format: DEFAULT_DATE_FORMAT.to_string(),
+        }
     }
 }
 
@@ -41,7 +56,8 @@ fn with_options<T>(f: impl FnOnce(&FormatOptions) -> T) -> T {
 
 /// One decimal, in powers of 1024 ("KiB", "MiB", ...) or 1000 ("kB", "MB", ...).
 fn size_format() -> FormatSizeOptions {
-    let base = if with_options(|o| o.decimal_units) { DECIMAL } else { BINARY };
+    let decimal = with_options(|o| o.size == SizeFormat::Decimal);
+    let base = if decimal { DECIMAL } else { BINARY };
     base.decimal_places(1).decimal_zeroes(1)
 }
 
@@ -55,8 +71,16 @@ pub fn size_string(size: u64, total: u64, percent: bool) -> String {
     humansize::format_size(size, size_format())
 }
 
-/// "1,234,567 bytes"
+/// A file's size as the options say: "1,234,567 bytes", "1.2 MiB" or "1.2 MB".
 pub fn file_size(size: u64) -> String {
+    match with_options(|o| o.size) {
+        SizeFormat::Bytes => bytes(size),
+        SizeFormat::Binary | SizeFormat::Decimal => size_string(size, 0, false),
+    }
+}
+
+/// "1,234,567 bytes"
+pub fn bytes(size: u64) -> String {
     format!("{} bytes", size.to_formatted_string(&Locale::en))
 }
 
@@ -91,16 +115,22 @@ mod tests {
         assert_eq!(size_string(3 * 1024 * 1024 * 1024, 0, false), "3.0 GiB");
         assert_eq!(size_string(5 << 40, 0, false), "5.0 TiB");
         assert_eq!(size_string(456, 1000, true), "45.6%");
-        assert_eq!(file_size(0), "0 bytes");
-        assert_eq!(file_size(999), "999 bytes");
-        assert_eq!(file_size(1234567), "1,234,567 bytes");
+        assert_eq!(bytes(0), "0 bytes");
+        assert_eq!(bytes(999), "999 bytes");
+        assert_eq!(bytes(1234567), "1,234,567 bytes");
     }
 
     #[test]
     fn dates() {
-        let secs = Local.with_ymd_and_hms(2024, 3, 5, 4, 7, 9).unwrap().timestamp();
+        let secs = Local
+            .with_ymd_and_hms(2024, 3, 5, 4, 7, 9)
+            .unwrap()
+            .timestamp();
         assert_eq!(date(secs), "05 Mar 2024   4:07:09");
-        let secs = Local.with_ymd_and_hms(2024, 12, 25, 14, 0, 0).unwrap().timestamp();
+        let secs = Local
+            .with_ymd_and_hms(2024, 12, 25, 14, 0, 0)
+            .unwrap()
+            .timestamp();
         assert_eq!(date(secs), "25 Dec 2024   14:00:00");
         assert_eq!(date_with(secs, "%Y-%m-%d"), "2024-12-25");
         assert_eq!(date_with(secs, "%Q bad"), "25 Dec 2024   14:00:00");
