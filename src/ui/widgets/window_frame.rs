@@ -1,11 +1,12 @@
 //! What the system frame did before decorations were turned off: a thin border, and resizing
 //! from the window's edges and corners (neither while maximised or full screen).
 
-use super::window_drag::wm_grab;
 use eframe::egui::{
     self, CursorIcon, Id, LayerId, Order, Rect, ResizeDirection, Sense, Stroke, StrokeKind, Ui,
     UiBuilder, ViewportCommand,
 };
+
+use super::window_drag::wm_grab;
 
 /// Width of the grab zone along each edge.
 const EDGE: f32 = 6.0;

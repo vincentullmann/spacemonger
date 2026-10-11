@@ -1,10 +1,11 @@
 //! Right-click menu on the map.
 
+use eframe::egui;
+
 use super::menu::CommandMenu;
 use super::CommandState;
 use crate::core::actions::Action;
 use crate::ui::keymap::{Command, Keymap};
-use eframe::egui;
 
 /// The menu for `resp` (the map); returns the command picked.
 pub fn context_menu(resp: &egui::Response, st: &CommandState, keys: &Keymap) -> Option<Action> {

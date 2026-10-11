@@ -5,14 +5,16 @@
 //! egui creates the settings viewport itself and doesn't hand out its window handle, so we
 //! find it among this process's top-level windows by title once it's mapped.
 
-use super::{atom, conn, root, window_of, Handle, XResult};
 use std::sync::atomic::{AtomicU32, Ordering};
+
 use x11rb::connection::Connection;
 use x11rb::protocol::xproto::{
     AtomEnum, ClientMessageEvent, ConnectionExt as _, EventMask, PropMode, Window,
 };
 use x11rb::rust_connection::RustConnection;
 use x11rb::wrapper::ConnectionExt as _;
+
+use super::{atom, conn, root, window_of, Handle, XResult};
 
 /// How many windows the property lists are read up to.
 const MAX_WINDOWS: u32 = 4096;

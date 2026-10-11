@@ -1,9 +1,10 @@
 //! The tree as it's being scanned: scanner threads fill it in while the UI takes snapshots.
 
-use crate::core::model::{Entry, Folder, Kind};
 use std::ffi::OsStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
+
+use crate::core::model::{Entry, Folder, Kind};
 
 /// A folder whose contents are being scanned.
 pub(super) struct LiveDir {

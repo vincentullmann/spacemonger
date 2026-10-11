@@ -18,12 +18,12 @@
 //! and asks for one more frame; [`acknowledge`] at the start of that frame (in `logic`, after
 //! the drawn frame was presented) sets the counter.
 
-use super::{atom, conn, XResult};
-use eframe::egui::{Color32, Context};
-use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle};
 use std::ffi::c_int;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Mutex, OnceLock};
+
+use eframe::egui::{Color32, Context};
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle};
 use x11_dl::xlib;
 use x11rb::connection::Connection;
 use x11rb::protocol::sync::{ConnectionExt as _, Int64};
@@ -32,6 +32,8 @@ use x11rb::protocol::xproto::{
 };
 use x11rb::rust_connection::RustConnection;
 use x11rb::wrapper::ConnectionExt as _;
+
+use super::{atom, conn, XResult};
 
 /// XSync extension version we ask for.
 const SYNC_VERSION: (u8, u8) = (3, 1);

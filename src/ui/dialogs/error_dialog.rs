@@ -1,7 +1,8 @@
 //! Error message box.
 
-use crate::ui::widgets::dialog::{button_row, Dialog};
 use eframe::egui;
+
+use crate::ui::widgets::dialog::{button_row, Dialog};
 
 /// Show `msg`. Returns true when dismissed.
 pub fn error_dialog(ctx: &egui::Context, msg: &str) -> bool {

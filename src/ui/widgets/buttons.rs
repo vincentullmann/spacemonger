@@ -1,9 +1,10 @@
 //! The small buttons several panels share: frameless icon buttons, ×, "+" and reset.
 
-use crate::constants::ICON_SIZE;
-use crate::ui::widgets::flat_items;
 use eframe::egui::{Button, Response, RichText, Ui, Vec2};
 use egui_phosphor::regular as icon;
+
+use crate::constants::ICON_SIZE;
+use crate::ui::widgets::flat_items;
 
 /// Size of the × in dialog headers.
 const CLOSE_SIZE: Vec2 = Vec2::splat(28.0);

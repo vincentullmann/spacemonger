@@ -1,12 +1,14 @@
 //! A scan running on a background thread, with a second thread taking snapshots of it.
 
-use super::{scan, Drive, FsError, ScanControl, ScanOptions};
-use crate::constants::LIVE_SCAN_INTERVAL;
-use crate::core::model::Tree;
-use poll_promise::Promise;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+
+use poll_promise::Promise;
+
+use super::{scan, Drive, FsError, ScanControl, ScanOptions};
+use crate::constants::LIVE_SCAN_INTERVAL;
+use crate::core::model::Tree;
 
 /// Where a [`ScanJob`] has got to.
 pub enum ScanStatus {

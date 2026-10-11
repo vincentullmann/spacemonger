@@ -1,11 +1,12 @@
 //! The commands keys and menus run.
 
-use crate::core::actions::Action;
-use crate::core::layout::Dir;
-use crate::core::selection::Nav;
 use egui_phosphor::regular as icon;
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, IntoStaticStr};
+
+use crate::core::actions::Action;
+use crate::core::layout::Dir;
+use crate::core::selection::Nav;
 
 /// Something a key can be bound to.
 #[derive(

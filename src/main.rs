@@ -1,7 +1,8 @@
 //! SpaceMonger One — treemap disk space viewer. Rust port of spacemonger1 (Java).
 
-use spacemonger::constants::{APP_ID, APP_NAME};
 use std::path::PathBuf;
+
+use spacemonger::constants::{APP_ID, APP_NAME};
 
 fn main() -> eframe::Result {
     let open_path = std::env::args_os().nth(1).map(PathBuf::from);

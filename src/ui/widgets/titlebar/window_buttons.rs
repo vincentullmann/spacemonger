@@ -1,9 +1,10 @@
 //! Close, maximise / restore and minimise, drawn like the system's own.
 
-use super::WINDOW_BUTTON_W;
-use crate::constants::ICON_SIZE;
 use eframe::egui::{self, Color32, Sense, Ui, Vec2, ViewportCommand};
 use egui_phosphor::regular as icon;
+
+use super::WINDOW_BUTTON_W;
+use crate::constants::ICON_SIZE;
 
 /// Fill of a hovered close button.
 const CLOSE_HOVER: Color32 = Color32::from_rgb(0xc4, 0x2b, 0x1c);

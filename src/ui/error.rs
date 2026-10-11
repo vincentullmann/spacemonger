@@ -1,7 +1,8 @@
 //! Errors shown to the user in the error dialog.
 
-use crate::core::fs::FsError;
 use std::path::PathBuf;
+
+use crate::core::fs::FsError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {

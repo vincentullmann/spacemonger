@@ -1,11 +1,12 @@
 //! Box labels: entry names with the chosen details under them, and the free-space block's
 //! summary.
 
+use eframe::egui::Painter;
+
 use super::MapPainter;
 use crate::core::layout::Item;
 use crate::core::model::{Entry, Tree};
 use crate::utils::format;
-use eframe::egui::Painter;
 
 /// Narrowest file box that gets details under its name.
 const MIN_DETAILS_W: f32 = 48.0;

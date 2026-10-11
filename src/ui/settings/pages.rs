@@ -1,10 +1,11 @@
 //! The contents of the settings pages (all but Hotkeys, which the window draws itself).
 
+use eframe::egui::Ui;
+
 use super::form::{self, group, rows};
 use super::{General, Labels, Layout, PathBar, Scan, Settings, Text, Tiles, Tooltips};
 use crate::constants::UI_ZOOM;
 use crate::ui::palette::Palette;
-use eframe::egui::Ui;
 
 pub fn navigation(ui: &mut Ui, s: &mut Settings) {
     let (g, d) = (&mut s.general, General::default());

@@ -1,7 +1,8 @@
 //! Keyboard control of the UI zoom setting.
 
-use crate::constants::UI_ZOOM;
 use eframe::egui;
+
+use crate::constants::UI_ZOOM;
 
 /// UI zoom (percent) that Ctrl 0 goes back to.
 const ZOOM_RESET: u32 = 100;

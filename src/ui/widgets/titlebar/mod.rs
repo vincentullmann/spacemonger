@@ -7,14 +7,15 @@ mod caption;
 mod toolbar;
 mod window_buttons;
 
-use super::window_drag::move_or_maximize;
-use super::CommandState;
-use crate::core::actions::Action;
-use crate::ui::keymap::Keymap;
 use caption::{progress_line, search_placeholder, title_text};
 use eframe::egui::{self, Align, Layout, Rect, Sense, Ui, UiBuilder, Vec2};
 use toolbar::toolbar;
 use window_buttons::window_buttons;
+
+use super::window_drag::move_or_maximize;
+use super::CommandState;
+use crate::core::actions::Action;
+use crate::ui::keymap::Keymap;
 
 /// Height of the bar.
 pub const HEIGHT: f32 = 34.0;

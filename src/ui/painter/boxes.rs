@@ -1,9 +1,10 @@
 //! Box fills and outlines.
 
+use eframe::egui::{self, Color32, Stroke};
+
 use super::MapPainter;
 use crate::core::layout::Item;
 use crate::core::model::Tree;
-use eframe::egui::{self, Color32, Stroke};
 
 /// Boxes this small (plus their 1-point gap) get no outline.
 const MIN_OUTLINED: f32 = 4.0;

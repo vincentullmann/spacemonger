@@ -1,8 +1,10 @@
 //! "Move to trash?" confirmation.
 
-use crate::ui::widgets::dialog::{button_row, Dialog};
-use eframe::egui;
 use std::path::PathBuf;
+
+use eframe::egui;
+
+use crate::ui::widgets::dialog::{button_row, Dialog};
 
 /// Ask before moving `paths` to the trash. `Some(true)` = go ahead, `Some(false)` = cancel,
 /// `None` = not answered yet.

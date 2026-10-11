@@ -1,10 +1,11 @@
 //! Holding the view steady while the window is resized.
 
+use std::time::Instant;
+
 use super::Camera;
 use crate::constants::{ANCHOR_MIN_SHARE, RESIZE_SETTLE};
 use crate::core::geometry::{Point, Rect, RectExt, Size};
 use crate::core::layout::{Item, Scene};
-use std::time::Instant;
 
 /// What to hold steady while the window is resized.
 #[derive(Clone)]

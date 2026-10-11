@@ -1,13 +1,15 @@
 //! What the scanner threads share with the UI: options, progress counters, pause / cancel,
 //! and the tree found so far.
 
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard};
+
+use dashmap::DashSet;
+
 use super::live::LiveDir;
 use super::scanner::make_tree;
 use super::Drive;
 use crate::core::model::Tree;
-use dashmap::DashSet;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
 
 /// What the scanner follows and counts.
 #[derive(Clone, Copy, Debug)]

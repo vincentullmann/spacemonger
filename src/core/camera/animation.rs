@@ -1,10 +1,11 @@
 //! Animated camera moves.
 
+use std::time::Instant;
+
 use super::Fit;
 use crate::core::geometry::{Point, Rect, Size, Vec2};
 use crate::core::layout::{Reshape, Scene};
 use crate::utils::math::{ease_out_cubic, geo_lerp};
-use std::time::Instant;
 
 /// Camera move to a folder: an even zoom about the move's fixed point (so the folder's centre
 /// travels in a straight line and the root keeps covering the view), with the folder's box

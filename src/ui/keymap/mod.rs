@@ -6,10 +6,11 @@ mod shortcut;
 pub use command::Command;
 pub use shortcut::{capture, same_shortcut, shortcut_text};
 
-use crate::core::actions::Action;
 use eframe::egui::{Event, InputState, Key, KeyboardShortcut, Modifiers};
 use serde::{Deserialize, Serialize};
 use shortcut::norm;
+
+use crate::core::actions::Action;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 #[serde(default)]

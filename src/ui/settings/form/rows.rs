@@ -1,8 +1,9 @@
 //! Labelled rows with a reset button, the layout every settings page shares.
 
+use eframe::egui::{self, Response, RichText, Ui};
+
 use crate::ui::fonts;
 use crate::ui::widgets::buttons::reset_button;
-use eframe::egui::{self, Response, RichText, Ui};
 
 /// Width of the label column, shared by every group so the inputs line up.
 pub const LABEL_WIDTH: f32 = 170.0;

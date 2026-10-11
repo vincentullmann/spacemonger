@@ -5,6 +5,12 @@ mod commands;
 mod treemap;
 mod view;
 
+use std::path::PathBuf;
+use std::rc::Rc;
+use std::time::Instant;
+
+use eframe::egui::{self, Vec2};
+
 use crate::core::camera::Camera;
 use crate::core::fs::{drive_for_path, ScanJob};
 use crate::core::geometry::Rect;
@@ -20,10 +26,6 @@ use crate::ui::settings::{Settings, SettingsWindow};
 use crate::ui::theme::Theme;
 use crate::ui::title::{scan_title, window_title};
 use crate::ui::widgets::{path_bar, titlebar, window_frame, CommandState};
-use eframe::egui::{self, Vec2};
-use std::path::PathBuf;
-use std::rc::Rc;
-use std::time::Instant;
 
 pub struct SpaceMonger {
     tree: Option<Tree>,

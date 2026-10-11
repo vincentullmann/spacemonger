@@ -1,10 +1,11 @@
 //! The Hotkeys page: one row per command with its shortcuts (click one to change it,
 //! right-click to remove it), "+" to add one, and a reset button.
 
+use eframe::egui::{self, KeyboardShortcut, RichText, Ui};
+
 use super::form;
 use crate::ui::keymap::{capture, same_shortcut, shortcut_text, Command, Keymap};
 use crate::ui::widgets::buttons::{add_button, reset_button};
-use eframe::egui::{self, KeyboardShortcut, RichText, Ui};
 
 /// Label column width on this page (command names are longer than setting names).
 const KEY_LABEL_WIDTH: f32 = 230.0;

@@ -1,14 +1,15 @@
 //! The icons left of the title: the main menu, Open / Reload, and the zoom history and
 //! search placeholders.
 
+use eframe::egui::{self, Sense, Stroke, Ui, Vec2};
+use egui_phosphor::regular as icon;
+
 use super::BUTTON;
 use crate::core::actions::Action;
 use crate::ui::keymap::{shortcut_text, Command, Keymap};
 use crate::ui::widgets::buttons::icon_button;
 use crate::ui::widgets::menu::CommandMenu;
 use crate::ui::widgets::{flat_items, CommandState};
-use eframe::egui::{self, Sense, Stroke, Ui, Vec2};
-use egui_phosphor::regular as icon;
 
 /// Width of the main menu.
 const MENU_W: f32 = 200.0;

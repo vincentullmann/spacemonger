@@ -1,9 +1,10 @@
 //! The tiles' colours and outlines, and keeping the colour scheme and list in step.
 
-use super::Line;
-use crate::ui::palette::Scheme;
 use eframe::egui::Color32;
 use serde::{Deserialize, Serialize};
+
+use super::Line;
+use crate::ui::palette::Scheme;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]

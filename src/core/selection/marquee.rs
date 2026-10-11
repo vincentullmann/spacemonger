@@ -1,9 +1,10 @@
 //! Shift+drag rectangle selection.
 
+use std::collections::HashSet;
+
 use super::Selection;
 use crate::core::layout::Item;
 use crate::core::model::EntryRef;
-use std::collections::HashSet;
 
 /// A rectangle selection in progress (view coordinates).
 pub struct Marquee {

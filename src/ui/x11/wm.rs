@@ -9,18 +9,20 @@
 //!
 //! Both go over the app's own connection (see [`super::conn`]).
 
-use super::shadow::{shadow_pixmaps, ShadowProperty};
-use super::{atom, conn, root, window_of, Handle, XResult};
-use eframe::egui::Pos2;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
+
+use eframe::egui::Pos2;
 use x11rb::connection::Connection;
 use x11rb::protocol::xproto::{
     AtomEnum, ClientMessageEvent, ConnectionExt as _, EventMask, PropMode, Window,
 };
 use x11rb::rust_connection::RustConnection;
 use x11rb::wrapper::ConnectionExt as _;
+
+use super::shadow::{shadow_pixmaps, ShadowProperty};
+use super::{atom, conn, root, window_of, Handle, XResult};
 
 /// How long a compositor check holds before asking the server again.
 const COMPOSITED_TTL: Duration = Duration::from_secs(1);

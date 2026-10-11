@@ -1,5 +1,9 @@
 //! Running actions, scanning, deleting and the dialogs.
 
+use std::path::PathBuf;
+
+use eframe::egui;
+
 use super::SpaceMonger;
 use crate::core::actions::Action;
 use crate::core::fs::{Drive, ScanJob, ScanStatus};
@@ -8,8 +12,6 @@ use crate::ui::dialogs::{confirm_delete, error_dialog, scan_dialog, DriveDialog}
 use crate::ui::error::AppError;
 use crate::ui::settings::Theme;
 use crate::utils::thread::drop_in_background;
-use eframe::egui;
-use std::path::PathBuf;
 
 impl SpaceMonger {
     pub(super) fn open_dialog(&mut self) {

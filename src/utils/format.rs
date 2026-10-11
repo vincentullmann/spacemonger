@@ -1,11 +1,12 @@
 //! Size / date formatting (port of FormatService).
 
+use std::fmt::Write as _;
+use std::sync::RwLock;
+
 use chrono::{Local, TimeZone};
 use humansize::{FormatSizeOptions, BINARY, DECIMAL};
 use num_format::{Locale, ToFormattedString};
 use serde::{Deserialize, Serialize};
-use std::fmt::Write as _;
-use std::sync::RwLock;
 use strum::{EnumIter, IntoStaticStr};
 
 /// Default `strftime` pattern for dates.

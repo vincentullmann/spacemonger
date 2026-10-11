@@ -1,8 +1,9 @@
 //! One laid-out box.
 
+use std::rc::Rc;
+
 use super::FOLDER_FRAME;
 use crate::core::geometry::Rect;
-use std::rc::Rc;
 
 /// A laid-out box: an entry, the free-space block, or an anonymous block of tiny entries.
 pub struct Item {

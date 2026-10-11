@@ -1,10 +1,11 @@
 //! Arrow-key selection moves.
 
+use std::rc::Rc;
+
 use super::Selection;
 use crate::core::geometry::Rect;
 use crate::core::layout::{neighbour, Dir};
 use crate::core::model::EntryRef;
-use std::rc::Rc;
 
 /// An arrow-key move.
 #[derive(Clone, Copy, PartialEq, Debug)]

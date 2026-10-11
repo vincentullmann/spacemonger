@@ -1,13 +1,15 @@
 //! Progress while a scan runs, floating over the treemap as it fills in. Not modal: it can be
 //! dragged out of the way.
 
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+
+use eframe::egui::{self, Align2, Vec2};
+
 use crate::core::fs::ScanJob;
 use crate::ui::theme::accent;
 use crate::ui::widgets::dialog::{button_row, Dialog};
 use crate::utils::text::elide_start;
-use eframe::egui::{self, Align2, Vec2};
-use std::sync::atomic::Ordering;
-use std::time::Duration;
 
 /// Show scan progress, with Pause / Resume and Cancel. Returns true when the user cancels.
 pub fn scan_dialog(ctx: &egui::Context, job: &ScanJob) -> bool {

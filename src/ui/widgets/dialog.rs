@@ -5,11 +5,12 @@
 //! modal one dims the window behind it and takes all input. The settings window draws the
 //! same [`header`] in a window of its own.
 
-use super::buttons::{close_button, close_button_margin};
 use eframe::egui::{
     self, Align, Align2, Area, Color32, Frame, Id, Layout, Margin, Order, Rect, RichText, Sense,
     Ui, UiBuilder, UiKind, Vec2,
 };
+
+use super::buttons::{close_button, close_button_margin};
 
 /// Height of the header row.
 pub const HEADER_H: f32 = 40.0;

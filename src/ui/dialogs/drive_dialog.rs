@@ -3,14 +3,16 @@
 //! Laid out top to bottom: the folder line, the drives table, and (later) a list of recently
 //! scanned paths under it, built like the drives table.
 
+use std::path::PathBuf;
+
+use eframe::egui::{self, Align, Layout, RichText, Sense, Shape, Ui, Vec2};
+use egui_phosphor::regular as icon;
+use poll_promise::Promise;
+
 use crate::core::fs::{drive_for_path, volumes, Drive, FsError};
 use crate::ui::theme::accent;
 use crate::ui::widgets::dialog::Dialog;
 use crate::utils::format;
-use eframe::egui::{self, Align, Layout, RichText, Sense, Shape, Ui, Vec2};
-use egui_phosphor::regular as icon;
-use poll_promise::Promise;
-use std::path::PathBuf;
 
 /// Width of the dialog's contents.
 const WIDTH: f32 = 520.0;

@@ -1,10 +1,11 @@
 //! Building the visible layout for one frame.
 
+use std::rc::Rc;
+
 use super::split::halves;
 use super::{content, root_content, Item, LayoutParams, Reshape};
 use crate::core::geometry::{Rect, Size};
 use crate::core::model::{Folder, Kind};
-use std::rc::Rc;
 
 /// Below this (w or h, in points) entries are merged into one anonymous block.
 const MIN_BOX: f64 = 5.0;

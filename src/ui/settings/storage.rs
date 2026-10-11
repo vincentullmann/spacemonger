@@ -1,7 +1,8 @@
 //! Loading and saving the settings (eframe storage), including the keys older versions used.
 
-use super::{Settings, Theme};
 use serde::Deserialize;
+
+use super::{Settings, Theme};
 
 /// Current storage key.
 const KEY: &str = "settings.v2";

@@ -1,11 +1,12 @@
 //! Camera state and the direct manipulations: pan, wheel zoom, reveal.
 
+use std::time::Instant;
+
 use super::{Anchor, Anim, Fit};
 use crate::constants::MAX_ZOOM;
 use crate::core::geometry::{Point, Rect, Size, TranslateScale, Vec2};
 use crate::core::layout::{self, child_boxes, Item, Reshape, Scene, FOLDER_FRAME};
 use crate::core::model::{path_after_remove, Kind};
-use std::time::Instant;
 
 #[derive(Default)]
 pub struct Camera {

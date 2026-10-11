@@ -1,11 +1,13 @@
 //! Name / size / date tip shown when hovering a box.
 
+use std::path::Path;
+
+use eframe::egui::{self, Id, Order, Pos2, RichText, Vec2};
+
 use crate::core::model::Entry;
 use crate::helpers::egui::popup_pivot;
 use crate::ui::settings::Tooltips;
 use crate::utils::format;
-use eframe::egui::{self, Id, Order, Pos2, RichText, Vec2};
-use std::path::Path;
 
 /// Show the tip for `entry` (at `path` on disk) next to the pointer at `pos`.
 pub fn infotip(ctx: &egui::Context, pos: Pos2, entry: &Entry, path: &Path, opts: &Tooltips) {

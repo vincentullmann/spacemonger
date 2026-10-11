@@ -1,16 +1,18 @@
 //! Parallel scanner: by default stays on one filesystem and counts hard links once.
 
-use super::control::ScanControl;
-use super::live::{Chain, LiveDir};
-use super::metadata::{entry_meta, meta};
-use super::{Drive, FsError};
-use crate::core::model::{Entry, Folder, Kind, Tree};
-use rayon::prelude::*;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::Path;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+
+use rayon::prelude::*;
+
+use super::control::ScanControl;
+use super::live::{Chain, LiveDir};
+use super::metadata::{entry_meta, meta};
+use super::{Drive, FsError};
+use crate::core::model::{Entry, Folder, Kind, Tree};
 
 /// Scan the folder at `path` into `chain.dir`.
 fn scan_dir(path: &Path, dev: u64, ctl: &ScanControl, chain: &Chain) {

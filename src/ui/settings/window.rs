@@ -5,6 +5,12 @@
 //! with × on the right, resizable from its edges, and the main menu's rounded corners where a
 //! compositor can show them (square without one). Pages are picked in a sidebar on the left.
 
+use eframe::egui::{
+    self, Align, CornerRadius, Id, Key, Layout, Margin, Rect, RichText, Sense, Stroke, UiBuilder,
+    Vec2, ViewportBuilder, ViewportId,
+};
+use egui_phosphor::regular as icon;
+
 use super::hotkeys::HotkeysPage;
 use super::{pages, Settings};
 use crate::constants::APP_ID;
@@ -12,11 +18,6 @@ use crate::helpers::zoom::zoom_keys;
 use crate::ui::platform;
 use crate::ui::widgets::dialog::{self, HEADER_H, PADDING};
 use crate::ui::widgets::{move_on_drag, window_frame};
-use eframe::egui::{
-    self, Align, CornerRadius, Id, Key, Layout, Margin, Rect, RichText, Sense, Stroke, UiBuilder,
-    Vec2, ViewportBuilder, ViewportId,
-};
-use egui_phosphor::regular as icon;
 
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 enum Page {

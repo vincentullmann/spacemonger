@@ -1,9 +1,10 @@
 //! The middle of the title bar: the window title, or where search will go, and the scan
 //! progress line along the bottom.
 
-use super::{BUTTON, PROGRESS_H, SEARCH_W};
 use eframe::egui::{self, Rect, Ui, Vec2};
 use egui_phosphor::regular as icon;
+
+use super::{BUTTON, PROGRESS_H, SEARCH_W};
 
 /// Narrowest space the title is drawn in.
 const MIN_TITLE_W: f32 = 24.0;

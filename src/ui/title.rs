@@ -1,11 +1,12 @@
 //! Window title: the selection, or the current folder, with sizes.
 
+use std::sync::atomic::Ordering;
+
 use crate::constants::APP_NAME;
 use crate::core::fs::ScanJob;
 use crate::core::model::Tree;
 use crate::core::selection::Selection;
 use crate::utils::format;
-use std::sync::atomic::Ordering;
 
 pub fn window_title(tree: Option<&Tree>, selection: &Selection, zoom: &[usize]) -> String {
     let Some(t) = tree else {

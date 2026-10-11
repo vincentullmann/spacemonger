@@ -1,8 +1,10 @@
 //! The set of selected entries.
 
-use crate::core::model::EntryRef;
-use indexmap::IndexSet;
 use std::collections::HashSet;
+
+use indexmap::IndexSet;
+
+use crate::core::model::EntryRef;
 
 /// Selected entries in the order they were picked; the last one is the primary (used by
 /// Zoom In, the window title and Shift+arrow extension). Equality ignores order.

@@ -14,9 +14,10 @@ pub use dialog::{attach_dialog, remember_main, Attach};
 pub use sync::{acknowledge, frame_drawn, install_sync, set_background};
 pub use wm::{add_shadow, composited, install_wm, set_shadow, show_window_menu};
 
-use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use std::error::Error;
 use std::sync::OnceLock;
+
+use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use x11rb::protocol::xproto::{ConnectionExt as _, Window};
 use x11rb::rust_connection::RustConnection;
 

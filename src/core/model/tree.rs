@@ -1,7 +1,8 @@
 //! A scanned tree with lookup by index path, hide / unhide and removal.
 
-use super::{Entry, EntryRef, Folder, Kind};
 use std::path::PathBuf;
+
+use super::{Entry, EntryRef, Folder, Kind};
 
 pub struct Tree {
     pub root: Folder,

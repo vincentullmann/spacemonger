@@ -1,10 +1,11 @@
 //! Menu entries for commands, shared by the main menu and the map's right-click menu.
 
+use eframe::egui::{Button, RichText, Ui};
+use egui_phosphor::regular as icon;
+
 use super::CommandState;
 use crate::core::actions::Action;
 use crate::ui::keymap::{shortcut_text, Command, Keymap};
-use eframe::egui::{Button, RichText, Ui};
-use egui_phosphor::regular as icon;
 
 /// Builds a menu of commands, remembering the one clicked.
 pub struct CommandMenu<'a> {

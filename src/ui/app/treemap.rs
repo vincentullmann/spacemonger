@@ -1,5 +1,9 @@
 //! The treemap panel: pointer input, layout, painting, menu and tips.
 
+use std::time::Instant;
+
+use eframe::egui::{self, Modifiers, PointerButton, Response, Sense};
+
 use super::SpaceMonger;
 use crate::core::actions::Action;
 use crate::core::geometry::{Point, Size, Vec2};
@@ -8,8 +12,6 @@ use crate::core::model::EntryRef;
 use crate::core::selection::{Marquee, Selection};
 use crate::ui::painter::MapPainter;
 use crate::ui::widgets::{context_menu, infotip};
-use eframe::egui::{self, Modifiers, PointerButton, Response, Sense};
-use std::time::Instant;
 
 impl SpaceMonger {
     pub(super) fn treemap(&mut self, ui: &mut egui::Ui) -> Option<Action> {

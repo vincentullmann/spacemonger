@@ -1,10 +1,11 @@
 //! Fonts: the treemap / path-bar font (egui's default, or a system font found with fontdb),
 //! the bold font for section titles, and the UI text size.
 
-use eframe::egui::{self, FontData, FontDefinitions, FontFamily};
-use eframe::epaint::text::{FontInsert, FontPriority, InsertFontFamily};
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex, OnceLock};
+
+use eframe::egui::{self, FontData, FontDefinitions, FontFamily};
+use eframe::epaint::text::{FontInsert, FontPriority, InsertFontFamily};
 
 /// Bold text (section titles): Ubuntu Bold, the heavy cut of egui's default font.
 pub fn bold_family() -> FontFamily {

@@ -1,11 +1,12 @@
 //! The settings groups, one struct per settings page (or part of one). Defaults are in
 //! `defaults.rs`.
 
-use crate::ui::keymap::Keymap;
-use crate::utils::format::SizeFormat;
 use eframe::egui::{self, Color32};
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, IntoStaticStr};
+
+use crate::ui::keymap::Keymap;
+use crate::utils::format::SizeFormat;
 
 pub use super::tiles::Tiles;
 

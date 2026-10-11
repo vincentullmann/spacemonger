@@ -1,10 +1,11 @@
 //! Moving the undecorated windows: drag empty space to move, handed to the window manager,
 //! and making up for the button release the window manager then swallows.
 
+use std::collections::HashMap;
+
 use eframe::egui::{
     self, Event, Modifiers, PointerButton, Pos2, RawInput, Ui, ViewportCommand, ViewportId,
 };
-use std::collections::HashMap;
 
 /// Pointer travel (points) with the button down before a press moves the window.
 const DRAG_THRESHOLD: f32 = 3.0;

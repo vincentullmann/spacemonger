@@ -14,14 +14,16 @@ pub use sections::{
 };
 pub use window::SettingsWindow;
 
+use std::time::Duration;
+
+use eframe::egui;
+
 use crate::constants::{BAR_H, WHEEL_ZOOM};
 use crate::core::camera::CameraParams;
 use crate::core::fs::ScanOptions;
 use crate::core::layout::LayoutParams;
 use crate::ui::fonts;
 use crate::utils::format::FormatOptions;
-use eframe::egui;
-use std::time::Duration;
 
 /// What the rest of the app takes from the settings.
 impl Settings {

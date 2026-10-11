@@ -4,10 +4,12 @@
 mod boxes;
 mod labels;
 
+use std::sync::Arc;
+
+use eframe::egui::{self, Color32, FontId, Galley, Painter, Pos2, Stroke, Vec2};
+
 use crate::helpers::egui::snap;
 use crate::ui::palette::Palette;
-use eframe::egui::{self, Color32, FontId, Galley, Painter, Pos2, Stroke, Vec2};
-use std::sync::Arc;
 
 /// Opacity of the drop shadow under light / dark label text.
 const SHADOW_ALPHA_DARK: u8 = 170;

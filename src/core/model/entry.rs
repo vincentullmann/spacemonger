@@ -1,8 +1,9 @@
 //! One file, folder or free-space block.
 
-use super::Folder;
 use std::borrow::Cow;
 use std::ffi::OsStr;
+
+use super::Folder;
 
 pub enum Kind {
     File,

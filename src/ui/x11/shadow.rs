@@ -1,10 +1,11 @@
 //! The window shadow's pixels: eight ARGB tiles (four corners, four edges the window manager
 //! repeats) for `_KDE_NET_WM_SHADOW`, and how far they reach outside the window.
 
-use super::XResult;
 use x11rb::connection::Connection;
 use x11rb::protocol::xproto::{ConnectionExt as _, ImageFormat, Window};
 use x11rb::rust_connection::RustConnection;
+
+use super::XResult;
 
 /// How far the shadow reaches past the window's sides, and how far down it's shifted.
 const RADIUS: i32 = 22;

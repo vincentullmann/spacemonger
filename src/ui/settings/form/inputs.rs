@@ -1,12 +1,14 @@
 //! The input widgets settings rows hold: numbers with a unit, drop-downs, colours, fonts.
 
+use std::ops::RangeInclusive;
+
+use eframe::egui::{self, emath::Numeric, Color32, Response, RichText, Ui};
+use strum::IntoEnumIterator;
+
 use crate::ui::fonts;
 use crate::ui::settings::{Line, Shown};
 use crate::ui::widgets::buttons::add_button;
 use crate::ui::widgets::flat_items;
-use eframe::egui::{self, emath::Numeric, Color32, Response, RichText, Ui};
-use std::ops::RangeInclusive;
-use strum::IntoEnumIterator;
 
 /// Width of a number slider (its number field comes after it).
 const SLIDER_W: f32 = 140.0;

@@ -1,11 +1,12 @@
 //! Colours and drawing options for the treemap and path bar. The "Classic" scheme is the
 //! original ColorService "Rainbow" palette; others are sampled from colorgrad presets.
 
-use crate::ui::settings::{Settings, Shown, Tiles};
 use colorgrad::Gradient;
 use eframe::egui::Color32;
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, IntoStaticStr};
+
+use crate::ui::settings::{Settings, Shown, Tiles};
 
 const fn c(r: u8, g: u8, b: u8) -> Color32 {
     Color32::from_rgb(r, g, b)

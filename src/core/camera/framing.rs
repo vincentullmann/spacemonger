@@ -1,10 +1,11 @@
 //! Camera moves that frame something: zoom to a folder, frame a set of entries, zoom out.
 
+use std::time::Instant;
+
 use super::{Anim, Camera, Fit};
 use crate::constants::MAX_ZOOM;
 use crate::core::geometry::{Rect, RectExt};
 use crate::core::layout::{self, Reshape, Scene};
-use std::time::Instant;
 
 /// Most rounds of the fixed-point camera solvers (folder frames don't scale with the camera,
 /// so each round only gets closer).
