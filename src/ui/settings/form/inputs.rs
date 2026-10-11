@@ -1,138 +1,27 @@
-//! Small building blocks for the settings pages: labelled rows with a reset button, and the input
-//! widgets they hold (numbers with a unit, drop-downs, colour lists, ...).
+//! The input widgets settings rows hold: numbers with a unit, drop-downs, colours, fonts.
 
-use super::{Line, Shown};
 use crate::ui::fonts;
-use crate::ui::widgets::buttons::{add_button, reset_button};
+use crate::ui::settings::{Line, Shown};
+use crate::ui::widgets::buttons::add_button;
 use crate::ui::widgets::flat_items;
 use eframe::egui::{self, emath::Numeric, Color32, Response, RichText, Ui};
 use std::ops::RangeInclusive;
+use strum::IntoEnumIterator;
 
-/// Width of the label column, shared by every group so the inputs line up.
-pub const LABEL_WIDTH: f32 = 170.0;
-/// Space kept between the inputs and the reset button.
-const RESET_GAP: f32 = 12.0;
-
-/// One settings line across the full width: `right` (the reset button) pinned to the right
-/// edge, `left` (label and input) filling the rest from the left. Follows the window width.
-pub fn line(ui: &mut Ui, right: impl FnOnce(&mut Ui), left: impl FnOnce(&mut Ui)) {
-    let h = ui.spacing().interact_size.y;
-    let size = egui::vec2(ui.available_width(), h);
-    ui.allocate_ui_with_layout(
-        size,
-        egui::Layout::right_to_left(egui::Align::Center),
-        |ui| {
-            right(ui);
-            ui.add_space(RESET_GAP);
-            let size = egui::vec2(ui.available_width(), h);
-            ui.allocate_ui_with_layout(
-                size,
-                egui::Layout::left_to_right(egui::Align::Center),
-                |ui| {
-                    // Keep the start of the line as the origin for `pad_to`.
-                    ui.set_min_width(ui.available_width());
-                    left(ui)
-                },
-            );
-        },
-    );
-}
-
-/// Space up to `x` from the start of the current line (the label column's width).
-pub fn pad_to(ui: &mut Ui, x: f32) {
-    let start = ui.min_rect().left();
-    ui.add_space((start + x - ui.cursor().min.x).max(0.0));
-}
-
-/// The changed-value marker after a label. Its space is always taken, so the widgets after
-/// it keep their ids (and focus / drag) when a value stops or starts being the default.
-pub fn changed_dot(ui: &mut Ui, changed: bool) {
-    let (dot, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-    if changed {
-        let color = crate::ui::theme::accent(ui.visuals());
-        ui.painter().circle_filled(dot.center(), 3.0, color);
-    }
-}
-
-/// A group of labelled rows.
-pub struct Rows<'a> {
-    ui: &'a mut Ui,
-}
-
-/// Rows without a title of their own (a page's only group: the page title names it).
-pub fn rows(ui: &mut Ui, add: impl FnOnce(&mut Rows)) {
-    ui.scope(|ui| {
-        ui.spacing_mut().item_spacing.y = 6.0;
-        add(&mut Rows { ui });
-    });
-}
-
-/// A titled group of rows.
-pub fn group(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Rows)) {
-    section(ui, title, |ui| rows(ui, add));
-}
-
-/// A section: a title in the strong text colour with a rule under it.
-pub fn section(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Ui)) {
-    ui.add_space(18.0);
-    ui.label(heading(title));
-    ui.separator();
-    add(ui);
-}
-
-impl Rows<'_> {
-    /// A row for `v`: `label` on the left, the input `add` draws, and a reset button.
-    /// A value that isn't `default` gets a bold label with a dot and an active reset button;
-    /// right-click on the label or input offers the reset too. `tip` shows when hovering the
-    /// label or input.
-    pub fn row<T: PartialEq + Clone>(
-        &mut self,
-        label: &str,
-        tip: &str,
-        v: &mut T,
-        default: &T,
-        add: impl FnOnce(&mut Ui, &mut T) -> Response,
-    ) {
-        let changed = v != default;
-        let reset = std::cell::Cell::new(false);
-        let menu = |r: &Response| {
-            r.context_menu(|ui| {
-                if ui
-                    .add_enabled(changed, egui::Button::new("Reset to default"))
-                    .clicked()
-                {
-                    reset.set(true);
-                    ui.close();
-                }
-            });
-        };
-        self.ui.push_id(label, |ui| {
-            line(
-                ui,
-                |ui| {
-                    if reset_button(ui, changed) {
-                        reset.set(true);
-                    }
-                },
-                |ui| {
-                    let text = if changed {
-                        RichText::new(label).strong()
-                    } else {
-                        RichText::new(label)
-                    };
-                    let l = ui.label(text).on_hover_text(tip);
-                    menu(&l);
-                    changed_dot(ui, changed);
-                    pad_to(ui, LABEL_WIDTH);
-                    add(ui, v).on_hover_text(tip);
-                },
-            );
-        });
-        if reset.get() {
-            *v = default.clone();
-        }
-    }
-}
+/// Width of a number slider (its number field comes after it).
+const SLIDER_W: f32 = 140.0;
+/// Width of the "which details" drop-down.
+const SHOWN_W: f32 = 260.0;
+/// Width of a colour swatch in a colour list.
+const SWATCH_W: f32 = 22.0;
+/// Most colours a colour list takes.
+const MAX_COLORS: usize = 64;
+/// Space an automatic colour's hint takes (shown or not), so what follows stays put.
+const HINT_W: f32 = 56.0;
+/// Height of the font list before it scrolls.
+const FONT_LIST_H: f32 = 400.0;
+/// Font names in the font list are this much bigger than the UI text.
+const FONT_PREVIEW_EXTRA: f32 = 2.0;
 
 /// A slider with its number field, and the unit after them.
 pub fn number<T: Numeric>(
@@ -143,7 +32,7 @@ pub fn number<T: Numeric>(
     unit: &str,
 ) -> Response {
     let (lo, hi) = (range.start().to_f64(), range.end().to_f64());
-    ui.spacing_mut().slider_width = 140.0;
+    ui.spacing_mut().slider_width = SLIDER_W;
     let r = ui.add(
         egui::Slider::new(v, range)
             .step_by(step)
@@ -162,26 +51,26 @@ pub fn number<T: Numeric>(
     r
 }
 
-/// A drop-down choosing one of `options`.
-pub fn choice<T: PartialEq + Copy>(
-    ui: &mut Ui,
-    id: &str,
-    v: &mut T,
-    options: &[(T, &str)],
-) -> Response {
-    let shown = options.iter().find(|(o, _)| o == v).map_or("", |(_, l)| *l);
+/// A drop-down choosing one value of an enum, listed in declaration order under their
+/// `strum` names.
+pub fn choice<T>(ui: &mut Ui, id: &str, v: &mut T) -> Response
+where
+    T: PartialEq + Copy + IntoEnumIterator + Into<&'static str>,
+{
+    let options: Vec<T> = T::iter().collect();
+    let name = |o: T| -> &'static str { o.into() };
     let r = egui::ComboBox::from_id_salt(id)
-        .selected_text(shown)
+        .selected_text(name(*v))
         .show_ui(ui, |ui| {
             flat_items(ui);
-            for (o, label) in options {
-                ui.selectable_value(v, *o, *label);
+            for &o in &options {
+                ui.selectable_value(v, o, name(o));
             }
         })
         .response;
-    let i = options.iter().position(|(o, _)| o == v).unwrap_or(0);
+    let i = options.iter().position(|o| o == v).unwrap_or(0);
     if let Some(j) = arrow_index(ui, &r, i, options.len()) {
-        *v = options[j].0;
+        *v = options[j];
     }
     r
 }
@@ -202,7 +91,7 @@ pub fn shown(ui: &mut Ui, id: &str, v: &mut Shown) -> Response {
     };
     egui::ComboBox::from_id_salt(id)
         .selected_text(text)
-        .width(260.0)
+        .width(SHOWN_W)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show_ui(ui, |ui| {
             flat_items(ui);
@@ -246,7 +135,7 @@ pub fn auto_color(ui: &mut Ui, v: &mut Option<Color32>, fallback: Color32, hint:
     if v.is_none() {
         ui.weak(hint);
     }
-    ui.add_space((x + 56.0 - ui.cursor().min.x).max(0.0));
+    ui.add_space((x + HINT_W - ui.cursor().min.x).max(0.0));
     r
 }
 
@@ -259,7 +148,7 @@ pub fn outline(ui: &mut Ui, v: &mut Line, fallback: Color32, hint: &str) -> Resp
 /// One swatch per colour (click to edit, right-click to remove), then "+" to add one.
 pub fn colors(ui: &mut Ui, colors: &mut Vec<Color32>) -> Response {
     ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().interact_size.x = 22.0;
+        ui.spacing_mut().interact_size.x = SWATCH_W;
         let mut remove = None;
         let only_one = colors.len() <= 1;
         for (i, c) in colors.iter_mut().enumerate() {
@@ -276,7 +165,7 @@ pub fn colors(ui: &mut Ui, colors: &mut Vec<Color32>) -> Response {
         if let Some(i) = remove {
             colors.remove(i);
         }
-        if colors.len() < 64
+        if colors.len() < MAX_COLORS
             && add_button(ui, false)
                 .on_hover_text("One colour more")
                 .clicked()
@@ -302,27 +191,29 @@ pub fn font_family(ui: &mut Ui, family: &mut String) -> Response {
             // Each name in its own font. Only the rows in view are drawn (and their fonts
             // loaded), so a long font list stays quick.
             let names = fonts::system_families();
-            let size = ui.style().text_styles[&egui::TextStyle::Body].size + 2.0;
+            let size = ui.style().text_styles[&egui::TextStyle::Body].size + FONT_PREVIEW_EXTRA;
             let row_h = size + ui.spacing().button_padding.y * 2.0 + ui.spacing().item_spacing.y;
-            egui::ScrollArea::vertical().max_height(400.0).show_rows(
-                ui,
-                row_h - ui.spacing().item_spacing.y,
-                names.len() + 1,
-                |ui, rows| {
-                    for k in rows {
-                        if k == 0 {
-                            ui.selectable_value(family, String::new(), "Default");
-                            continue;
+            egui::ScrollArea::vertical()
+                .max_height(FONT_LIST_H)
+                .show_rows(
+                    ui,
+                    row_h - ui.spacing().item_spacing.y,
+                    names.len() + 1,
+                    |ui, rows| {
+                        for k in rows {
+                            if k == 0 {
+                                ui.selectable_value(family, String::new(), "Default");
+                                continue;
+                            }
+                            let name = &names[k - 1];
+                            let mut text = RichText::new(name).size(size);
+                            if let Some(f) = fonts::preview_family(ui.ctx(), name) {
+                                text = text.family(f);
+                            }
+                            ui.selectable_value(family, name.clone(), text);
                         }
-                        let name = &names[k - 1];
-                        let mut text = RichText::new(name).size(size);
-                        if let Some(f) = fonts::preview_family(ui.ctx(), name) {
-                            text = text.family(f);
-                        }
-                        ui.selectable_value(family, name.clone(), text);
-                    }
-                },
-            );
+                    },
+                );
         })
         .response;
     // "Default" is index 0, then the system fonts.
@@ -358,9 +249,4 @@ pub fn excludes(ui: &mut Ui, list: &mut [String]) -> Response {
 /// A checkbox without a label of its own (the row has one).
 pub fn check(ui: &mut Ui, v: &mut bool) -> Response {
     ui.checkbox(v, "")
-}
-
-/// A section title: bold, in the strong text colour.
-pub fn heading(title: &str) -> RichText {
-    RichText::new(title).family(fonts::bold_family()).strong()
 }

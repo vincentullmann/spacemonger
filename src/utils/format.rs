@@ -6,27 +6,37 @@ use num_format::{Locale, ToFormattedString};
 use serde::{Deserialize, Serialize};
 use std::fmt::Write as _;
 use std::sync::RwLock;
+use strum::{EnumIter, IntoStaticStr};
 
 /// Default `strftime` pattern for dates.
 pub const DEFAULT_DATE_FORMAT: &str = "%d %b %Y   %-H:%M:%S";
 
 /// How file sizes are written.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+///
+/// The strum names are what the settings show.
+#[derive(
+    Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default, EnumIter, IntoStaticStr,
+)]
 pub enum SizeFormat {
     /// "1,234,567 bytes".
     #[default]
+    #[strum(serialize = "Bytes (1,234,567 bytes)")]
     Bytes,
 
     /// Powers of 1024: "1.2 MiB".
+    #[strum(serialize = "Binary (1.2 MiB)")]
     Binary,
 
     /// Powers of 1000: "1.2 MB".
+    #[strum(serialize = "Decimal (1.2 MB)")]
     Decimal,
 
     /// "38.8 KiB (39,718 bytes)".
+    #[strum(serialize = "Binary + bytes (1.2 MiB (1,234,567 bytes))")]
     BinaryAndBytes,
 
     /// "39.7 kB (39,718 bytes)".
+    #[strum(serialize = "Decimal + bytes (1.2 MB (1,234,567 bytes))")]
     DecimalAndBytes,
 }
 

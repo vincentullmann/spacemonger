@@ -144,7 +144,7 @@ impl SpaceMonger {
     /// window under the pointer.
     fn sync_zoom(&mut self, ctx: &egui::Context) {
         let z = &mut self.settings.general.ui_zoom;
-        crate::ui::settings::zoom_keys(ctx, z);
+        crate::helpers::zoom::zoom_keys(ctx, z);
         let want = *z as f32 / 100.0;
         let idle = !ctx.input(|i| i.pointer.any_down());
         if idle && (ctx.zoom_factor() - want).abs() > 1e-4 {

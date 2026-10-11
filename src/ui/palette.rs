@@ -5,6 +5,7 @@ use crate::ui::settings::{Settings, Shown, Tiles};
 use colorgrad::Gradient;
 use eframe::egui::Color32;
 use serde::{Deserialize, Serialize};
+use strum::{EnumIter, IntoStaticStr};
 
 const fn c(r: u8, g: u8, b: u8) -> Color32 {
     Color32::from_rgb(r, g, b)
@@ -40,7 +41,9 @@ const BOX_LIGHT: [Color32; 24] = [
 ];
 
 /// Where the depth colours come from.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[derive(
+    Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default, EnumIter, IntoStaticStr,
+)]
 pub enum Scheme {
     /// The original SpaceMonger rainbow.
     #[default]

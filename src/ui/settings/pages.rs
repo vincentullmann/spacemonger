@@ -1,44 +1,10 @@
 //! The contents of the settings pages (all but Hotkeys, which the window draws itself).
 
 use super::form::{self, group, rows};
-use super::{General, Labels, Layout, PathBar, Scan, Settings, Text, Theme, Tiles, Tooltips};
+use super::{General, Labels, Layout, PathBar, Scan, Settings, Text, Tiles, Tooltips};
 use crate::constants::UI_ZOOM;
-use crate::ui::palette::{Palette, Scheme};
-use crate::utils::format::SizeFormat;
+use crate::ui::palette::Palette;
 use eframe::egui::Ui;
-
-const THEMES: [(Theme, &str); 3] = [
-    (Theme::Light, "Light"),
-    (Theme::Dark, "Dark"),
-    (Theme::System, "Follow system"),
-];
-
-const SIZE_FORMATS: [(SizeFormat, &str); 5] = [
-    (SizeFormat::Bytes, "Bytes (1,234,567 bytes)"),
-    (SizeFormat::Binary, "Binary (1.2 MiB)"),
-    (SizeFormat::Decimal, "Decimal (1.2 MB)"),
-    (
-        SizeFormat::BinaryAndBytes,
-        "Binary + bytes (1.2 MiB (1,234,567 bytes))",
-    ),
-    (
-        SizeFormat::DecimalAndBytes,
-        "Decimal + bytes (1.2 MB (1,234,567 bytes))",
-    ),
-];
-
-const SCHEMES: [(Scheme, &str); 10] = [
-    (Scheme::Classic, "Classic"),
-    (Scheme::Turbo, "Turbo"),
-    (Scheme::Sinebow, "Sinebow"),
-    (Scheme::Rainbow, "Rainbow"),
-    (Scheme::Spectral, "Spectral"),
-    (Scheme::Viridis, "Viridis"),
-    (Scheme::Plasma, "Plasma"),
-    (Scheme::Warm, "Warm"),
-    (Scheme::Cool, "Cool"),
-    (Scheme::Custom, "Custom"),
-];
 
 pub fn navigation(ui: &mut Ui, s: &mut Settings) {
     let (g, d) = (&mut s.general, General::default());
@@ -125,7 +91,7 @@ pub fn appearance(ui: &mut Ui, s: &mut Settings) {
             "Light or dark colours, or follow the desktop's preference.",
             &mut g.theme,
             &dg.theme,
-            |ui, v| form::choice(ui, "theme", v, &THEMES),
+            |ui, v| form::choice(ui, "theme", v),
         );
         r.row(
             "UI zoom",
@@ -155,7 +121,7 @@ pub fn appearance(ui: &mut Ui, s: &mut Settings) {
             "How file sizes are shown in labels and tips. Totals (title bar, free space) use binary or decimal units.",
             &mut f.size_format,
             &d.size_format,
-            |ui, v| form::choice(ui, "size_format", v, &SIZE_FORMATS),
+            |ui, v| form::choice(ui, "size_format", v),
         );
         r.row(
             "Date format",
@@ -195,7 +161,7 @@ pub fn tiles(ui: &mut Ui, s: &mut Settings) {
             "Where the depth colours come from. Picking one resets the colour list; editing a colour makes the scheme Custom.",
             &mut t.scheme,
             &d.scheme,
-            |ui, v| form::choice(ui, "scheme", v, &SCHEMES),
+            |ui, v| form::choice(ui, "scheme", v),
         );
         r.row(
             "Colours",
