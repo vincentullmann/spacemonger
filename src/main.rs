@@ -1,5 +1,8 @@
 //! SpaceMonger One — treemap disk space viewer. Rust port of spacemonger1 (Java).
 
+// Release builds on Windows are GUI apps: don't open a console window alongside.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use std::path::PathBuf;
 
 use spacemonger::constants::{APP_ID, APP_NAME, MIN_WINDOW_SIZE, WINDOW_SIZE};

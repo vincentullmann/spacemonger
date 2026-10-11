@@ -9,37 +9,33 @@ permissions:
   contents: write
 
 jobs:
-
-  # Create a GitHub release.
   create-release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
       - uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, '-') }} # check if a dash is in the tag
+          prerelease: ${{ contains(github.ref_name, '-') }}
 
-  # Upload assets to the GitHub release.
   upload-assets:
     needs: create-release
     strategy:
       matrix:
         include:
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-22.04 # older glibc = runs on more distros
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-          - target: universal-apple-darwin # Apple Silicon + Intel
-            os: macos-latest
+          - { os: ubuntu-22.04,   target: x86_64-unknown-linux-gnu, name: linux-x86_64 }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc,   name: windows-x86_64, ext: .exe }
+          - { os: macos-latest,   target: aarch64-apple-darwin,     name: macos-arm64 }
+          - { os: macos-latest,   target: x86_64-apple-darwin,      name: macos-x86_64 }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
-      - uses: taiki-e/upload-rust-binary-action@v1
+      - uses: houseabsolute/actions-rust-cross@v1
         with:
-          bin: spacemonger
           target: ${{ matrix.target }}
-          archive: spacemonger-$tag-$target
-          checksum: sha256
-          locked: true
-          token: ${{ secrets.GITHUB_TOKEN }}
+          args: "--locked --release"
+      - name: Rename binary
+        shell: bash
+        run: mv target/${{ matrix.target }}/release/spacemonger${{ matrix.ext }} spacemonger-${{ github.ref_name }}-${{ matrix.name }}${{ matrix.ext }}
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: spacemonger-${{ github.ref_name }}-${{ matrix.name }}${{ matrix.ext }}
