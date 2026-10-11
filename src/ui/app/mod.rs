@@ -257,6 +257,10 @@ impl eframe::App for SpaceMonger {
         crate::ui::x11_sync::frame_drawn(&ctx);
     }
 
+    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        crate::ui::widgets::release_after_grab(ctx, raw_input);
+    }
+
     /// Runs once before every [`Self::ui`]. eframe 0.36 has no `update`; this is that hook.
     fn logic(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // The previous frame is on screen now; release the window manager's resize step.
