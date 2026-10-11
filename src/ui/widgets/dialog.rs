@@ -199,7 +199,8 @@ pub fn header(ui: &mut Ui, title: &str, closable: bool) -> bool {
     ui.allocate_ui_with_layout(size, Layout::left_to_right(Align::Center), |ui| {
         ui.set_min_size(size);
         ui.add_space(PADDING);
-        ui.label(RichText::new(title).strong());
+        // Not selectable, so dragging the title moves the dialog.
+        ui.add(egui::Label::new(RichText::new(title).strong()).selectable(false));
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.add_space(PADDING - (CLOSE_BUTTON.x - ICON_SIZE) / 2.0);
             closable && close_button(ui).clicked()

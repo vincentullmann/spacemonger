@@ -17,11 +17,13 @@ const ICON_W: f32 = 26.0;
 const BAR_W: f32 = 90.0;
 const BAR_H: f32 = 6.0;
 const SIZE_W: f32 = 130.0;
-const FS_W: f32 = 56.0;
+const FS_W: f32 = 76.0;
 
 pub struct DriveDialog {
     drives: Vec<Drive>,
     path: String,
+    /// Put the cursor in the folder field on the first frame.
+    focus: bool,
 }
 
 /// What happened in the dialog this frame.
@@ -40,6 +42,7 @@ impl DriveDialog {
         Self {
             drives: volumes(),
             path: String::new(),
+            focus: true,
         }
     }
 
@@ -79,6 +82,9 @@ impl DriveDialog {
                     .hint_text("Path to a folder, Enter to scan")
                     .desired_width(w),
             );
+            if std::mem::take(&mut self.focus) {
+                te.request_focus();
+            }
             let enter = te.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             let browse = ui
                 .add(
@@ -175,7 +181,11 @@ fn drive_row(ui: &mut Ui, d: &Drive) -> egui::Response {
         );
     });
     fixed(&mut row, FS_W, &mut |ui| {
-        ui.add(egui::Label::new(RichText::new(&d.fs).weak()).selectable(false));
+        ui.add(
+            egui::Label::new(RichText::new(&d.fs).weak())
+                .selectable(false)
+                .truncate(),
+        );
     });
 
     let visuals = ui.style().interact(&resp);
@@ -185,7 +195,7 @@ fn drive_row(ui: &mut Ui, d: &Drive) -> egui::Response {
             Shape::rect_filled(rect, visuals.corner_radius, visuals.weak_bg_fill),
         );
     }
-    resp.on_hover_text(format!("Scan {}", d.root.display()))
+    resp
 }
 
 /// A network share or a local disk.

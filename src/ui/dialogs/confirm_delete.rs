@@ -46,6 +46,7 @@ pub fn confirm_delete(ctx: &egui::Context, paths: &[PathBuf]) -> Option<bool> {
 
 /// A row of buttons along the bottom right of a dialog, laid out right to left.
 pub(super) fn buttons<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    ui.with_layout(Layout::right_to_left(Align::Center), add)
+    let size = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
+    ui.allocate_ui_with_layout(size, Layout::right_to_left(Align::Center), add)
         .inner
 }

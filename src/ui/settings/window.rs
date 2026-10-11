@@ -29,8 +29,11 @@ enum Page {
     Tooltips,
 }
 
-/// The sidebar: titled groups of pages, each with its icon and name.
-const SIDEBAR: [(&str, &[(Page, &str, &str)]); 2] = [
+/// A sidebar entry: the page, its icon and its name.
+type Entry = (Page, &'static str, &'static str);
+
+/// The sidebar: titled groups of pages.
+const SIDEBAR: [(&str, &[Entry]); 2] = [
     (
         "General",
         &[
@@ -217,7 +220,7 @@ impl SettingsWindow {
             |ui| {
                 ui.set_min_size(Vec2::new(w, HEADER_H));
                 ui.add_space(PADDING - 10.0);
-                ui.label(RichText::new(TITLE).strong());
+                ui.add(egui::Label::new(RichText::new(TITLE).strong()).selectable(false));
             },
         );
         ui.spacing_mut().item_spacing.y = 2.0;
