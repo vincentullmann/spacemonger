@@ -9,6 +9,7 @@ use eframe::egui::{
     self, Align, Align2, Area, Color32, Frame, Id, Layout, Margin, Order, Rect, RichText, Sense,
     Ui, UiBuilder, UiKind, Vec2,
 };
+use crate::ui::fonts;
 
 use super::buttons::{close_button, close_button_margin};
 
@@ -160,6 +161,7 @@ impl<'a> Dialog<'a> {
 ////////////////////////////////////////////////////////////////////////////////
 // region:Frame, header and buttons
 
+
 /// Move `min` so a `size` box from there stays inside `screen` (top-left wins if too big).
 fn clamp_into(min: egui::Pos2, size: Vec2, screen: Rect) -> egui::Pos2 {
     egui::pos2(
@@ -167,6 +169,7 @@ fn clamp_into(min: egui::Pos2, size: Vec2, screen: Rect) -> egui::Pos2 {
         min.y.min(screen.bottom() - size.y).max(screen.top()),
     )
 }
+
 
 /// The frame, header and padded body. Returns whether × was clicked, and what `add` returned.
 fn framed<R>(
@@ -201,6 +204,7 @@ fn framed<R>(
         .inner
 }
 
+
 /// The title on the left, × on the right (if `closable`), across the available width.
 /// Returns whether × was clicked.
 pub fn header(ui: &mut Ui, title: &str, closable: bool) -> bool {
@@ -208,8 +212,14 @@ pub fn header(ui: &mut Ui, title: &str, closable: bool) -> bool {
     ui.allocate_ui_with_layout(size, Layout::left_to_right(Align::Center), |ui| {
         ui.set_min_size(size);
         ui.add_space(PADDING);
-        // Not selectable, so dragging the title moves the dialog.
-        ui.add(egui::Label::new(RichText::new(title).strong()).selectable(false));
+        
+        let mut label_text = RichText::new(title);
+        label_text = label_text.family(fonts::bold_family());
+        label_text = label_text.strong();
+        let mut label = egui::Label::new(label_text);
+        label = label.selectable(false);  // allow dragging the title to move the dialog.
+        ui.add(label);
+
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.add_space(close_button_margin(PADDING));
             closable && close_button(ui).clicked()
