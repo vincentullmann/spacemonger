@@ -250,8 +250,8 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
                 |ui, v| form::number(ui, v, -3..=3, 1.0, ""),
             );
             r.row(
-                "Show",
-                "What file labels show, as far as the box is big enough. Folders show their name.",
+                "Elements",
+                "What elements to show in the labels, as far as the box is big enough.",
                 &mut lb.shown,
                 &dl.shown,
                 |ui, v| form::shown(ui, "label_shown", v),
@@ -277,8 +277,8 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
     let (tt, d) = (&mut s.tooltips, Tooltips::default());
     group(ui, "Tooltips", |r| {
         r.row(
-            "Show",
-            "What the tip shows.",
+            "Elements",
+            "What elements to show in the tooltips.",
             &mut tt.shown,
             &d.shown,
             |ui, v| form::shown(ui, "tip_shown", v),
