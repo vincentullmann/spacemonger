@@ -222,15 +222,13 @@ fn divider(ui: &mut Ui) {
 /// The icons left of the title. Also returns whether the search icon is hovered.
 fn commands(ui: &mut Ui, st: &CommandState, keys: &Keymap) -> (Option<Action>, bool) {
     let mut act = main_menu(ui, st, keys);
-    // Placeholders for zoom history (see TODO.md).
-    icon_button(ui, icon::ARROW_LEFT, false, "Back (coming later)");
-    icon_button(ui, icon::ARROW_RIGHT, false, "Forward (coming later)");
-    divider(ui);
+
     let mut cmd = |ui: &mut Ui, glyph: &str, enabled: bool, c: Command, name: &str| {
         if icon_button(ui, glyph, enabled, &tip(keys, c, name)).clicked() {
             act = Some(c.action(false));
         }
     };
+
     cmd(ui, icon::FOLDER_OPEN, true, Command::Open, "Open…");
     cmd(
         ui,
@@ -240,6 +238,12 @@ fn commands(ui: &mut Ui, st: &CommandState, keys: &Keymap) -> (Option<Action>, b
         "Reload",
     );
     divider(ui);
+
+    // Placeholders for zoom history (see TODO.md).
+    icon_button(ui, icon::ARROW_LEFT, false, "Back (coming later)");
+    icon_button(ui, icon::ARROW_RIGHT, false, "Forward (coming later)");
+    divider(ui);
+
     let search = ui.add_enabled(
         false,
         Button::new(RichText::new(icon::MAGNIFYING_GLASS).size(ICON_SIZE))
