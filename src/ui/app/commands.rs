@@ -7,6 +7,7 @@ use crate::core::model::{path_after_remove, EntryRef};
 use crate::ui::dialogs::{confirm_delete, error_dialog, scan_dialog, DriveDialog};
 use crate::ui::error::AppError;
 use crate::ui::settings::Theme;
+use crate::utils::thread::drop_in_background;
 use eframe::egui;
 use std::path::PathBuf;
 
@@ -22,8 +23,7 @@ impl SpaceMonger {
         }
         // Dropping a running job cancels it.
         self.scan = None;
-        self.tree = None;
-        self.live = None;
+        drop_in_background((self.tree.take(), self.live.take()));
         self.zoom.clear();
         self.camera.reset();
         self.selection.clear();
@@ -45,7 +45,7 @@ impl SpaceMonger {
             ScanStatus::Running => {
                 if let Some(mut t) = job.take_snapshot() {
                     t.set_dotfiles_hidden(self.settings.scan.ignore_hidden);
-                    self.live = Some(t);
+                    drop_in_background(self.live.replace(t));
                     self.invalidate();
                 }
             }
@@ -60,7 +60,7 @@ impl SpaceMonger {
                     t.set_dotfiles_hidden(self.settings.scan.ignore_hidden);
                 }
                 self.tree = tree;
-                self.live = None;
+                drop_in_background(self.live.take());
                 self.scan = None;
                 self.invalidate();
             }

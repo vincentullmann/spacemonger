@@ -42,7 +42,7 @@ pub fn path_bar(
         &painter,
         resp.rect.min,
         ui.ctx().pixels_per_point(),
-        pal.clone(),
+        pal,
         font.clone(),
     );
     let w = resp.rect.width() as i32;

@@ -20,13 +20,8 @@ impl SpaceMonger {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Default);
         }
         let ppp = ui.ctx().pixels_per_point();
-        let d = MapPainter::new(
-            &painter,
-            resp.rect.min,
-            ppp,
-            self.palette(),
-            self.settings.map_font(),
-        );
+        let pal = self.palette.clone();
+        let d = MapPainter::new(&painter, resp.rect.min, ppp, &pal, self.settings.map_font());
         let (w, h) = (resp.rect.width(), resp.rect.height());
         let mods = ui.input(|i| i.modifiers);
         // A running scan's snapshot is only drawn; its entries move around as the scan goes.

@@ -21,6 +21,7 @@ use crate::ui::title::{scan_title, window_title};
 use crate::ui::widgets::{path_bar, titlebar, window_frame, CommandState};
 use eframe::egui::{self, Vec2};
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::time::Instant;
 
 pub struct SpaceMonger {
@@ -44,6 +45,8 @@ pub struct SpaceMonger {
     hover_since: Instant,
 
     settings: Settings,
+    /// Colours and label options for the painters, from the settings.
+    palette: Rc<Palette>,
     settings_window: SettingsWindow,
     /// Folder title bar height for the current label font.
     title_h: f64,
@@ -76,6 +79,7 @@ impl SpaceMonger {
             marquee: None,
             hovered: None,
             hover_since: Instant::now(),
+            palette: Rc::new(Palette::new(&settings)),
             settings,
             settings_window: SettingsWindow::default(),
             title_h: crate::core::layout::TITLE_H,
@@ -102,10 +106,6 @@ impl SpaceMonger {
         ctx.theme() == egui::Theme::Dark
     }
 
-    fn palette(&self) -> Palette {
-        Palette::new(&self.settings)
-    }
-
     /// Push changed settings out to egui, the camera, the tree and the layout.
     fn apply_settings(&mut self, ctx: &egui::Context) {
         let s = &self.settings;
@@ -123,6 +123,7 @@ impl SpaceMonger {
             crate::utils::format::set_options(s.format_options());
         }
         self.camera.params = s.camera_params();
+        self.palette = Rc::new(Palette::new(s));
         if let Some(t) = &mut self.tree {
             if t.dotfiles_hidden != s.scan.ignore_hidden {
                 t.set_dotfiles_hidden(s.scan.ignore_hidden);
@@ -203,7 +204,7 @@ impl eframe::App for SpaceMonger {
         let ctx = ui.ctx().clone();
         #[cfg(target_os = "linux")]
         {
-            let bg = self.palette().background;
+            let bg = self.palette.background;
             crate::ui::x11_sync::install(frame, &ctx, bg);
             crate::ui::x11_dialog::remember_main(frame);
             crate::ui::x11_sync::set_background(bg);
@@ -226,17 +227,15 @@ impl eframe::App for SpaceMonger {
         self.poll_scan();
 
         let st = self.command_state();
-        let pal = self.palette();
+        let pal = self.palette.clone();
         let (bar_font, bar_h) = (self.settings.bar_font(), self.settings.bar_height());
+        // Not scanning: last frame's title (it's brought up to date at the end of the frame).
         let (title, progress) = match &self.scan {
             Some(job) => {
                 let (t, frac) = scan_title(job);
                 (t, Some(frac))
             }
-            None => (
-                window_title(self.tree.as_ref(), &self.selection, &self.zoom),
-                None,
-            ),
+            None => (self.title.clone(), None),
         };
         let mut act = egui::Panel::top("titlebar")
             .exact_size(titlebar::HEIGHT)

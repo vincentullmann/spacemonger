@@ -6,20 +6,25 @@ use crate::core::model::Tree;
 use crate::helpers::egui::snap;
 use crate::ui::palette::Palette;
 use crate::utils::format;
-use eframe::egui::{self, Align2, Color32, FontId, Painter, Pos2, Stroke, Vec2};
+use eframe::egui::{self, Color32, FontId, Galley, Painter, Pos2, Stroke, Vec2};
+use std::sync::Arc;
+
+/// Opacity of the drop shadow under light / dark label text.
+const SHADOW_ALPHA_DARK: u8 = 170;
+const SHADOW_ALPHA_LIGHT: u8 = 150;
 
 /// Draws boxes and labels in view coordinates relative to `origin` (snapped to the pixel grid).
 pub struct MapPainter<'a> {
     painter: &'a Painter,
     origin: Pos2,
     ppp: f32,
-    pal: Palette,
+    pal: &'a Palette,
     font: FontId,
 }
 
 impl<'a> MapPainter<'a> {
     /// A painter whose view origin is `min` (the allocated rect's top-left).
-    pub fn new(painter: &'a Painter, min: Pos2, ppp: f32, pal: Palette, font: FontId) -> Self {
+    pub fn new(painter: &'a Painter, min: Pos2, ppp: f32, pal: &'a Palette, font: FontId) -> Self {
         Self {
             painter,
             origin: snap(min, ppp),
@@ -30,7 +35,7 @@ impl<'a> MapPainter<'a> {
     }
 
     pub fn palette(&self) -> &Palette {
-        &self.pal
+        self.pal
     }
 
     /// Screen position to view coordinates.
@@ -55,31 +60,37 @@ impl<'a> MapPainter<'a> {
         }
     }
 
+    /// `s` laid out in the label font, once: measure it with [`Self::size`], draw it with
+    /// [`Self::text`] (in any colour, shadow included).
+    pub fn galley(&self, s: &str) -> Arc<Galley> {
+        self.painter
+            .layout_no_wrap(s.to_owned(), self.font.clone(), Color32::WHITE)
+    }
+
+    /// Size of `s` in the label font, rounded up to whole points.
     pub fn text_width(&self, s: &str) -> (f32, f32) {
-        let g = self
-            .painter
-            .layout_no_wrap(s.to_string(), self.font.clone(), Color32::WHITE);
+        Self::size(&self.galley(s))
+    }
+
+    /// A galley's size, rounded up to whole points.
+    pub fn size(g: &Galley) -> (f32, f32) {
         (g.size().x.ceil(), g.size().y.ceil())
     }
 
-    fn text(&self, p: &Painter, s: &str, x: f32, y: f32, c: Color32) {
+    /// Draw a label galley with its top-left at view point (`x`, `y`), plus the drop shadow
+    /// if it's on.
+    fn text(&self, p: &Painter, g: &Arc<Galley>, x: f32, y: f32, c: Color32) {
         let pos = self.snap(self.origin + Vec2::new(x, y));
         if self.pal.shadow {
             // Dark shadow under light text, light under dark.
             let shadow = if c.intensity() > 0.5 {
-                Color32::from_black_alpha(170)
+                Color32::from_black_alpha(SHADOW_ALPHA_DARK)
             } else {
-                Color32::from_white_alpha(150)
+                Color32::from_white_alpha(SHADOW_ALPHA_LIGHT)
             };
-            p.text(
-                pos + Vec2::splat(1.0),
-                Align2::LEFT_TOP,
-                s,
-                self.font.clone(),
-                shadow,
-            );
+            p.galley_with_override_text_color(pos + Vec2::splat(1.0), g.clone(), shadow);
         }
-        p.text(pos, Align2::LEFT_TOP, s, self.font.clone(), c);
+        p.galley_with_override_text_color(pos, g.clone(), c);
     }
 
     /// A path-bar box in the treemap's style: fill, border (the hover outline when hovered), label
@@ -103,13 +114,14 @@ impl<'a> MapPainter<'a> {
             Stroke::new(bw / self.ppp, bc),
             egui::StrokeKind::Inside,
         );
-        let (_, th) = self.text_width(label);
+        let label = self.galley(label);
+        let (_, th) = Self::size(&label);
         let p = self
             .painter
             .with_clip_rect(self.rect(x, y, w, h).intersect(self.painter.clip_rect()));
         self.text(
             &p,
-            label,
+            &label,
             x + 6.0,
             y + 1.0 + (h - 1.0 - th) / 2.0,
             self.pal.bar_text_on(fill),
@@ -134,7 +146,7 @@ impl<'a> MapPainter<'a> {
     /// physical pixels. With collapsed borders the box reaches one border width further right
     /// and down, onto the neighbour's line.
     pub fn outline(&self, it: &Item, sel: bool, hover: bool) {
-        let pal = &self.pal;
+        let pal = self.pal;
         let (fx, fy, mut fw, mut fh) = self.fill_box(it);
         if it.w + 1.0 <= 4.0
             || it.h + 1.0 <= 4.0
@@ -184,7 +196,7 @@ impl<'a> MapPainter<'a> {
 
     /// Flat box: a single fill with a gap to its neighbours (1px by default), plus its label.
     pub fn item(&self, tree: &Tree, it: &Item, sel: bool, hover: bool) {
-        let pal = &self.pal;
+        let pal = self.pal;
         let (x, y, w, h) = (it.x, it.y, it.w + 1.0, it.h + 1.0);
 
         if !it.is_free {
@@ -227,7 +239,8 @@ impl<'a> MapPainter<'a> {
                 format!("Files Total:  {}", tree.num_files),
                 format!("Folders Total:  {}", tree.num_folders),
             ];
-            let (lw, lh) = self.text_width(&lines[0]);
+            let lines = lines.map(|l| self.galley(&l));
+            let (lw, lh) = Self::size(&lines[0]);
             let tx = if lw > w - 2.0 {
                 x + 2.0
             } else {
@@ -244,8 +257,8 @@ impl<'a> MapPainter<'a> {
             return;
         }
 
-        let name = entry.display_name();
-        let (tw, th) = self.text_width(&name);
+        let name = self.galley(&entry.display_name());
+        let (tw, th) = Self::size(&name);
         let tx = if tw > w - 2.0 || it.is_folder {
             x + 3.0
         } else {
@@ -294,13 +307,14 @@ impl<'a> MapPainter<'a> {
             (false, _) => (0.0, -5.0 * k * (n - 1.0), 10.0 * k),
         };
         for (i, s) in extras.iter().enumerate() {
-            let (sw, _) = self.text_width(s);
+            let s = self.galley(s);
+            let (sw, _) = Self::size(&s);
             let sx = if sw > w - 2.0 {
                 x + 3.0
             } else {
                 x + (w - sw) / 2.0
             };
-            self.text(&p, s, sx, ty + first + step * i as f32, fg);
+            self.text(&p, &s, sx, ty + first + step * i as f32, fg);
         }
         ty += name_dy;
         if !show_name {

@@ -56,8 +56,15 @@ impl ScanJob {
         // Snapshots are built here rather than on the UI thread, which only picks them up.
         let (d, c, out) = (drive.clone(), ctl.clone(), latest.clone());
         std::thread::spawn(move || {
+            let mut last = None;
             while !done.load(Ordering::Relaxed) && !c.cancelled.load(Ordering::Relaxed) {
                 std::thread::sleep(LIVE_SCAN_INTERVAL);
+                // Nothing new found (paused, or a slow folder): keep the last snapshot.
+                let found = c.found();
+                if last == Some(found) {
+                    continue;
+                }
+                last = Some(found);
                 if let Some(t) = c.snapshot(&d) {
                     *out.lock().unwrap_or_else(|e| e.into_inner()) = Some(t);
                     on_update();

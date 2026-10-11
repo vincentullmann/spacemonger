@@ -91,6 +91,15 @@ impl ScanControl {
     fn first_sighting(&self, id: Option<(u64, u64)>) -> bool {
         id.is_none_or(|id| self.seen.insert(id))
     }
+    /// (files, folders, bytes) found so far: changes whenever the scan finds anything.
+    pub fn found(&self) -> (u64, u64, u64) {
+        (
+            self.files.load(Ordering::Relaxed),
+            self.folders.load(Ordering::Relaxed),
+            self.bytes.load(Ordering::Relaxed),
+        )
+    }
+
     /// Count something that couldn't be read.
     fn failed(&self) {
         self.errors.fetch_add(1, Ordering::Relaxed);

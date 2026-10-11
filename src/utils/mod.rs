@@ -3,3 +3,4 @@
 pub mod format;
 pub mod math;
 pub mod text;
+pub mod thread;
