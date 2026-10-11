@@ -1,8 +1,26 @@
 # SpaceMonger One (Rust)
 
 Rust port of [spacemonger1](https://github.com/scf37/spacemonger1) (Java), itself a port of
-Sean Werkema's original SpaceMonger 1.x. Shows a disk or folder as a treemap: bigger box,
-more space; boxes inside boxes are folders; colours show nesting depth.
+Sean Werkema's original SpaceMonger 1.x, with some additional tweaks.
+
+Shows a disk or folder as a treemap:
+
+- bigger box more space;
+- boxes inside boxes are folders;
+- colors indicate nesting depth.
+
+<img src=docs/img/screenshot_main.png width=1280px />
+
+## Features
+
+adjusts when resizing the window  
+use the mousewheel or double click folders to zoom in and out  
+
+<video src=docs/img/demo.mp4 width=500px ></video>
+
+extensive setting options
+
+<video src=docs/img/settings.mp4 width=500px ></video>
 
 ## Build & run
 
