@@ -21,8 +21,9 @@ pub fn infotip(ctx: &egui::Context, pos: Pos2, entry: &Entry, path: &Path, opts:
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+                // The name bold in the main colour; the details under it dimmed.
                 if shown.name {
-                    ui.label(text(entry.name.clone()).strong());
+                    ui.label(text(entry.name.clone()).family(crate::ui::fonts::bold_family()));
                 }
                 // (label, value) rows under the name.
                 let mut rows: Vec<(&str, String)> = Vec::new();
@@ -44,8 +45,8 @@ pub fn infotip(ctx: &egui::Context, pos: Pos2, entry: &Entry, path: &Path, opts:
                     .spacing([10.0, ui.spacing().item_spacing.y])
                     .show(ui, |ui| {
                         for (label, value) in rows {
-                            ui.label(text(label.to_string()));
-                            ui.label(text(value));
+                            ui.label(text(label.to_string()).weak());
+                            ui.label(text(value).weak());
                             ui.end_row();
                         }
                     });
