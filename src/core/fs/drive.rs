@@ -60,10 +60,12 @@ fn free(m: &Mount) -> u64 {
 
 /// Build a `Drive` for an arbitrary folder, using the stats of the volume it lives on.
 pub fn drive_for_path(path: &Path) -> Result<Drive, FsError> {
-    let path = fs::canonicalize(path).map_err(|source| FsError::Io {
-        path: path.to_path_buf(),
-        source,
-    })?;
+    let path = fs::canonicalize(path)
+        .map(strip_verbatim)
+        .map_err(|source| FsError::Io {
+            path: path.to_path_buf(),
+            source,
+        })?;
     if !path.is_dir() {
         return Err(FsError::NotAFolder(path));
     }
@@ -83,6 +85,26 @@ pub fn drive_for_path(path: &Path) -> Result<Drive, FsError> {
         fs: best.map_or(String::new(), |m| m.info.fs_type.clone()),
         root: path,
     })
+}
+
+/// On Windows `canonicalize` returns verbatim paths (`\\?\C:\dir`, `\\?\UNC\host\share`),
+/// which never match the volume mount points (`C:\`) and look odd in the UI. Turn them back
+/// into the ordinary form.
+fn strip_verbatim(path: PathBuf) -> PathBuf {
+    if !cfg!(windows) {
+        return path;
+    }
+    let plain = {
+        let s = path.to_string_lossy();
+        if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+            Some(PathBuf::from(format!(r"\\{rest}")))
+        } else {
+            s.strip_prefix(r"\\?\")
+                .filter(|rest| rest.as_bytes().get(1) == Some(&b':'))
+                .map(PathBuf::from)
+        }
+    };
+    plain.unwrap_or(path)
 }
 
 #[cfg(test)]
