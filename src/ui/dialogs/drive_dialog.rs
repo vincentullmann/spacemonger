@@ -72,7 +72,12 @@ impl DriveDialog {
                 Some(drives) if drives.is_empty() => {
                     ui.weak("No drives found.");
                 }
-                Some(drives) => out.chosen = drive_list(ui, drives),
+                Some(drives) => {
+                    // Only a click replaces a folder the line above may have picked.
+                    if let Some(c) = drive_list(ui, drives) {
+                        out.chosen = Some(c);
+                    }
+                }
             }
         });
         out.closed |= shown.close;
