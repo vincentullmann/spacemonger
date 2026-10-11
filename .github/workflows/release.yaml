@@ -1,42 +1,45 @@
+name: Release
+
+# Push a tag like `v0.2.0` to build all platforms and publish a GitHub release.
 on:
-  workflow_dispatch:
+  push:
+    tags: ["v*"]
 
 permissions:
-  # to write the changelog
   contents: write
 
 jobs:
-  release:
-    name: Release - ${{ matrix.platform.os-name }}
+
+  # Create a GitHub release.
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }} # check if a dash is in the tag
+
+  # Upload assets to the GitHub release.
+  upload-assets:
+    needs: create-release
     strategy:
       matrix:
-        platform:
-          - os-name: Linux-x86_64
-            runs-on: ubuntu-24.04
-            target: x86_64-unknown-linux-musl
-
-          - os-name: Windows-x86_64
-            runs-on: windows-latest
-            target: x86_64-pc-windows-msvc
-
-          - os-name: macOS-x86_64
-            runs-on: macOS-latest
-            target: x86_64-apple-darwin
-
-    runs-on: ${{ matrix.platform.runs-on }}
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04 # older glibc = runs on more distros
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+          - target: universal-apple-darwin # Apple Silicon + Intel
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Build binary
-        uses: houseabsolute/actions-rust-cross@v1
+      - uses: actions/checkout@v6
+      - uses: taiki-e/upload-rust-binary-action@v1
         with:
-          command: build
-          target: ${{ matrix.platform.target }}
-          args: "--locked --release"
-          strip: true
-      - name: Publish artifacts and release
-        uses: houseabsolute/actions-rust-release@v0
-        with:
-          executable-name: spacemonger
-          target: ${{ matrix.platform.target }}
-          changes-file: ""
+          bin: spacemonger
+          target: ${{ matrix.target }}
+          archive: spacemonger-$tag-$target
+          checksum: sha256
+          locked: true
+          token: ${{ secrets.GITHUB_TOKEN }}
