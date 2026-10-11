@@ -127,6 +127,10 @@ pub fn build(root: &Folder, cam: Rect, view: Size, p: LayoutParams, ovs: &[Resha
 }
 
 fn layout_folder(cx: &mut Ctx, folder: &Folder, path: Rc<[usize]>, r: Rect, depth: i32) {
+    // A folder too small for its frame and title bar has no room for its contents.
+    if r.width() <= 0.0 || r.height() <= 0.0 {
+        return;
+    }
     let indices: Vec<usize> = (0..folder.entries.len()).collect();
     split(cx, folder, &path, &indices, r, depth);
 }
@@ -182,7 +186,7 @@ fn place(cx: &mut Ctx, folder: &Folder, path: &Rc<[usize]>, list: &[usize], r: R
             let area = content(r, cx.p.title_h);
             layout_folder(cx, child, Rc::from(cp), area, depth + 1);
         }
-    } else if cx.on_screen(r) {
+    } else if cx.on_screen(r) && r.width() > 0.0 && r.height() > 0.0 {
         // A few pixels across: merge into one anonymous block.
         cx.push(path, None, depth, (false, false, false), r);
     }

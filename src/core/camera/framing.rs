@@ -71,7 +71,9 @@ impl Camera {
         }
         // Root coverage only (the fit itself isn't active yet).
         let cam = self.cover_root(cam);
-        let n = scene.locate(cam, path, &[])?;
+        let n = scene
+            .locate(cam, path, &[])
+            .filter(|n| n.width() > 0.0 && n.height() > 0.0)?;
         let reshape = Reshape::between(path.to_vec(), n, t);
         Some((
             cam,

@@ -3,7 +3,7 @@
 use super::{Anchor, Anim, Fit};
 use crate::constants::MAX_ZOOM;
 use crate::core::geometry::{Point, Rect, Size, TranslateScale, Vec2};
-use crate::core::layout::{self, child_boxes, Item, Reshape, Scene};
+use crate::core::layout::{self, child_boxes, Item, Reshape, Scene, FOLDER_FRAME};
 use crate::core::model::{path_after_remove, Kind};
 use std::time::Instant;
 
@@ -75,11 +75,12 @@ impl Camera {
 
     /// Box a folder (with a `title_h` title bar) needs so its content exactly fills the view.
     pub fn fill_box(&self, title_h: f64) -> Rect {
+        // The root's content stops 1 short of the view on the right and bottom.
         Rect::new(
-            -3.0,
+            -FOLDER_FRAME,
             -title_h,
-            self.view.width + 2.0,
-            self.view.height + 2.0,
+            self.view.width + FOLDER_FRAME - 1.0,
+            self.view.height + FOLDER_FRAME - 1.0,
         )
     }
 
