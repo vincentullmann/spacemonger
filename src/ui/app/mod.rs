@@ -16,7 +16,7 @@ use crate::ui::error::AppError;
 use crate::ui::fonts;
 use crate::ui::palette::Palette;
 use crate::ui::settings::{Settings, SettingsWindow};
-use crate::ui::title::window_title;
+use crate::ui::title::{scan_title, window_title};
 use crate::ui::widgets::{path_bar, titlebar, window_frame, CommandState};
 use eframe::egui::{self, Vec2};
 use std::path::PathBuf;
@@ -191,6 +191,12 @@ impl eframe::App for SpaceMonger {
             crate::ui::x11_sync::install(frame, &ctx, bg);
             crate::ui::x11_dialog::remember_main(frame);
             crate::ui::x11_sync::set_background(bg);
+            crate::ui::x11_wm::install(frame);
+            let full = ctx.input(|i| {
+                let v = i.viewport();
+                v.maximized.unwrap_or(false) || v.fullscreen.unwrap_or(false)
+            });
+            crate::ui::x11_wm::set_shadow(!full);
         }
         #[cfg(not(target_os = "linux"))]
         let _ = frame;
@@ -206,12 +212,23 @@ impl eframe::App for SpaceMonger {
         let st = self.command_state();
         let pal = self.palette(&ctx);
         let (bar_font, bar_h) = (self.settings.bar_font(), self.settings.bar_height());
-        let title = window_title(self.tree.as_ref(), &self.selection, &self.zoom);
+        let (title, progress) = match &self.scan {
+            Some(job) => {
+                let (t, frac) = scan_title(job);
+                (t, Some(frac))
+            }
+            None => (
+                window_title(self.tree.as_ref(), &self.selection, &self.zoom),
+                None,
+            ),
+        };
         let mut act = egui::Panel::top("titlebar")
             .exact_size(titlebar::HEIGHT)
             .resizable(false)
             .frame(egui::Frame::NONE.fill(ctx.global_style().visuals.panel_fill))
-            .show(ui, |ui| titlebar(ui, &st, &self.settings.keys, &title))
+            .show(ui, |ui| {
+                titlebar(ui, &st, &self.settings.keys, &title, progress)
+            })
             .inner;
         let tm = egui::CentralPanel::no_frame()
             .frame(egui::Frame::NONE.fill(pal.background))
