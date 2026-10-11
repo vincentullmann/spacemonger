@@ -12,6 +12,7 @@ use shortcut::norm;
 
 use crate::core::actions::Action;
 
+/// The user's shortcut table. A command may have several shortcuts, or none.
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 #[serde(default)]
 pub struct Keymap {

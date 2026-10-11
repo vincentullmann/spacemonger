@@ -40,6 +40,7 @@ impl Item {
         )
     }
 
+    /// Is view point (`px`, `py`) strictly inside the box?
     pub fn contains(&self, px: f32, py: f32) -> bool {
         px > self.x && py > self.y && px < self.x + self.w && py < self.y + self.h
     }

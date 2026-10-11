@@ -14,6 +14,10 @@ use crate::ui::settings::Theme;
 use crate::utils::thread::drop_in_background;
 
 impl SpaceMonger {
+    ////////////////////////////////////////////////////////////////////////////
+    // region:Scanning
+
+    /// Show the Open dialog.
     pub(super) fn open_dialog(&mut self) {
         self.dialog = Some(DriveDialog::with_volumes());
     }
@@ -41,6 +45,7 @@ impl SpaceMonger {
         self.drive = Some(drive);
     }
 
+    /// Pick up a running scan's latest snapshot, or its result once it's done.
     pub(super) fn poll_scan(&mut self) {
         let Some(job) = &mut self.scan else { return };
         match job.poll() {
@@ -69,6 +74,10 @@ impl SpaceMonger {
         }
     }
 
+    ////////////////////////////////////////////////////////////////////////////
+    // region:Actions
+
+    /// Do what `action` asks.
     pub(super) fn run(&mut self, action: Action, ctx: &egui::Context) {
         match action {
             Action::Open => self.open_dialog(),
@@ -130,6 +139,9 @@ impl SpaceMonger {
         }
     }
 
+    ////////////////////////////////////////////////////////////////////////////
+    // region:Open / delete
+
     /// Run or open every selected entry with the system's default handler.
     fn open_selection(&mut self) {
         let Some(t) = &self.tree else { return };
@@ -173,6 +185,9 @@ impl SpaceMonger {
         self.items.clear();
         self.hovered = None;
     }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // region:Dialogs
 
     /// Show whichever dialogs are open and act on their answers.
     pub(super) fn dialogs(&mut self, ctx: &egui::Context) {

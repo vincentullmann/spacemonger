@@ -11,6 +11,7 @@ const MIN_SIZES: [(f64, f64); 7] = [
     (8.0, 6.0),
 ];
 
+/// Everything besides the tree and camera that decides the layout.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct LayoutParams {
     pub density: i32,

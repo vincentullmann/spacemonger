@@ -14,22 +14,27 @@ pub struct Selection {
 }
 
 impl Selection {
+    /// The entry selected last: the one keyboard moves start from.
     pub fn primary(&self) -> Option<&EntryRef> {
         self.items.last()
     }
 
+    /// Number of selected entries.
     pub fn len(&self) -> usize {
         self.items.len()
     }
 
+    /// Nothing selected.
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
     }
 
+    /// Selected entries, in the order they were selected.
     pub fn iter(&self) -> impl Iterator<Item = &EntryRef> {
         self.items.iter()
     }
 
+    /// Is `r` selected?
     pub fn contains(&self, r: &EntryRef) -> bool {
         self.items.contains(r)
     }
@@ -39,6 +44,7 @@ impl Selection {
         self.items.len() == 1 && self.items.contains(r)
     }
 
+    /// Select nothing.
     pub fn clear(&mut self) {
         self.items.clear();
     }

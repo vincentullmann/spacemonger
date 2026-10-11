@@ -17,6 +17,7 @@ pub struct CommandMenu<'a> {
 }
 
 impl<'a> CommandMenu<'a> {
+    /// A menu for `keys` and the app state `st`.
     pub fn new(keys: &'a Keymap, st: &'a CommandState, close_on_click: bool) -> Self {
         Self {
             keys,

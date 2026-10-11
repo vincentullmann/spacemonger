@@ -143,6 +143,8 @@ impl Command {
         }
     }
 
+    /// The action this command runs; `extend` turns an arrow move into extending the
+    /// selection.
     pub fn action(self, extend: bool) -> Action {
         if let Some(d) = self.direction() {
             return Action::Nav(if extend {

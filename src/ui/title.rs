@@ -8,6 +8,8 @@ use crate::core::model::Tree;
 use crate::core::selection::Selection;
 use crate::utils::format;
 
+/// The window title: the selection with its size and share, or the current folder with the
+/// drive's totals.
 pub fn window_title(tree: Option<&Tree>, selection: &Selection, zoom: &[usize]) -> String {
     let Some(t) = tree else {
         return APP_NAME.to_string();

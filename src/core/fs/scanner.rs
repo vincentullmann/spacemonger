@@ -14,6 +14,9 @@ use super::metadata::{entry_meta, meta};
 use super::{Drive, FsError};
 use crate::core::model::{Entry, Folder, Kind, Tree};
 
+/// Stack size of the scanner threads: `scan_dir` recurses once per folder level.
+const SCAN_STACK: usize = 32 * 1024 * 1024;
+
 /// Scan the folder at `path` into `chain.dir`.
 fn scan_dir(path: &Path, dev: u64, ctl: &ScanControl, chain: &Chain) {
     if ctl.is_cancelled() {
@@ -105,9 +108,6 @@ pub(super) fn make_tree(drive: &Drive, mut root: Folder, ctl: &ScanControl) -> T
         dotfiles_hidden: false,
     }
 }
-
-/// Stack size of the scanner threads: `scan_dir` recurses once per folder level.
-const SCAN_STACK: usize = 32 * 1024 * 1024;
 
 /// Scan a drive. `Ok(None)` if cancelled; an error if its root can't be read at all.
 pub fn scan(drive: &Drive, ctl: &ScanControl) -> Result<Option<Tree>, FsError> {

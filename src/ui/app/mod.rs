@@ -27,6 +27,10 @@ use crate::ui::theme::Theme;
 use crate::ui::title::{scan_title, window_title};
 use crate::ui::widgets::{path_bar, titlebar, window_frame, CommandState};
 
+////////////////////////////////////////////////////////////////////////////////
+// region:App state
+
+/// The app: the scanned tree, the view on it, settings, and whatever dialog is open.
 pub struct SpaceMonger {
     tree: Option<Tree>,
     /// Snapshot of a running scan, drawn (but not interactive) until the scan finishes.
@@ -65,6 +69,7 @@ pub struct SpaceMonger {
 }
 
 impl SpaceMonger {
+    /// Start up: load the settings, then scan `open_path` or ask what to open.
     pub fn new(cc: &eframe::CreationContext<'_>, open_path: Option<PathBuf>) -> Self {
         let settings = Settings::load(cc.storage);
         Theme::install(&cc.egui_ctx);
@@ -103,6 +108,9 @@ impl SpaceMonger {
         }
         app
     }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // region:Settings and derived state
 
     /// Dark colours in effect (the theme may follow the system).
     fn dark(&self, ctx: &egui::Context) -> bool {
@@ -201,6 +209,9 @@ impl SpaceMonger {
         self.dialog.is_some() || self.error.is_some() || self.confirm_delete.is_some()
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// region:Frame
 
 impl eframe::App for SpaceMonger {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {

@@ -3,6 +3,7 @@
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::Duration;
 
 use dashmap::DashSet;
 
@@ -10,6 +11,11 @@ use super::live::LiveDir;
 use super::scanner::make_tree;
 use super::Drive;
 use crate::core::model::Tree;
+
+/// How often a paused scanner thread looks whether it may go on.
+const PAUSE_POLL: Duration = Duration::from_millis(50);
+/// A live snapshot keeps entries of at least this fraction of the bytes found so far.
+const LIVE_DETAIL: u64 = 200_000;
 
 /// What the scanner follows and counts.
 #[derive(Clone, Copy, Debug)]
@@ -54,6 +60,7 @@ impl Default for ScanControl {
 }
 
 impl ScanControl {
+    /// Fresh counters for a scan with `opts`.
     pub fn new(opts: ScanOptions) -> Self {
         Self {
             cancelled: AtomicBool::new(false),
@@ -69,12 +76,15 @@ impl ScanControl {
         }
     }
 
+    /// Ask the scanner threads to stop.
     pub fn cancel(&self) {
         self.cancelled.store(true, Ordering::Relaxed);
     }
+    /// Hold the scanner threads (or let them go on).
     pub fn set_paused(&self, paused: bool) {
         self.paused.store(paused, Ordering::Relaxed);
     }
+    /// The scan is on hold.
     pub fn is_paused(&self) -> bool {
         self.paused.load(Ordering::Relaxed)
     }
@@ -103,6 +113,7 @@ impl ScanControl {
     pub(super) fn failed(&self) {
         self.errors.fetch_add(1, Ordering::Relaxed);
     }
+    /// The tree found so far (poison-tolerant lock).
     pub(super) fn live(&self) -> MutexGuard<'_, Option<Arc<LiveDir>>> {
         self.live.lock().unwrap_or_else(|e| e.into_inner())
     }
@@ -116,9 +127,3 @@ impl ScanControl {
         Some(make_tree(drive, root.snapshot(min), self))
     }
 }
-
-/// How often a paused scanner thread looks whether it may go on.
-const PAUSE_POLL: std::time::Duration = std::time::Duration::from_millis(50);
-
-/// A live snapshot keeps entries of at least this fraction of the bytes found so far.
-const LIVE_DETAIL: u64 = 200_000;

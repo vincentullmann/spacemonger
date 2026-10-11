@@ -13,6 +13,7 @@ pub struct Reshape {
 }
 
 impl Reshape {
+    /// The reshaped box for natural box `n`.
     pub fn apply(&self, n: Rect) -> Rect {
         let size = Size::new(n.width() * self.a.x, n.height() * self.a.y);
         let c = n.origin() + Vec2::new(n.width() * (0.5 + self.d.x), n.height() * (0.5 + self.d.y));

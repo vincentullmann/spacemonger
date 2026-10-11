@@ -47,6 +47,7 @@ impl Settings {
             .max(BAR_H as f32 / 2.0)
     }
 
+    /// Camera settings: animation length and how much a framed selection fills.
     pub fn camera_params(&self) -> CameraParams {
         CameraParams {
             anim_duration: self.general.anim_ms as f32 / 1000.0,
@@ -54,6 +55,7 @@ impl Settings {
         }
     }
 
+    /// What the next scan follows and counts.
     pub fn scan_options(&self) -> ScanOptions {
         ScanOptions {
             one_filesystem: self.scan.one_filesystem,
@@ -61,6 +63,7 @@ impl Settings {
         }
     }
 
+    /// How sizes and dates are written.
     pub fn format_options(&self) -> FormatOptions {
         FormatOptions {
             size: self.text.size_format,
@@ -68,6 +71,7 @@ impl Settings {
         }
     }
 
+    /// How long to hover before the tip shows.
     pub fn infotip_delay(&self) -> Duration {
         Duration::from_millis(self.tooltips.delay_ms as u64)
     }

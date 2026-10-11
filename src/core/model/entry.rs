@@ -5,6 +5,7 @@ use std::ffi::OsStr;
 
 use super::Folder;
 
+/// What an entry is.
 pub enum Kind {
     File,
     Dir(Box<Folder>),
@@ -12,6 +13,7 @@ pub enum Kind {
     Free,
 }
 
+/// One entry of a folder.
 pub struct Entry {
     /// The name on disk, as is (not necessarily UTF-8); see [`Entry::display_name`].
     pub name: Box<OsStr>,

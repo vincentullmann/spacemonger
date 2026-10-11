@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use super::Line;
 use crate::ui::palette::Scheme;
 
+/// How the boxes look: colours, text colour, outlines, gap, hover.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct Tiles {

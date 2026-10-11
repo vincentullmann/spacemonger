@@ -31,6 +31,7 @@ pub struct Anim {
 }
 
 impl Anim {
+    /// The move has reached its end.
     pub fn done(&self) -> bool {
         self.progress() >= 1.0
     }

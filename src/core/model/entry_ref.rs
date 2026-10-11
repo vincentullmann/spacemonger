@@ -13,6 +13,7 @@ pub struct EntryRef {
 }
 
 impl EntryRef {
+    /// Entry `index` of the folder at index path `folder`.
     pub fn new(folder: Rc<[usize]>, index: usize) -> Self {
         Self { folder, index }
     }

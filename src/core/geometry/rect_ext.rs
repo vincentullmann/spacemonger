@@ -2,6 +2,7 @@
 
 use kurbo::Rect;
 
+/// Helpers kurbo's `Rect` doesn't have.
 pub trait RectExt {
     /// Area, counting an inverted (negative-size) rectangle as empty.
     fn clamped_area(&self) -> f64;

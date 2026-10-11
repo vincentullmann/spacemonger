@@ -4,6 +4,7 @@ use std::fs;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 
+/// What the scanner reads from one directory entry.
 pub(super) struct Meta {
     pub is_dir: bool,
     pub is_file: bool,

@@ -7,6 +7,10 @@ use super::{General, Labels, Layout, PathBar, Scan, Settings, Text, Tiles, Toolt
 use crate::constants::UI_ZOOM;
 use crate::ui::palette::Palette;
 
+////////////////////////////////////////////////////////////////////////////////
+// region:General
+
+/// Navigation: animation length and wheel zoom speed.
 pub fn navigation(ui: &mut Ui, s: &mut Settings) {
     let (g, d) = (&mut s.general, General::default());
     rows(ui, |r| {
@@ -27,6 +31,7 @@ pub fn navigation(ui: &mut Ui, s: &mut Settings) {
     });
 }
 
+/// Actions: delete confirmation and how much a framed selection fills.
 pub fn actions(ui: &mut Ui, s: &mut Settings) {
     let (g, d) = (&mut s.general, General::default());
     rows(ui, |r| {
@@ -47,6 +52,7 @@ pub fn actions(ui: &mut Ui, s: &mut Settings) {
     });
 }
 
+/// Scan: hidden files, filesystems, hard links, excludes.
 pub fn scan(ui: &mut Ui, s: &mut Settings) {
     let (sc, d) = (&mut s.scan, Scan::default());
     rows(ui, |r| {
@@ -83,6 +89,10 @@ pub fn scan(ui: &mut Ui, s: &mut Settings) {
     ui.weak("Filesystem and hard-link options apply from the next scan.");
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// region:Display
+
+/// Appearance: theme, UI zoom and font, map font, size and date formats.
 pub fn appearance(ui: &mut Ui, s: &mut Settings) {
     let (g, dg) = (&mut s.general, General::default());
     let (f, d) = (&mut s.text, Text::default());
@@ -134,6 +144,7 @@ pub fn appearance(ui: &mut Ui, s: &mut Settings) {
     });
 }
 
+/// Path bar: its font size.
 pub fn path_bar(ui: &mut Ui, s: &mut Settings) {
     let (p, d) = (&mut s.path_bar, PathBar::default());
     rows(ui, |r| {
@@ -147,6 +158,7 @@ pub fn path_bar(ui: &mut Ui, s: &mut Settings) {
     });
 }
 
+/// Tiles: colours, outlines, gap and layout.
 pub fn tiles(ui: &mut Ui, s: &mut Settings) {
     let before = s.tiles.clone();
     let (t, d) = (&mut s.tiles, Tiles::default());
@@ -240,6 +252,7 @@ pub fn tiles(ui: &mut Ui, s: &mut Settings) {
     });
 }
 
+/// Tile labels: font size, shadow, density and what they show.
 pub fn tile_labels(ui: &mut Ui, s: &mut Settings) {
     let (lb, d) = (&mut s.labels, Labels::default());
     rows(ui, |r| {
@@ -274,6 +287,7 @@ pub fn tile_labels(ui: &mut Ui, s: &mut Settings) {
     });
 }
 
+/// Tooltips: what they show, font size and delay.
 pub fn tooltips(ui: &mut Ui, s: &mut Settings) {
     let (tt, d) = (&mut s.tooltips, Tooltips::default());
     rows(ui, |r| {

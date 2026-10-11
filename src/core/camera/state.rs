@@ -8,6 +8,10 @@ use crate::core::geometry::{Point, Rect, Size, TranslateScale, Vec2};
 use crate::core::layout::{self, child_boxes, Item, Reshape, Scene, FOLDER_FRAME};
 use crate::core::model::{path_after_remove, Kind};
 
+////////////////////////////////////////////////////////////////////////////////
+// region:Camera
+
+/// Where the map is looked at from: zoom, pan, fitted folder, and any move in progress.
 #[derive(Default)]
 pub struct Camera {
     /// View size (points) the camera was last fitted to.
@@ -44,6 +48,9 @@ impl Default for CameraParams {
 }
 
 impl Camera {
+    ////////////////////////////////////////////////////////////////////////////
+    // region:State
+
     /// Forget the camera position (new scan). Keeps the view size.
     pub fn reset(&mut self) {
         self.cam = None;
@@ -70,6 +77,7 @@ impl Camera {
         }
     }
 
+    /// The camera fully zoomed out: the root fills the view.
     pub fn full_view(&self) -> Rect {
         self.view.to_rect()
     }
@@ -85,10 +93,12 @@ impl Camera {
         )
     }
 
+    /// Zoom of camera `c`: root width over view width (1 fully zoomed out).
     pub fn scale_of(&self, c: Rect) -> f64 {
         c.width() / self.view.width.max(1.0)
     }
 
+    /// Zoomed in, or a folder fitted to the window.
     pub fn zoomed(&self) -> bool {
         self.fit.is_some() || self.cam.is_some_and(|c| c != self.full_view())
     }
@@ -130,6 +140,9 @@ impl Camera {
             None => false,
         }
     }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // region:Limits
 
     /// Scale camera `c` by `k` about point `p`.
     pub(super) fn scaled(c: Rect, p: Point, k: f64) -> Rect {
@@ -186,6 +199,9 @@ impl Camera {
         ))
     }
 
+    ////////////////////////////////////////////////////////////////////////////
+    // region:Direct manipulation
+
     /// Scale the camera by `k` about a view point, keeping whatever is under it in place.
     pub fn zoom_at(&mut self, scene: &Scene, items: &[Item], p: Point, k: f64) {
         let Some(cam) = self.cam else { return };
@@ -229,6 +245,7 @@ impl Camera {
         }
     }
 
+    /// Move the camera by `d` points, as far as the root (and a fitted folder) allow.
     pub fn pan(&mut self, scene: &Scene, d: Vec2) {
         if let Some(c) = self.cam {
             self.cam = Some(self.clamp_cam(scene, c + d));

@@ -31,6 +31,7 @@ impl Settings {
         }
     }
 
+    /// Save under the current key and drop the old ones.
     pub fn save(&self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, KEY, self);
         for k in LEGACY_KEYS.into_iter().chain([KEY_V1]) {

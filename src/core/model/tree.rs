@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use super::{Entry, EntryRef, Folder, Kind};
 
+/// The result of a scan: the root folder, where it is on disk, and the drive's totals.
 pub struct Tree {
     pub root: Folder,
     pub root_path: PathBuf,
@@ -20,14 +21,20 @@ pub struct Tree {
 }
 
 impl Tree {
+    ////////////////////////////////////////////////////////////////////////////
+    // region:Lookup
+
+    /// The folder at index path `path` (the root for an empty path).
     pub fn folder_at(&self, path: &[usize]) -> Option<&Folder> {
         self.root.descendant(path)
     }
 
+    /// Entry `index` of the folder at index path `folder`.
     pub fn entry_at(&self, folder: &[usize], index: usize) -> Option<&Entry> {
         self.folder_at(folder)?.entries.get(index)
     }
 
+    /// The entry `r` refers to, if it still exists.
     pub fn entry(&self, r: &EntryRef) -> Option<&Entry> {
         self.entry_at(&r.folder, r.index)
     }
@@ -57,6 +64,9 @@ impl Tree {
         }
         p
     }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // region:Hide / unhide
 
     /// Hide an entry from the view: ancestors shrink by its size; `unhide_all` restores it.
     pub fn hide(&mut self, folder: &[usize], index: usize) {
@@ -119,6 +129,9 @@ impl Tree {
         walk(&mut self.root, self.dotfiles_hidden);
     }
 
+    ////////////////////////////////////////////////////////////////////////////
+    // region:Changing sizes
+
     fn folder_at_mut(&mut self, path: &[usize]) -> Option<&mut Folder> {
         let mut f = &mut self.root;
         for &i in path {
@@ -145,6 +158,9 @@ impl Tree {
         }
         f.total = f.total.saturating_sub(size);
     }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // region:Removal
 
     /// Remove an entry after it has been deleted on disk, updating ancestor sizes and the
     /// file / folder counts.

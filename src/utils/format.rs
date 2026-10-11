@@ -60,6 +60,7 @@ impl Default for FormatOptions {
 
 static OPTIONS: RwLock<Option<FormatOptions>> = RwLock::new(None);
 
+/// Use `o` from now on (called when the settings change).
 pub fn set_options(o: FormatOptions) {
     if let Ok(mut g) = OPTIONS.write() {
         *g = Some(o);

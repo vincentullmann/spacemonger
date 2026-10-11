@@ -22,6 +22,7 @@ pub enum ScanStatus {
 /// What the scan thread hands back.
 type ScanResult = Result<Option<Tree>, FsError>;
 
+/// A running scan of one drive or folder. Dropping it cancels the scan.
 pub struct ScanJob {
     pub drive: Drive,
     /// Progress counters and the cancel flag, shared with the scanner threads.

@@ -30,6 +30,7 @@ pub(super) struct Chain<'a> {
 }
 
 impl Chain<'_> {
+    /// Add `n` bytes to this folder and every folder above it.
     pub fn add_bytes(&self, n: u64) {
         let mut c = Some(self);
         while let Some(link) = c {
@@ -40,6 +41,7 @@ impl Chain<'_> {
 }
 
 impl LiveDir {
+    /// A folder that hasn't been listed yet.
     pub fn new(name: Box<OsStr>, mtime: i64, created: i64) -> Self {
         Self {
             name,
@@ -50,6 +52,7 @@ impl LiveDir {
         }
     }
 
+    /// Bytes found so far in this folder and below.
     pub fn bytes(&self) -> u64 {
         self.bytes.load(Ordering::Relaxed)
     }

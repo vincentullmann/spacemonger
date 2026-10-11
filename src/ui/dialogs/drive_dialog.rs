@@ -23,6 +23,10 @@ const BAR_H: f32 = 6.0;
 const SIZE_W: f32 = 130.0;
 const FS_W: f32 = 76.0;
 
+////////////////////////////////////////////////////////////////////////////////
+// region:Dialog
+
+/// The Open dialog's state.
 pub struct DriveDialog {
     /// Read on a background thread: a stuck network mount can take a while to answer.
     drives: Promise<Vec<Drive>>,
@@ -51,6 +55,7 @@ impl DriveDialog {
         }
     }
 
+    /// Draw the dialog; says what was chosen, if anything.
     pub fn show(&mut self, ctx: &egui::Context) -> DriveDialogOutcome {
         let mut out = DriveDialogOutcome::default();
         let shown = Dialog::new("open", "Open").width(WIDTH).show(ctx, |ui| {
@@ -118,6 +123,9 @@ impl DriveDialog {
         }
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// region:Drive list
 
 /// The volumes, one clickable row each; returns the one clicked.
 fn drive_list(ui: &mut Ui, drives: &[Drive]) -> Option<(Drive, bool)> {

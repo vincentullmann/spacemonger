@@ -18,6 +18,9 @@ pub const HEADER_H: f32 = 40.0;
 pub const PADDING: f32 = 14.0;
 const BACKDROP: Color32 = Color32::from_black_alpha(90);
 
+////////////////////////////////////////////////////////////////////////////////
+// region:Dialog
+
 /// Where a dialog sits and how far it's been moved, kept between frames.
 #[derive(Clone, Copy, Default)]
 struct Placement {
@@ -25,6 +28,7 @@ struct Placement {
     size: Option<Vec2>,
 }
 
+/// A dialog to show this frame (built up with the methods below, then [`Dialog::show`]).
 pub struct Dialog<'a> {
     id: Id,
     title: &'a str,
@@ -35,6 +39,7 @@ pub struct Dialog<'a> {
     width: f32,
 }
 
+/// What [`Dialog::show`] returns.
 pub struct DialogResponse<R> {
     pub inner: R,
     /// × clicked, or Escape on a modal dialog.
@@ -61,6 +66,7 @@ impl<'a> Dialog<'a> {
         self
     }
 
+    /// Show the × in the header (on by default).
     pub fn closable(mut self, closable: bool) -> Self {
         self.closable = closable;
         self
@@ -79,6 +85,7 @@ impl<'a> Dialog<'a> {
         self
     }
 
+    /// Show the dialog with `add` drawing its body.
     pub fn show<R>(self, ctx: &egui::Context, add: impl FnOnce(&mut Ui) -> R) -> DialogResponse<R> {
         let screen = ctx.content_rect();
         let mut place: Placement = ctx.data(|d| d.get_temp(self.id)).unwrap_or_default();
@@ -149,6 +156,9 @@ impl<'a> Dialog<'a> {
         DialogResponse { inner, close }
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// region:Frame, header and buttons
 
 /// Move `min` so a `size` box from there stays inside `screen` (top-left wins if too big).
 fn clamp_into(min: egui::Pos2, size: Vec2, screen: Rect) -> egui::Pos2 {

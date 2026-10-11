@@ -36,6 +36,7 @@ impl<'a> MapPainter<'a> {
         }
     }
 
+    /// The colours this painter draws with.
     pub fn palette(&self) -> &Palette {
         self.pal
     }
@@ -56,6 +57,7 @@ impl<'a> MapPainter<'a> {
         egui::Rect::from_min_max(self.snap(r.min), self.snap(r.max))
     }
 
+    /// Fill a view-coordinate box with `c` (nothing for an empty box).
     pub fn fill(&self, c: Color32, x: f32, y: f32, w: f32, h: f32) {
         if w > 0.0 && h > 0.0 {
             self.painter.rect_filled(self.rect(x, y, w, h), 0.0, c);

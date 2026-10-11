@@ -14,6 +14,7 @@ use crate::ui::painter::MapPainter;
 use crate::ui::widgets::{context_menu, infotip};
 
 impl SpaceMonger {
+    /// The map panel for this frame. Returns the action a click or the menu asked for.
     pub(super) fn treemap(&mut self, ui: &mut egui::Ui) -> Option<Action> {
         let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
         // Clickable widgets get a hand cursor, but the map is one big one: keep the arrow
@@ -78,6 +79,9 @@ impl SpaceMonger {
         act
     }
 
+    ////////////////////////////////////////////////////////////////////////////
+    // region:Input
+
     /// Wheel / pinch zoom, Shift+drag rectangle select, drag to pan.
     fn view_input(&mut self, ui: &egui::Ui, resp: &Response, d: &MapPainter, mods: Modifiers) {
         // Wheel / pinch: zoom about the pointer, like an infinite canvas.
@@ -127,6 +131,9 @@ impl SpaceMonger {
         }
     }
 
+    ////////////////////////////////////////////////////////////////////////////
+    // region:Layout
+
     /// Rebuild the layout when the view, data, camera or reshaping changes.
     fn rebuild_layout(&mut self, w: f32, h: f32) {
         let (cam, ovs) = {
@@ -161,6 +168,9 @@ impl SpaceMonger {
         }
     }
 
+    ////////////////////////////////////////////////////////////////////////////
+    // region:Painting
+
     fn paint(&self, d: &MapPainter, w: f32, h: f32) {
         d.fill(d.palette().background, 0.0, 0.0, w, h);
         if let Some(tree) = self.shown_tree() {
@@ -188,6 +198,9 @@ impl SpaceMonger {
             d.marquee(m.start, m.end);
         }
     }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // region:Clicks and tips
 
     /// Click, right-click and double-click selection.
     fn clicks(&mut self, resp: &Response, d: &MapPainter, mods: Modifiers) -> Option<Action> {

@@ -10,6 +10,9 @@ use crate::utils::format::SizeFormat;
 
 pub use super::tiles::Tiles;
 
+////////////////////////////////////////////////////////////////////////////////
+// region:Settings
+
 /// Everything kept between runs.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 #[serde(default)]
@@ -25,6 +28,9 @@ pub struct Settings {
     pub tooltips: Tooltips,
     pub keys: Keymap,
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// region:General
 
 /// Light or dark window colours.
 #[derive(
@@ -63,6 +69,9 @@ pub struct General {
     pub frame_fill: u32,
     pub confirm_delete: bool,
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// region:Display
 
 /// How the treemap is split.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

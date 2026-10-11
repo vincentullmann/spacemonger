@@ -56,6 +56,9 @@ static CTX: OnceLock<Context> = OnceLock::new();
 static RECEIVED: Mutex<Option<i64>> = Mutex::new(None);
 static DRAWN: Mutex<Option<i64>> = Mutex::new(None);
 
+////////////////////////////////////////////////////////////////////////////////
+// region:State
+
 /// The handshake's state, set up once the main window exists.
 struct X11 {
     conn: &'static RustConnection,
@@ -67,6 +70,9 @@ struct X11 {
 
 static X11: OnceLock<X11> = OnceLock::new();
 static GAVE_UP: AtomicBool = AtomicBool::new(false);
+
+////////////////////////////////////////////////////////////////////////////////
+// region:Per frame
 
 /// Set up the handshake for the main window. Call every frame; it does its work once,
 /// as soon as the window exists (eframe keeps it unmapped until the first frame is drawn).
@@ -134,6 +140,9 @@ pub fn acknowledge() {
     let _ = x.conn.sync_set_counter(x.counter, value);
     let _ = x.conn.flush();
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// region:Setup
 
 fn setup(window: Window, display: *mut xlib::Display, background: Color32) -> XResult<X11> {
     let (conn, _) = conn().ok_or("no X connection")?;

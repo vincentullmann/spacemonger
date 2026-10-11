@@ -19,6 +19,24 @@ use crate::ui::platform;
 use crate::ui::widgets::dialog::{self, HEADER_H, PADDING};
 use crate::ui::widgets::{move_on_drag, window_frame};
 
+/// Window title (also how the window is found to make it a dialog, see [`platform`]).
+const TITLE: &str = "Settings";
+/// Window size to start with, and the smallest it can be resized to.
+const SIZE: [f32; 2] = [760.0, 600.0];
+const MIN_SIZE: [f32; 2] = [560.0, 360.0];
+/// Sidebar width, its side padding, and the height of a page entry.
+const SIDEBAR_W: f32 = 190.0;
+const SIDEBAR_PAD: f32 = 10.0;
+const SIDEBAR_ITEM_H: f32 = 30.0;
+/// Size of the page icons in the sidebar.
+const SIDEBAR_ICON: f32 = 15.0;
+/// Frames to keep trying to make the window a dialog before giving up (about two seconds).
+const ATTACH_TRIES: u32 = 120;
+
+////////////////////////////////////////////////////////////////////////////////
+// region:Pages
+
+/// The settings pages, in sidebar order.
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 enum Page {
     #[default]
@@ -59,10 +77,10 @@ const SIDEBAR: [(&str, &[Entry]); 2] = [
     ),
 ];
 
-const TITLE: &str = "Settings";
-const SIDEBAR_W: f32 = 190.0;
-const SIDEBAR_ITEM_H: f32 = 30.0;
+////////////////////////////////////////////////////////////////////////////////
+// region:Window
 
+/// The settings window's state (the settings themselves live in the app).
 pub struct SettingsWindow {
     pub open: bool,
     /// Frames spent trying to make the window a dialog of the main one (X11), or `None`
@@ -94,6 +112,7 @@ impl SettingsWindow {
         self.hotkeys.cancel();
     }
 
+    /// Show the window while it's open, editing `s` in place.
     pub fn show(&mut self, ctx: &egui::Context, s: &mut Settings) {
         if !self.open {
             self.attaching = Some(0);
@@ -107,8 +126,8 @@ impl SettingsWindow {
             .with_app_id(APP_ID)
             .with_decorations(false)
             .with_transparent(true)
-            .with_inner_size([760.0, 600.0])
-            .with_min_inner_size([560.0, 360.0]);
+            .with_inner_size(SIZE)
+            .with_min_inner_size(MIN_SIZE);
         ctx.show_viewport_immediate(
             ViewportId::from_hash_of("settings"),
             builder,
@@ -155,7 +174,7 @@ impl SettingsWindow {
 
         let mut side = ui.new_child(
             UiBuilder::new()
-                .max_rect(sidebar.shrink2(Vec2::new(10.0, 0.0)))
+                .max_rect(sidebar.shrink2(Vec2::new(SIDEBAR_PAD, 0.0)))
                 .layout(Layout::top_down(Align::Min)),
         );
         self.sidebar_ui(&mut side);
@@ -220,21 +239,21 @@ impl SettingsWindow {
             Layout::left_to_right(Align::Center),
             |ui| {
                 ui.set_min_size(Vec2::new(w, HEADER_H));
-                ui.add_space(PADDING - 10.0);
+                ui.add_space(PADDING - SIDEBAR_PAD);
                 ui.add(egui::Label::new(RichText::new(TITLE).strong()).selectable(false));
             },
         );
         ui.spacing_mut().item_spacing.y = 2.0;
         crate::ui::widgets::flat_items(ui);
         for (group, pages) in SIDEBAR {
-            ui.add_space(10.0);
+            ui.add_space(SIDEBAR_PAD);
             ui.horizontal(|ui| {
-                ui.add_space(PADDING - 10.0);
+                ui.add_space(PADDING - SIDEBAR_PAD);
                 ui.weak(group);
             });
             ui.add_space(2.0);
             for &(page, glyph, name) in pages {
-                let text = (RichText::new(glyph).size(15.0), name);
+                let text = (RichText::new(glyph).size(SIDEBAR_ICON), name);
                 let b = egui::Button::selectable(self.page == page, text)
                     .min_size(Vec2::new(w, SIDEBAR_ITEM_H));
                 if ui.add(b).clicked() && self.page != page {
@@ -265,7 +284,7 @@ impl SettingsWindow {
     fn attach(&mut self, ctx: &egui::Context) {
         let Some(tries) = self.attaching else { return };
         let done = platform::attach_dialog(TITLE);
-        self.attaching = if done || tries > 120 {
+        self.attaching = if done || tries > ATTACH_TRIES {
             None
         } else {
             Some(tries + 1)
@@ -275,6 +294,9 @@ impl SettingsWindow {
         }
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// region:Helpers
 
 /// The main menu's corner radius where a compositor can show see-through corners, else none.
 fn corner_radius(ui: &egui::Ui) -> CornerRadius {

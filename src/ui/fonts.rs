@@ -7,6 +7,14 @@ use std::sync::{Arc, Mutex, OnceLock};
 use eframe::egui::{self, FontData, FontDefinitions, FontFamily};
 use eframe::epaint::text::{FontInsert, FontPriority, InsertFontFamily};
 
+/// egui's default text sizes, the UI font size's 100%.
+const BASE_BODY: f32 = 12.5;
+/// Default UI font size (egui's body text).
+pub const DEFAULT_UI_SIZE: f32 = BASE_BODY;
+
+////////////////////////////////////////////////////////////////////////////////
+// region:Font families
+
 /// Bold text (section titles): Ubuntu Bold, the heavy cut of egui's default font.
 pub fn bold_family() -> FontFamily {
     FontFamily::Name("bold".into())
@@ -24,6 +32,9 @@ pub fn title_height(ctx: &egui::Context, font: &egui::FontId) -> f64 {
     let (row, base_row) = ctx.fonts_mut(|f| (f.row_height(font), f.row_height(&base)));
     (crate::core::layout::TITLE_H * row as f64 / base_row as f64).ceil()
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// region:System fonts
 
 /// System fonts, loaded on first use (takes a moment on systems with many fonts).
 fn database() -> &'static (fontdb::Database, Vec<String>) {
@@ -175,8 +186,8 @@ pub fn preview_family(ctx: &egui::Context, name: &str) -> Option<FontFamily> {
     None
 }
 
-/// egui's default text sizes, the UI font size's 100%.
-const BASE_BODY: f32 = 12.5;
+////////////////////////////////////////////////////////////////////////////////
+// region:UI text size
 
 /// Set the UI text size: body and button text to `body` px, the other styles in proportion.
 pub fn set_ui_size(ctx: &egui::Context, body: f32) {
@@ -190,6 +201,3 @@ pub fn set_ui_size(ctx: &egui::Context, body: f32) {
         }
     });
 }
-
-/// Default UI font size (egui's body text).
-pub const DEFAULT_UI_SIZE: f32 = BASE_BODY;
