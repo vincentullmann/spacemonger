@@ -1,32 +1,43 @@
 //! Size / date formatting (port of FormatService).
 
+use std::fmt::Write as _;
+use std::sync::RwLock;
+
 use chrono::{Local, TimeZone};
 use humansize::{FormatSizeOptions, BINARY, DECIMAL};
 use num_format::{Locale, ToFormattedString};
 use serde::{Deserialize, Serialize};
-use std::fmt::Write as _;
-use std::sync::RwLock;
+use strum::{EnumIter, IntoStaticStr};
 
 /// Default `strftime` pattern for dates.
 pub const DEFAULT_DATE_FORMAT: &str = "%d %b %Y   %-H:%M:%S";
 
 /// How file sizes are written.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+///
+/// The strum names are what the settings show.
+#[derive(
+    Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default, EnumIter, IntoStaticStr,
+)]
 pub enum SizeFormat {
     /// "1,234,567 bytes".
     #[default]
+    #[strum(serialize = "Bytes (1,234,567 bytes)")]
     Bytes,
 
     /// Powers of 1024: "1.2 MiB".
+    #[strum(serialize = "Binary (1.2 MiB)")]
     Binary,
 
     /// Powers of 1000: "1.2 MB".
+    #[strum(serialize = "Decimal (1.2 MB)")]
     Decimal,
 
     /// "38.8 KiB (39,718 bytes)".
+    #[strum(serialize = "Binary + bytes (1.2 MiB (1,234,567 bytes))")]
     BinaryAndBytes,
 
     /// "39.7 kB (39,718 bytes)".
+    #[strum(serialize = "Decimal + bytes (1.2 MB (1,234,567 bytes))")]
     DecimalAndBytes,
 }
 
@@ -49,6 +60,7 @@ impl Default for FormatOptions {
 
 static OPTIONS: RwLock<Option<FormatOptions>> = RwLock::new(None);
 
+/// Use `o` from now on (called when the settings change).
 pub fn set_options(o: FormatOptions) {
     if let Ok(mut g) = OPTIONS.write() {
         *g = Some(o);
@@ -94,7 +106,12 @@ pub fn file_size(size: u64) -> String {
 
 /// "1,234,567 bytes"
 pub fn bytes(size: u64) -> String {
-    format!("{} bytes", size.to_formatted_string(&Locale::en))
+    format!("{} bytes", count(size))
+}
+
+/// "1,234,567": a count with thousands separators.
+pub fn count(n: u64) -> String {
+    n.to_formatted_string(&Locale::en)
 }
 
 /// "05 Mar 2024   14:07:09" in local time (or the date format from the options).

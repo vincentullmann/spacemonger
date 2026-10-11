@@ -5,16 +5,38 @@
 //! with × on the right, resizable from its edges, and the main menu's rounded corners where a
 //! compositor can show them (square without one). Pages are picked in a sidebar on the left.
 
-use super::{form, pages, Settings};
-use crate::ui::keymap::{same_shortcut, shortcut_text, Command, Keymap};
-use crate::ui::widgets::dialog::{self, HEADER_H, PADDING};
-use crate::ui::widgets::{titlebar, window_frame};
 use eframe::egui::{
-    self, Align, CornerRadius, Event, Id, Key, KeyboardShortcut, Layout, Margin, Rect, RichText,
-    Sense, Stroke, UiBuilder, Vec2, ViewportBuilder, ViewportId,
+    self, Align, CornerRadius, Id, Key, Layout, Margin, Rect, RichText, Sense, Stroke, UiBuilder,
+    Vec2, ViewportBuilder, ViewportId,
 };
 use egui_phosphor::regular as icon;
 
+use super::hotkeys::HotkeysPage;
+use super::{pages, Settings};
+use crate::constants::APP_ID;
+use crate::helpers::zoom::zoom_keys;
+use crate::ui::platform;
+use crate::ui::widgets::dialog::{self, HEADER_H, PADDING};
+use crate::ui::widgets::{move_on_drag, window_frame};
+
+/// Window title (also how the window is found to make it a dialog, see [`platform`]).
+const TITLE: &str = "Settings";
+/// Window size to start with, and the smallest it can be resized to.
+const SIZE: [f32; 2] = [760.0, 600.0];
+const MIN_SIZE: [f32; 2] = [560.0, 360.0];
+/// Sidebar width, its side padding, and the height of a page entry.
+const SIDEBAR_W: f32 = 190.0;
+const SIDEBAR_PAD: f32 = 10.0;
+const SIDEBAR_ITEM_H: f32 = 30.0;
+/// Size of the page icons in the sidebar.
+const SIDEBAR_ICON: f32 = 15.0;
+/// Frames to keep trying to make the window a dialog before giving up (about two seconds).
+const ATTACH_TRIES: u32 = 120;
+
+////////////////////////////////////////////////////////////////////////////////
+// region:Pages
+
+/// The settings pages, in sidebar order.
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 enum Page {
     #[default]
@@ -55,23 +77,17 @@ const SIDEBAR: [(&str, &[Entry]); 2] = [
     ),
 ];
 
-const TITLE: &str = "Settings";
-const SIDEBAR_W: f32 = 190.0;
-const SIDEBAR_ITEM_H: f32 = 30.0;
+////////////////////////////////////////////////////////////////////////////////
+// region:Window
 
-/// Label column width on the Hotkeys page.
-const KEY_LABEL_WIDTH: f32 = 230.0;
-
-/// Which binding is waiting for a key press: (command, index in `binds` or `None` for new).
-type Capture = (Command, Option<usize>);
-
+/// The settings window's state (the settings themselves live in the app).
 pub struct SettingsWindow {
     pub open: bool,
     /// Frames spent trying to make the window a dialog of the main one (X11), or `None`
     /// once it is.
     attaching: Option<u32>,
     page: Page,
-    capture: Option<Capture>,
+    hotkeys: HotkeysPage,
 }
 
 impl Default for SettingsWindow {
@@ -80,7 +96,7 @@ impl Default for SettingsWindow {
             open: false,
             attaching: Some(0),
             page: Page::default(),
-            capture: None,
+            hotkeys: HotkeysPage::default(),
         }
     }
 }
@@ -88,14 +104,15 @@ impl Default for SettingsWindow {
 impl SettingsWindow {
     /// Waiting for a shortcut: the main window should ignore key presses.
     pub fn capturing(&self) -> bool {
-        self.open && self.capture.is_some()
+        self.open && self.hotkeys.capturing()
     }
 
     fn close(&mut self) {
         self.open = false;
-        self.capture = None;
+        self.hotkeys.cancel();
     }
 
+    /// Show the window while it's open, editing `s` in place.
     pub fn show(&mut self, ctx: &egui::Context, s: &mut Settings) {
         if !self.open {
             self.attaching = Some(0);
@@ -106,11 +123,11 @@ impl SettingsWindow {
             .with_title(TITLE)
             .with_window_type(egui::X11WindowType::Dialog)
             .with_taskbar(false)
-            .with_app_id("spacemonger")
+            .with_app_id(APP_ID)
             .with_decorations(false)
             .with_transparent(true)
-            .with_inner_size([760.0, 600.0])
-            .with_min_inner_size([560.0, 360.0]);
+            .with_inner_size(SIZE)
+            .with_min_inner_size(MIN_SIZE);
         ctx.show_viewport_immediate(
             ViewportId::from_hash_of("settings"),
             builder,
@@ -118,8 +135,8 @@ impl SettingsWindow {
                 if ui.input(|i| i.viewport().close_requested()) {
                     self.close();
                 }
-                if self.capture.is_none() {
-                    super::zoom_keys(ui.ctx(), &mut s.general.ui_zoom);
+                if !self.hotkeys.capturing() {
+                    zoom_keys(ui.ctx(), &mut s.general.ui_zoom);
                 }
                 self.window_ui(ui, s);
             },
@@ -157,7 +174,7 @@ impl SettingsWindow {
 
         let mut side = ui.new_child(
             UiBuilder::new()
-                .max_rect(sidebar.shrink2(Vec2::new(10.0, 0.0)))
+                .max_rect(sidebar.shrink2(Vec2::new(SIDEBAR_PAD, 0.0)))
                 .layout(Layout::top_down(Align::Min)),
         );
         self.sidebar_ui(&mut side);
@@ -202,11 +219,11 @@ impl SettingsWindow {
                     });
             });
 
-        titlebar::move_on_drag(ui, &drag, |p| !close_rect.contains(p));
+        move_on_drag(ui, &drag, |p| !close_rect.contains(p));
         if close {
             self.close();
         }
-        let esc = self.capture.is_none()
+        let esc = !self.hotkeys.capturing()
             && !egui::Popup::is_any_open(&ctx)
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, Key::Escape));
         if esc {
@@ -222,26 +239,26 @@ impl SettingsWindow {
             Layout::left_to_right(Align::Center),
             |ui| {
                 ui.set_min_size(Vec2::new(w, HEADER_H));
-                ui.add_space(PADDING - 10.0);
+                ui.add_space(PADDING - SIDEBAR_PAD);
                 ui.add(egui::Label::new(RichText::new(TITLE).strong()).selectable(false));
             },
         );
         ui.spacing_mut().item_spacing.y = 2.0;
         crate::ui::widgets::flat_items(ui);
         for (group, pages) in SIDEBAR {
-            ui.add_space(10.0);
+            ui.add_space(SIDEBAR_PAD);
             ui.horizontal(|ui| {
-                ui.add_space(PADDING - 10.0);
+                ui.add_space(PADDING - SIDEBAR_PAD);
                 ui.weak(group);
             });
             ui.add_space(2.0);
             for &(page, glyph, name) in pages {
-                let text = (RichText::new(glyph).size(15.0), name);
+                let text = (RichText::new(glyph).size(SIDEBAR_ICON), name);
                 let b = egui::Button::selectable(self.page == page, text)
                     .min_size(Vec2::new(w, SIDEBAR_ITEM_H));
                 if ui.add(b).clicked() && self.page != page {
                     self.page = page;
-                    self.capture = None;
+                    self.hotkeys.cancel();
                 }
             }
         }
@@ -252,7 +269,7 @@ impl SettingsWindow {
             Page::Navigation => pages::navigation(ui, s),
             Page::Scan => pages::scan(ui, s),
             Page::Actions => pages::actions(ui, s),
-            Page::Hotkeys => self.keys_ui(ui, &mut s.keys),
+            Page::Hotkeys => self.hotkeys.ui(ui, &mut s.keys),
             Page::Appearance => pages::appearance(ui, s),
             Page::PathBar => pages::path_bar(ui, s),
             Page::Tiles => pages::tiles(ui, s),
@@ -266,19 +283,8 @@ impl SettingsWindow {
     /// little while.
     fn attach(&mut self, ctx: &egui::Context) {
         let Some(tries) = self.attaching else { return };
-        #[cfg(target_os = "linux")]
-        let done = match crate::ui::x11_dialog::attach(TITLE) {
-            crate::ui::x11_dialog::Attach::Pending => false,
-            crate::ui::x11_dialog::Attach::Done(window) => {
-                if let Some(w) = window {
-                    crate::ui::x11_wm::add_shadow(w);
-                }
-                true
-            }
-        };
-        #[cfg(not(target_os = "linux"))]
-        let done = true;
-        self.attaching = if done || tries > 120 {
+        let done = platform::attach_dialog(TITLE);
+        self.attaching = if done || tries > ATTACH_TRIES {
             None
         } else {
             Some(tries + 1)
@@ -287,142 +293,14 @@ impl SettingsWindow {
             ctx.request_repaint();
         }
     }
-
-    /// One row per command: its shortcuts (click one to change it, right-click to remove),
-    /// "+" to add one, and a reset button.
-    fn keys_ui(&mut self, ui: &mut egui::Ui, keys: &mut Keymap) {
-        if let Some(cap) = self.capture {
-            ui.label(RichText::new("Press a key combination… (Esc cancels)").strong());
-            if let Some(sc) = captured(ui) {
-                match (sc, cap) {
-                    (None, _) => {}
-                    (Some(sc), (cmd, Some(i))) => keys.binds[i] = (cmd, sc),
-                    (Some(sc), (cmd, None)) => keys.binds.push((cmd, sc)),
-                }
-                self.capture = None;
-            }
-        } else {
-            ui.weak("Click a shortcut to change it, right-click to remove it.");
-        }
-        ui.add_space(6.0);
-
-        let mut remove = None;
-        let mut reset = None;
-        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-        for (title, cmds) in Command::GROUPS {
-            form::section(ui, title, |ui| {
-                for &cmd in cmds {
-                    let is_default = {
-                        let now: Vec<_> = keys.for_command(cmd).map(|(_, s)| *s).collect();
-                        let def = Keymap::defaults_for(cmd);
-                        now.len() == def.len()
-                            && now.iter().zip(&def).all(|(a, b)| same_shortcut(a, b))
-                    };
-                    let mut reset_clicked = false;
-                    ui.push_id(cmd.label(), |ui| {
-                        // Same columns as the other tabs: label, shortcuts, reset on the right.
-                        form::line(
-                            ui,
-                            |ui| {
-                                reset_clicked = ui
-                                    .add_enabled(!is_default, egui::Button::new("⟲").small())
-                                    .on_hover_text("Reset to default")
-                                    .clicked();
-                            },
-                            |ui| {
-                                let text = if is_default {
-                                    RichText::new(cmd.label())
-                                } else {
-                                    RichText::new(cmd.label()).strong()
-                                };
-                                ui.label(text);
-                                form::changed_dot(ui, !is_default);
-                                form::pad_to(ui, KEY_LABEL_WIDTH);
-                                let bound: Vec<(usize, KeyboardShortcut)> =
-                                    keys.for_command(cmd).map(|(i, s)| (i, *s)).collect();
-                                for (i, sc) in bound {
-                                    let waiting = self.capture == Some((cmd, Some(i)));
-                                    let clashes = keys.conflicts(i);
-                                    let mut text = RichText::new(if waiting {
-                                        "…".to_string()
-                                    } else {
-                                        shortcut_text(&sc)
-                                    });
-                                    if !clashes.is_empty() {
-                                        text = text.color(ui.visuals().error_fg_color);
-                                    }
-                                    let mut b = ui.add(egui::Button::new(text).selected(waiting));
-                                    if !clashes.is_empty() {
-                                        let names: Vec<_> =
-                                            clashes.iter().map(|c| c.label()).collect();
-                                        b = b.on_hover_text(format!(
-                                            "Also bound to: {}",
-                                            names.join(", ")
-                                        ));
-                                    }
-                                    if b.clicked() {
-                                        self.capture = Some((cmd, Some(i)));
-                                    }
-                                    if b.secondary_clicked() {
-                                        remove = Some(i);
-                                    }
-                                }
-                                let adding = self.capture == Some((cmd, None));
-                                if form::add_button(ui, adding)
-                                    .on_hover_text("Add a shortcut")
-                                    .clicked()
-                                {
-                                    self.capture = Some((cmd, None));
-                                }
-                            },
-                        );
-                    });
-                    if reset_clicked {
-                        reset = Some(cmd);
-                    }
-                }
-            });
-        }
-        if let Some(i) = remove {
-            keys.binds.remove(i);
-            self.capture = None;
-        }
-        if let Some(cmd) = reset {
-            keys.reset(cmd);
-            self.capture = None;
-        }
-    }
 }
 
-/// A key pressed this frame while capturing: `Some(None)` for Esc (cancel),
-/// `Some(Some(shortcut))` for anything else, `None` while still waiting.
-fn captured(ui: &egui::Ui) -> Option<Option<KeyboardShortcut>> {
-    ui.input_mut(|i| {
-        let found = i.events.iter().find_map(|e| match e {
-            Event::Key {
-                key,
-                pressed: true,
-                repeat: false,
-                modifiers,
-                ..
-            } => Some((*key, *modifiers)),
-            _ => None,
-        })?;
-        i.events.retain(|e| !matches!(e, Event::Key { .. }));
-        Some(match found {
-            (Key::Escape, m) if m.is_none() => None,
-            (key, m) => Some(KeyboardShortcut::new(m, key)),
-        })
-    })
-}
+////////////////////////////////////////////////////////////////////////////////
+// region:Helpers
 
 /// The main menu's corner radius where a compositor can show see-through corners, else none.
 fn corner_radius(ui: &egui::Ui) -> CornerRadius {
-    #[cfg(target_os = "linux")]
-    let composited = crate::ui::x11_wm::composited();
-    #[cfg(not(target_os = "linux"))]
-    let composited = true;
-    if composited {
+    if platform::composited() {
         ui.visuals().menu_corner_radius
     } else {
         CornerRadius::ZERO

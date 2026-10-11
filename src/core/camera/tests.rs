@@ -3,22 +3,11 @@
 use super::*;
 use crate::core::geometry::{Point, Rect, Size, Vec2};
 use crate::core::layout::{content, root_content, LayoutParams, Scene};
+use crate::core::model::testing::file;
 use crate::core::model::{Entry, Folder, Kind};
 
 const VW: f64 = 400.0;
 const VH: f64 = 300.0;
-
-fn file(name: &str, size: u64) -> Entry {
-    Entry {
-        name: name.into(),
-        size,
-        actual: size,
-        mtime: 0,
-        created: 0,
-        kind: Kind::File,
-        hidden: false,
-    }
-}
 
 fn tree() -> Folder {
     let sub = Folder {
@@ -27,15 +16,7 @@ fn tree() -> Folder {
     };
     Folder {
         entries: vec![
-            Entry {
-                name: "sub".into(),
-                size: 1000,
-                actual: 1000,
-                mtime: 0,
-                created: 0,
-                kind: Kind::Dir(Box::new(sub)),
-                hidden: false,
-            },
+            Entry::new("sub", 1000, Kind::Dir(Box::new(sub))),
             file("b", 500),
             file("c", 250),
         ],
@@ -184,15 +165,7 @@ fn resize_when_not_zoomed_stays_full_view() {
 #[test]
 fn child_boxes_skip_free_space() {
     let mut root = tree();
-    root.entries.push(Entry {
-        name: String::new(),
-        size: 100,
-        actual: 100,
-        mtime: 0,
-        created: 0,
-        kind: Kind::Free,
-        hidden: false,
-    });
+    root.entries.push(Entry::new("", 100, Kind::Free));
     let scene = Scene {
         root: Some(&root),
         params: LayoutParams::default(),

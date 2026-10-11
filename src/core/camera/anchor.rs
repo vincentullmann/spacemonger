@@ -1,10 +1,11 @@
 //! Holding the view steady while the window is resized.
 
+use std::time::Instant;
+
 use super::Camera;
 use crate::constants::{ANCHOR_MIN_SHARE, RESIZE_SETTLE};
 use crate::core::geometry::{Point, Rect, RectExt, Size};
 use crate::core::layout::{Item, Scene};
-use std::time::Instant;
 
 /// What to hold steady while the window is resized.
 #[derive(Clone)]
@@ -63,6 +64,10 @@ impl Camera {
                 height: vh,
             },
         ) = (self.view, view);
+        // A minimised window has no size: keep the camera for when it comes back.
+        if vw <= 0.0 || vh <= 0.0 {
+            return;
+        }
         let Some(cam) = self.cam.filter(|_| ow > 0.0 && oh > 0.0) else {
             self.view = view;
             self.cam = None;

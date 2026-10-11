@@ -4,10 +4,12 @@ use super::LayoutParams;
 use crate::core::geometry::Rect;
 use crate::core::model::{Entry, Folder, Kind};
 
+/// Size an entry counts with in the layout: 0 when it's left out (hidden, dotfile, free
+/// space turned off).
 pub(super) fn weight(e: &Entry, p: LayoutParams) -> u64 {
     if e.hidden
         || (matches!(e.kind, Kind::Free) && !p.show_free)
-        || (p.hide_dotfiles && e.name.starts_with('.'))
+        || (p.hide_dotfiles && e.is_dotfile())
     {
         0
     } else {

@@ -1,13 +1,15 @@
 //! Window title: the selection, or the current folder, with sizes.
 
+use std::sync::atomic::Ordering;
+
 use crate::constants::APP_NAME;
 use crate::core::fs::ScanJob;
 use crate::core::model::Tree;
 use crate::core::selection::Selection;
 use crate::utils::format;
-use num_format::{Locale, ToFormattedString};
-use std::sync::atomic::Ordering;
 
+/// The window title: the selection with its size and share, or the current folder with the
+/// drive's totals.
 pub fn window_title(tree: Option<&Tree>, selection: &Selection, zoom: &[usize]) -> String {
     let Some(t) = tree else {
         return APP_NAME.to_string();
@@ -39,8 +41,13 @@ pub fn window_title(tree: Option<&Tree>, selection: &Selection, zoom: &[usize]) 
     } else {
         t.folder_at(zoom).map_or(0, |f| f.total)
     };
+    // Only mentioned when the scan missed something.
+    let unreadable = match t.unreadable {
+        0 => String::new(),
+        n => format!("  -  {} unreadable", format::count(n)),
+    };
     format!(
-        "{}  -  {} Total  -  {} Free  -  {APP_NAME}",
+        "{}  -  {} Total  -  {} Free{unreadable}  -  {APP_NAME}",
         t.full_path(zoom, None).display(),
         format::size_string(size, t.total_space, false),
         format::size_string(t.free_space, t.free_space, false),
@@ -53,12 +60,6 @@ pub fn scan_title(job: &ScanJob) -> (String, f32) {
     let ctl = &job.ctl;
     let bytes = ctl.bytes.load(Ordering::Relaxed);
     let files = ctl.files.load(Ordering::Relaxed);
-    let used = job.drive.total.saturating_sub(job.drive.free);
-    let frac = if used > 0 {
-        (bytes as f32 / used as f32).min(1.0)
-    } else {
-        0.0
-    };
     let verb = if ctl.is_paused() {
         "Paused"
     } else {
@@ -67,8 +68,8 @@ pub fn scan_title(job: &ScanJob) -> (String, f32) {
     let text = format!(
         "{verb} {}  -  {} files  -  {}  -  {APP_NAME}",
         job.drive.root.display(),
-        files.to_formatted_string(&Locale::en),
+        format::count(files),
         format::size_string(bytes, 0, false),
     );
-    (text, frac)
+    (text, job.progress())
 }

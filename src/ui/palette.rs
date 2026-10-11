@@ -1,10 +1,12 @@
 //! Colours and drawing options for the treemap and path bar. The "Classic" scheme is the
 //! original ColorService "Rainbow" palette; others are sampled from colorgrad presets.
 
-use crate::ui::settings::{Settings, Shown, Tiles};
 use colorgrad::Gradient;
 use eframe::egui::Color32;
 use serde::{Deserialize, Serialize};
+use strum::{EnumIter, IntoStaticStr};
+
+use crate::ui::settings::{Settings, Shown, Tiles};
 
 const fn c(r: u8, g: u8, b: u8) -> Color32 {
     Color32::from_rgb(r, g, b)
@@ -39,8 +41,13 @@ const BOX_LIGHT: [Color32; 24] = [
     c(0xBF, 0x7F, 0xBF),
 ];
 
+////////////////////////////////////////////////////////////////////////////////
+// region:Colour schemes
+
 /// Where the depth colours come from.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[derive(
+    Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default, EnumIter, IntoStaticStr,
+)]
 pub enum Scheme {
     /// The original SpaceMonger rainbow.
     #[default]
@@ -118,6 +125,9 @@ fn classic(table: &[Color32; 24], n: usize) -> Vec<Color32> {
     (0..n).map(|i| table[i % table.len()]).collect()
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// region:Palette
+
 /// `text` on `fill`, unless the two are too close, then the opposite (near white / black).
 fn contrast_text(fill: Color32, text: Color32) -> Color32 {
     let lum = fill.intensity();
@@ -169,6 +179,7 @@ impl Palette {
     /// Outline colour when the settings don't pick one.
     pub const BORDER: Color32 = c(0x55, 0x55, 0x55);
 
+    /// The palette the settings describe.
     pub fn new(s: &Settings) -> Self {
         let Tiles {
             ref colors,

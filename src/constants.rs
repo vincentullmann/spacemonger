@@ -2,7 +2,18 @@
 
 use std::time::Duration;
 
+/// Name in the title bar and taskbar.
 pub const APP_NAME: &str = "SpaceMonger One";
+
+/// Application id: window class / Wayland app id, and eframe's storage name.
+pub const APP_ID: &str = "spacemonger";
+
+/// Main window size to start with, and the smallest it can be resized to.
+pub const WINDOW_SIZE: [f32; 2] = [1200.0, 800.0];
+pub const MIN_WINDOW_SIZE: [f32; 2] = [400.0, 300.0];
+
+/// Size of icon glyphs on buttons (title bar, dialog ×).
+pub const ICON_SIZE: f32 = 16.0;
 
 /// Zoom factor per point of wheel scroll at the default zoom speed (a mouse notch is ~50
 /// points, about 1.2x).

@@ -13,6 +13,7 @@ pub struct Scene<'a> {
 }
 
 impl<'a> Scene<'a> {
+    /// A scene over `tree` (none before the first scan) with layout `params`.
     pub fn new(tree: Option<&'a Tree>, params: LayoutParams) -> Self {
         Self {
             root: tree.map(|t| &t.root),

@@ -1,45 +1,16 @@
 //! The contents of the settings pages (all but Hotkeys, which the window draws itself).
 
-use super::form::{self, group, rows};
-use super::{General, Labels, Layout, PathBar, Scan, Settings, Text, Theme, Tiles, Tooltips};
-use crate::constants::UI_ZOOM;
-use crate::ui::palette::{Palette, Scheme};
-use crate::utils::format::SizeFormat;
 use eframe::egui::Ui;
 
-const THEMES: [(Theme, &str); 3] = [
-    (Theme::Light, "Light"),
-    (Theme::Dark, "Dark"),
-    (Theme::System, "Follow system"),
-];
+use super::form::{self, group, rows};
+use super::{General, Labels, Layout, PathBar, Scan, Settings, Text, Tiles, Tooltips};
+use crate::constants::UI_ZOOM;
+use crate::ui::palette::Palette;
 
-const SIZE_FORMATS: [(SizeFormat, &str); 5] = [
-    (SizeFormat::Bytes, "Bytes (1,234,567 bytes)"),
-    (SizeFormat::Binary, "Binary (1.2 MiB)"),
-    (SizeFormat::Decimal, "Decimal (1.2 MB)"),
-    (
-        SizeFormat::BinaryAndBytes,
-        "Binary + bytes (1.2 MiB (1,234,567 bytes))",
-    ),
-    (
-        SizeFormat::DecimalAndBytes,
-        "Decimal + bytes (1.2 MB (1,234,567 bytes))",
-    ),
-];
+////////////////////////////////////////////////////////////////////////////////
+// region:General
 
-const SCHEMES: [(Scheme, &str); 10] = [
-    (Scheme::Classic, "Classic"),
-    (Scheme::Turbo, "Turbo"),
-    (Scheme::Sinebow, "Sinebow"),
-    (Scheme::Rainbow, "Rainbow"),
-    (Scheme::Spectral, "Spectral"),
-    (Scheme::Viridis, "Viridis"),
-    (Scheme::Plasma, "Plasma"),
-    (Scheme::Warm, "Warm"),
-    (Scheme::Cool, "Cool"),
-    (Scheme::Custom, "Custom"),
-];
-
+/// Navigation: animation length and wheel zoom speed.
 pub fn navigation(ui: &mut Ui, s: &mut Settings) {
     let (g, d) = (&mut s.general, General::default());
     rows(ui, |r| {
@@ -60,6 +31,7 @@ pub fn navigation(ui: &mut Ui, s: &mut Settings) {
     });
 }
 
+/// Actions: delete confirmation and how much a framed selection fills.
 pub fn actions(ui: &mut Ui, s: &mut Settings) {
     let (g, d) = (&mut s.general, General::default());
     rows(ui, |r| {
@@ -80,6 +52,7 @@ pub fn actions(ui: &mut Ui, s: &mut Settings) {
     });
 }
 
+/// Scan: hidden files, filesystems, hard links, excludes.
 pub fn scan(ui: &mut Ui, s: &mut Settings) {
     let (sc, d) = (&mut s.scan, Scan::default());
     rows(ui, |r| {
@@ -116,6 +89,10 @@ pub fn scan(ui: &mut Ui, s: &mut Settings) {
     ui.weak("Filesystem and hard-link options apply from the next scan.");
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// region:Display
+
+/// Appearance: theme, UI zoom and font, map font, size and date formats.
 pub fn appearance(ui: &mut Ui, s: &mut Settings) {
     let (g, dg) = (&mut s.general, General::default());
     let (f, d) = (&mut s.text, Text::default());
@@ -125,7 +102,7 @@ pub fn appearance(ui: &mut Ui, s: &mut Settings) {
             "Light or dark colours, or follow the desktop's preference.",
             &mut g.theme,
             &dg.theme,
-            |ui, v| form::choice(ui, "theme", v, &THEMES),
+            |ui, v| form::choice(ui, "theme", v),
         );
         r.row(
             "UI zoom",
@@ -155,7 +132,7 @@ pub fn appearance(ui: &mut Ui, s: &mut Settings) {
             "How file sizes are shown in labels and tips. Totals (title bar, free space) use binary or decimal units.",
             &mut f.size_format,
             &d.size_format,
-            |ui, v| form::choice(ui, "size_format", v, &SIZE_FORMATS),
+            |ui, v| form::choice(ui, "size_format", v),
         );
         r.row(
             "Date format",
@@ -167,6 +144,7 @@ pub fn appearance(ui: &mut Ui, s: &mut Settings) {
     });
 }
 
+/// Path bar: its font size.
 pub fn path_bar(ui: &mut Ui, s: &mut Settings) {
     let (p, d) = (&mut s.path_bar, PathBar::default());
     rows(ui, |r| {
@@ -180,6 +158,7 @@ pub fn path_bar(ui: &mut Ui, s: &mut Settings) {
     });
 }
 
+/// Tiles: colours, outlines, gap and layout.
 pub fn tiles(ui: &mut Ui, s: &mut Settings) {
     let before = s.tiles.clone();
     let (t, d) = (&mut s.tiles, Tiles::default());
@@ -195,7 +174,7 @@ pub fn tiles(ui: &mut Ui, s: &mut Settings) {
             "Where the depth colours come from. Picking one resets the colour list; editing a colour makes the scheme Custom.",
             &mut t.scheme,
             &d.scheme,
-            |ui, v| form::choice(ui, "scheme", v, &SCHEMES),
+            |ui, v| form::choice(ui, "scheme", v),
         );
         r.row(
             "Colours",
@@ -273,6 +252,7 @@ pub fn tiles(ui: &mut Ui, s: &mut Settings) {
     });
 }
 
+/// Tile labels: font size, shadow, density and what they show.
 pub fn tile_labels(ui: &mut Ui, s: &mut Settings) {
     let (lb, d) = (&mut s.labels, Labels::default());
     rows(ui, |r| {
@@ -307,6 +287,7 @@ pub fn tile_labels(ui: &mut Ui, s: &mut Settings) {
     });
 }
 
+/// Tooltips: what they show, font size and delay.
 pub fn tooltips(ui: &mut Ui, s: &mut Settings) {
     let (tt, d) = (&mut s.tooltips, Tooltips::default());
     rows(ui, |r| {

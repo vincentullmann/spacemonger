@@ -3,6 +3,9 @@
 
 use eframe::egui::{self, Color32, Stroke};
 
+/// Corner radius of buttons, list items and inputs.
+const CORNER_RADIUS: u8 = 4;
+
 /// One set of chrome colours.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Theme {
@@ -23,6 +26,7 @@ pub struct Theme {
 }
 
 impl Theme {
+    /// The light chrome colours.
     pub const fn light() -> Self {
         Self {
             background: Color32::from_rgb(0xF6, 0xF6, 0xF4),
@@ -33,6 +37,7 @@ impl Theme {
         }
     }
 
+    /// The dark chrome colours.
     pub const fn dark() -> Self {
         Self {
             background: Color32::from_rgb(0x22, 0x23, 0x24),
@@ -43,6 +48,7 @@ impl Theme {
         }
     }
 
+    /// The dark or light colours.
     pub const fn of(dark: bool) -> Self {
         if dark {
             Self::dark()
@@ -144,9 +150,6 @@ impl Theme {
             egui::epaint::FontColorTransferFunction::LIGHT_MODE_DEFAULT;
     }
 }
-
-/// Corner radius of buttons, list items and inputs.
-const CORNER_RADIUS: u8 = 4;
 
 /// The accent colour (progress, links, the changed marker).
 pub fn accent(visuals: &egui::Visuals) -> Color32 {

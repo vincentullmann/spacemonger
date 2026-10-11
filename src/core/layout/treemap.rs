@@ -1,10 +1,11 @@
 //! Building the visible layout for one frame.
 
+use std::rc::Rc;
+
 use super::split::halves;
 use super::{content, root_content, Item, LayoutParams, Reshape};
 use crate::core::geometry::{Rect, Size};
 use crate::core::model::{Folder, Kind};
-use std::rc::Rc;
 
 /// Below this (w or h, in points) entries are merged into one anonymous block.
 const MIN_BOX: f64 = 5.0;
@@ -127,6 +128,10 @@ pub fn build(root: &Folder, cam: Rect, view: Size, p: LayoutParams, ovs: &[Resha
 }
 
 fn layout_folder(cx: &mut Ctx, folder: &Folder, path: Rc<[usize]>, r: Rect, depth: i32) {
+    // A folder too small for its frame and title bar has no room for its contents.
+    if r.width() <= 0.0 || r.height() <= 0.0 {
+        return;
+    }
     let indices: Vec<usize> = (0..folder.entries.len()).collect();
     split(cx, folder, &path, &indices, r, depth);
 }
@@ -182,7 +187,7 @@ fn place(cx: &mut Ctx, folder: &Folder, path: &Rc<[usize]>, list: &[usize], r: R
             let area = content(r, cx.p.title_h);
             layout_folder(cx, child, Rc::from(cp), area, depth + 1);
         }
-    } else if cx.on_screen(r) {
+    } else if cx.on_screen(r) && r.width() > 0.0 && r.height() > 0.0 {
         // A few pixels across: merge into one anonymous block.
         cx.push(path, None, depth, (false, false, false), r);
     }

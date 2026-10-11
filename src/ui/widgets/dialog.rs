@@ -6,18 +6,20 @@
 //! same [`header`] in a window of its own.
 
 use eframe::egui::{
-    self, Align, Align2, Area, Button, Color32, Frame, Id, Layout, Margin, Order, Rect, RichText,
-    Sense, Ui, UiBuilder, UiKind, Vec2,
+    self, Align, Align2, Area, Color32, Frame, Id, Layout, Margin, Order, Rect, RichText, Sense,
+    Ui, UiBuilder, UiKind, Vec2,
 };
-use egui_phosphor::regular as icon;
+
+use super::buttons::{close_button, close_button_margin};
 
 /// Height of the header row.
 pub const HEADER_H: f32 = 40.0;
 /// Space between the dialog's edge and its contents.
 pub const PADDING: f32 = 14.0;
-const CLOSE_BUTTON: Vec2 = Vec2::new(28.0, 28.0);
-const ICON_SIZE: f32 = 16.0;
 const BACKDROP: Color32 = Color32::from_black_alpha(90);
+
+////////////////////////////////////////////////////////////////////////////////
+// region:Dialog
 
 /// Where a dialog sits and how far it's been moved, kept between frames.
 #[derive(Clone, Copy, Default)]
@@ -26,6 +28,7 @@ struct Placement {
     size: Option<Vec2>,
 }
 
+/// A dialog to show this frame (built up with the methods below, then [`Dialog::show`]).
 pub struct Dialog<'a> {
     id: Id,
     title: &'a str,
@@ -36,6 +39,7 @@ pub struct Dialog<'a> {
     width: f32,
 }
 
+/// What [`Dialog::show`] returns.
 pub struct DialogResponse<R> {
     pub inner: R,
     /// × clicked, or Escape on a modal dialog.
@@ -62,6 +66,7 @@ impl<'a> Dialog<'a> {
         self
     }
 
+    /// Show the × in the header (on by default).
     pub fn closable(mut self, closable: bool) -> Self {
         self.closable = closable;
         self
@@ -80,6 +85,7 @@ impl<'a> Dialog<'a> {
         self
     }
 
+    /// Show the dialog with `add` drawing its body.
     pub fn show<R>(self, ctx: &egui::Context, add: impl FnOnce(&mut Ui) -> R) -> DialogResponse<R> {
         let screen = ctx.content_rect();
         let mut place: Placement = ctx.data(|d| d.get_temp(self.id)).unwrap_or_default();
@@ -151,6 +157,9 @@ impl<'a> Dialog<'a> {
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// region:Frame, header and buttons
+
 /// Move `min` so a `size` box from there stays inside `screen` (top-left wins if too big).
 fn clamp_into(min: egui::Pos2, size: Vec2, screen: Rect) -> egui::Pos2 {
     egui::pos2(
@@ -202,7 +211,7 @@ pub fn header(ui: &mut Ui, title: &str, closable: bool) -> bool {
         // Not selectable, so dragging the title moves the dialog.
         ui.add(egui::Label::new(RichText::new(title).strong()).selectable(false));
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            ui.add_space(PADDING - (CLOSE_BUTTON.x - ICON_SIZE) / 2.0);
+            ui.add_space(close_button_margin(PADDING));
             closable && close_button(ui).clicked()
         })
         .inner
@@ -210,10 +219,9 @@ pub fn header(ui: &mut Ui, title: &str, closable: bool) -> bool {
     .inner
 }
 
-/// A frameless × the size of the title bar's icon buttons.
-pub fn close_button(ui: &mut Ui) -> egui::Response {
-    let b = Button::new(RichText::new(icon::X).size(ICON_SIZE))
-        .frame_when_inactive(false)
-        .min_size(CLOSE_BUTTON);
-    ui.add(b).on_hover_text("Close")
+/// A row of buttons along the bottom right of a dialog, laid out right to left.
+pub fn button_row<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let size = Vec2::new(ui.available_width(), ui.spacing().interact_size.y);
+    ui.allocate_ui_with_layout(size, Layout::right_to_left(Align::Center), add)
+        .inner
 }

@@ -12,17 +12,18 @@
 //!
 //! The request arrives as a ClientMessage on winit's own Xlib connection, and winit drops it.
 //! We read it with Xlib's per-display event hook (`XESetWireToEvent`), which runs inside
-//! winit's event pump on the main thread. Everything else uses a second connection.
+//! winit's event pump on the main thread. Everything else uses the app's own connection.
 //!
 //! Per frame: [`frame_drawn`] at the end of `ui` marks the requests received so far as drawn
 //! and asks for one more frame; [`acknowledge`] at the start of that frame (in `logic`, after
 //! the drawn frame was presented) sets the counter.
 
-use eframe::egui::{Color32, Context};
-use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle};
 use std::ffi::c_int;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Mutex, OnceLock};
+
+use eframe::egui::{Color32, Context};
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle};
 use x11_dl::xlib;
 use x11rb::connection::Connection;
 use x11rb::protocol::sync::{ConnectionExt as _, Int64};
@@ -31,6 +32,13 @@ use x11rb::protocol::xproto::{
 };
 use x11rb::rust_connection::RustConnection;
 use x11rb::wrapper::ConnectionExt as _;
+
+use super::{atom, conn, XResult};
+
+/// XSync extension version we ask for.
+const SYNC_VERSION: (u8, u8) = (3, 1);
+/// How many `WM_PROTOCOLS` entries are read.
+const MAX_PROTOCOLS: u32 = 64;
 
 type WireToEvent =
     unsafe extern "C" fn(*mut xlib::Display, *mut xlib::XEvent, *mut xlib::xEvent) -> c_int;
@@ -48,8 +56,12 @@ static CTX: OnceLock<Context> = OnceLock::new();
 static RECEIVED: Mutex<Option<i64>> = Mutex::new(None);
 static DRAWN: Mutex<Option<i64>> = Mutex::new(None);
 
+////////////////////////////////////////////////////////////////////////////////
+// region:State
+
+/// The handshake's state, set up once the main window exists.
 struct X11 {
-    conn: RustConnection,
+    conn: &'static RustConnection,
     window: Window,
     counter: u32,
     depth: u8,
@@ -59,9 +71,12 @@ struct X11 {
 static X11: OnceLock<X11> = OnceLock::new();
 static GAVE_UP: AtomicBool = AtomicBool::new(false);
 
+////////////////////////////////////////////////////////////////////////////////
+// region:Per frame
+
 /// Set up the handshake for the main window. Call every frame; it does its work once,
 /// as soon as the window exists (eframe keeps it unmapped until the first frame is drawn).
-pub fn install(frame: &eframe::Frame, ctx: &Context, background: Color32) {
+pub fn install_sync(frame: &eframe::Frame, ctx: &Context, background: Color32) {
     if X11.get().is_some() || GAVE_UP.load(Ordering::Relaxed) {
         return;
     }
@@ -126,38 +141,33 @@ pub fn acknowledge() {
     let _ = x.conn.flush();
 }
 
-fn setup(window: Window, display: *mut xlib::Display, background: Color32) -> Result<X11, String> {
-    let err = |e: &dyn std::fmt::Display| e.to_string();
-    let (conn, _) = x11rb::connect(None).map_err(|e| err(&e))?;
-    conn.sync_initialize(3, 1)
-        .map_err(|e| err(&e))?
-        .reply()
-        .map_err(|e| err(&e))?;
+////////////////////////////////////////////////////////////////////////////////
+// region:Setup
 
-    let atom = |name: &[u8]| -> Result<u32, String> {
-        Ok(conn
-            .intern_atom(false, name)
-            .map_err(|e| err(&e))?
-            .reply()
-            .map_err(|e| err(&e))?
-            .atom)
-    };
-    let wm_protocols = atom(b"WM_PROTOCOLS")?;
-    let sync_request = atom(b"_NET_WM_SYNC_REQUEST")?;
-    let sync_counter = atom(b"_NET_WM_SYNC_REQUEST_COUNTER")?;
+fn setup(window: Window, display: *mut xlib::Display, background: Color32) -> XResult<X11> {
+    let (conn, _) = conn().ok_or("no X connection")?;
+    conn.sync_initialize(SYNC_VERSION.0, SYNC_VERSION.1)?
+        .reply()?;
 
-    let counter = conn.generate_id().map_err(|e| err(&e))?;
-    conn.sync_create_counter(counter, Int64 { hi: 0, lo: 0 })
-        .map_err(|e| err(&e))?
-        .check()
-        .map_err(|e| err(&e))?;
+    let wm_protocols = atom(conn, "WM_PROTOCOLS")?;
+    let sync_request = atom(conn, "_NET_WM_SYNC_REQUEST")?;
+    let sync_counter = atom(conn, "_NET_WM_SYNC_REQUEST_COUNTER")?;
+
+    let counter = conn.generate_id()?;
+    conn.sync_create_counter(counter, Int64 { hi: 0, lo: 0 })?
+        .check()?;
 
     // Advertise the protocol next to winit's WM_DELETE_WINDOW / _NET_WM_PING.
     let mut protocols: Vec<u32> = conn
-        .get_property(false, window, wm_protocols, AtomEnum::ATOM, 0, 64)
-        .map_err(|e| err(&e))?
-        .reply()
-        .map_err(|e| err(&e))?
+        .get_property(
+            false,
+            window,
+            wm_protocols,
+            AtomEnum::ATOM,
+            0,
+            MAX_PROTOCOLS,
+        )?
+        .reply()?
         .value32()
         .map(Iterator::collect)
         .unwrap_or_default();
@@ -170,36 +180,26 @@ fn setup(window: Window, display: *mut xlib::Display, background: Color32) -> Re
         wm_protocols,
         AtomEnum::ATOM,
         &protocols,
-    )
-    .map_err(|e| err(&e))?;
+    )?;
     conn.change_property32(
         PropMode::REPLACE,
         window,
         sync_counter,
         AtomEnum::CARDINAL,
         &[counter],
-    )
-    .map_err(|e| err(&e))?;
+    )?;
 
-    let depth = conn
-        .get_geometry(window)
-        .map_err(|e| err(&e))?
-        .reply()
-        .map_err(|e| err(&e))?
-        .depth;
+    let depth = conn.get_geometry(window)?.reply()?.depth;
     let aux = ChangeWindowAttributesAux::new()
         .background_pixel(pixel(background, depth))
         .bit_gravity(Gravity::NORTH_WEST);
-    conn.change_window_attributes(window, &aux)
-        .map_err(|e| err(&e))?
-        .check()
-        .map_err(|e| err(&e))?;
+    conn.change_window_attributes(window, &aux)?.check()?;
 
     // Hook winit's connection. Store the atoms first: the hook may run on the next event.
     WINDOW.store(window, Ordering::Relaxed);
     WM_PROTOCOLS.store(wm_protocols, Ordering::Relaxed);
     SYNC_REQUEST.store(sync_request, Ordering::Relaxed);
-    let xlib = xlib::Xlib::open().map_err(|e| err(&e))?;
+    let xlib = xlib::Xlib::open()?;
     // SAFETY: `display` is winit's live Xlib display; we're on the thread that pumps it, and
     // not inside an Xlib call. The hook only ever forwards to Xlib's own converter.
     let prev = unsafe { (xlib.XESetWireToEvent)(display, xlib::ClientMessage, Some(hook)) };

@@ -1,168 +1,18 @@
 //! Keyboard shortcuts: a user-editable table from shortcut to command.
 
-use crate::core::actions::Action;
-use crate::core::layout::Dir;
-use crate::core::selection::Nav;
-use eframe::egui::{Event, InputState, Key, KeyboardShortcut, ModifierNames, Modifiers};
+mod command;
+mod shortcut;
+
+pub use command::Command;
+pub use shortcut::{capture, same_shortcut, shortcut_text};
+
+use eframe::egui::{Event, InputState, Key, KeyboardShortcut, Modifiers};
 use serde::{Deserialize, Serialize};
+use shortcut::norm;
 
-/// Something a key can be bound to.
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Hash)]
-pub enum Command {
-    Open,
-    Reload,
-    Settings,
-    ZoomFull,
-    ZoomIn,
-    ZoomOut,
-    Frame,
-    Up,
-    Down,
-    Left,
-    Right,
-    Parent,
-    FirstChild,
-    ClearSelection,
-    RunOpen,
-    Delete,
-    Hide,
-    UnhideAll,
-    ToggleFree,
-    ToggleDark,
-}
+use crate::core::actions::Action;
 
-impl Command {
-    /// Every command, by group, in the order the Keys tab lists them.
-    pub const GROUPS: [(&'static str, &'static [Command]); 4] = [
-        ("Scanning", &[Command::Open, Command::Reload]),
-        (
-            "Navigation",
-            &[
-                Command::ZoomFull,
-                Command::ZoomIn,
-                Command::ZoomOut,
-                Command::Frame,
-                Command::Up,
-                Command::Down,
-                Command::Left,
-                Command::Right,
-                Command::Parent,
-                Command::FirstChild,
-            ],
-        ),
-        (
-            "Selection & actions",
-            &[
-                Command::ClearSelection,
-                Command::RunOpen,
-                Command::Delete,
-                Command::Hide,
-                Command::UnhideAll,
-            ],
-        ),
-        (
-            "Display",
-            &[Command::ToggleFree, Command::ToggleDark, Command::Settings],
-        ),
-    ];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Command::Open => "Open drive / folder",
-            Command::Reload => "Rescan",
-            Command::Settings => "Settings",
-            Command::ZoomFull => "Zoom full",
-            Command::ZoomIn => "Zoom in",
-            Command::ZoomOut => "Zoom out",
-            Command::Frame => "Frame selection",
-            Command::Up => "Select up (Shift/Ctrl extends)",
-            Command::Down => "Select down (Shift/Ctrl extends)",
-            Command::Left => "Select left (Shift/Ctrl extends)",
-            Command::Right => "Select right (Shift/Ctrl extends)",
-            Command::Parent => "Select parent",
-            Command::FirstChild => "Select first child",
-            Command::ClearSelection => "Clear selection",
-            Command::RunOpen => "Run / open",
-            Command::Delete => "Delete",
-            Command::Hide => "Hide",
-            Command::UnhideAll => "Unhide all",
-            Command::ToggleFree => "Toggle free space",
-            Command::ToggleDark => "Toggle dark mode",
-        }
-    }
-
-    /// Arrow-style moves: Shift or Ctrl on top of the binding extends the selection.
-    fn direction(self) -> Option<Dir> {
-        match self {
-            Command::Up => Some(Dir::Up),
-            Command::Down => Some(Dir::Down),
-            Command::Left => Some(Dir::Left),
-            Command::Right => Some(Dir::Right),
-            _ => None,
-        }
-    }
-
-    pub fn action(self, extend: bool) -> Action {
-        if let Some(d) = self.direction() {
-            return Action::Nav(if extend {
-                Nav::Extend(d)
-            } else {
-                Nav::Sibling(d)
-            });
-        }
-        match self {
-            Command::Open => Action::Open,
-            Command::Reload => Action::Reload,
-            Command::Settings => Action::Settings,
-            Command::ZoomFull => Action::ZoomFull,
-            Command::ZoomIn => Action::ZoomIn,
-            Command::ZoomOut => Action::ZoomOut,
-            Command::Frame => Action::Frame,
-            Command::Parent => Action::Nav(Nav::Parent),
-            Command::FirstChild => Action::Nav(Nav::FirstChild),
-            Command::ClearSelection => Action::ClearSelection,
-            Command::RunOpen => Action::RunOpen,
-            Command::Delete => Action::Delete,
-            Command::Hide => Action::Hide,
-            Command::UnhideAll => Action::UnhideAll,
-            Command::ToggleFree => Action::ToggleFree,
-            Command::ToggleDark => Action::ToggleDark,
-            Command::Up | Command::Down | Command::Left | Command::Right => unreachable!(),
-        }
-    }
-}
-
-/// (alt, ctrl/cmd, shift): what a shortcut's modifiers mean, platform aside.
-fn norm(m: Modifiers) -> (bool, bool, bool) {
-    (m.alt, m.ctrl || m.command || m.mac_cmd, m.shift)
-}
-
-/// "Ctrl+Shift+H", "Ctrl+,": punctuation as its symbol, other keys by name.
-pub fn shortcut_text(s: &KeyboardShortcut) -> String {
-    let names = ModifierNames::NAMES;
-    let mut text = names.format(&s.modifiers, cfg!(target_os = "macos"));
-    if !text.is_empty() {
-        text += names.concat;
-    }
-    // egui's symbols for the arrows are pictures; "Up" reads better there.
-    let key = s.logical_key;
-    let arrow = matches!(
-        key,
-        Key::ArrowUp | Key::ArrowDown | Key::ArrowLeft | Key::ArrowRight
-    );
-    text += if arrow {
-        key.name()
-    } else {
-        key.symbol_or_name()
-    };
-    text
-}
-
-/// Same key and modifiers, however the modifiers were recorded.
-pub fn same_shortcut(a: &KeyboardShortcut, b: &KeyboardShortcut) -> bool {
-    a.logical_key == b.logical_key && norm(a.modifiers) == norm(b.modifiers)
-}
-
+/// The user's shortcut table. A command may have several shortcuts, or none.
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 #[serde(default)]
 pub struct Keymap {
@@ -275,6 +125,8 @@ impl Keymap {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::layout::Dir;
+    use crate::core::selection::Nav;
 
     #[test]
     fn lookup_matches_like_before() {
@@ -307,11 +159,12 @@ mod tests {
 
     #[test]
     fn groups_list_every_command_once() {
+        use strum::IntoEnumIterator;
         let all: Vec<Command> = Command::GROUPS
             .iter()
             .flat_map(|(_, c)| c.iter().copied())
             .collect();
-        assert_eq!(all.len(), 20);
+        assert_eq!(all.len(), Command::iter().count());
         assert!(all.iter().enumerate().all(|(i, c)| !all[..i].contains(c)));
         // Every default binding's command is listed.
         assert!(Keymap::default().binds.iter().all(|(c, _)| all.contains(c)));

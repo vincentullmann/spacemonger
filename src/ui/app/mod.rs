@@ -5,6 +5,12 @@ mod commands;
 mod treemap;
 mod view;
 
+use std::path::PathBuf;
+use std::rc::Rc;
+use std::time::Instant;
+
+use eframe::egui::{self, Vec2};
+
 use crate::core::camera::Camera;
 use crate::core::fs::{drive_for_path, ScanJob};
 use crate::core::geometry::Rect;
@@ -15,14 +21,16 @@ use crate::ui::dialogs::DriveDialog;
 use crate::ui::error::AppError;
 use crate::ui::fonts;
 use crate::ui::palette::Palette;
+use crate::ui::platform;
 use crate::ui::settings::{Settings, SettingsWindow};
 use crate::ui::theme::Theme;
 use crate::ui::title::{scan_title, window_title};
 use crate::ui::widgets::{path_bar, titlebar, window_frame, CommandState};
-use eframe::egui::{self, Vec2};
-use std::path::PathBuf;
-use std::time::Instant;
 
+////////////////////////////////////////////////////////////////////////////////
+// region:App state
+
+/// The app: the scanned tree, the view on it, settings, and whatever dialog is open.
 pub struct SpaceMonger {
     tree: Option<Tree>,
     /// Snapshot of a running scan, drawn (but not interactive) until the scan finishes.
@@ -44,6 +52,8 @@ pub struct SpaceMonger {
     hover_since: Instant,
 
     settings: Settings,
+    /// Colours and label options for the painters, from the settings.
+    palette: Rc<Palette>,
     settings_window: SettingsWindow,
     /// Folder title bar height for the current label font.
     title_h: f64,
@@ -59,6 +69,7 @@ pub struct SpaceMonger {
 }
 
 impl SpaceMonger {
+    /// Start up: load the settings, then scan `open_path` or ask what to open.
     pub fn new(cc: &eframe::CreationContext<'_>, open_path: Option<PathBuf>) -> Self {
         let settings = Settings::load(cc.storage);
         Theme::install(&cc.egui_ctx);
@@ -76,6 +87,7 @@ impl SpaceMonger {
             marquee: None,
             hovered: None,
             hover_since: Instant::now(),
+            palette: Rc::new(Palette::new(&settings)),
             settings,
             settings_window: SettingsWindow::default(),
             title_h: crate::core::layout::TITLE_H,
@@ -97,13 +109,12 @@ impl SpaceMonger {
         app
     }
 
+    ////////////////////////////////////////////////////////////////////////////
+    // region:Settings and derived state
+
     /// Dark colours in effect (the theme may follow the system).
     fn dark(&self, ctx: &egui::Context) -> bool {
         ctx.theme() == egui::Theme::Dark
-    }
-
-    fn palette(&self) -> Palette {
-        Palette::new(&self.settings)
     }
 
     /// Push changed settings out to egui, the camera, the tree and the layout.
@@ -123,6 +134,7 @@ impl SpaceMonger {
             crate::utils::format::set_options(s.format_options());
         }
         self.camera.params = s.camera_params();
+        self.palette = Rc::new(Palette::new(s));
         if let Some(t) = &mut self.tree {
             if t.dotfiles_hidden != s.scan.ignore_hidden {
                 t.set_dotfiles_hidden(s.scan.ignore_hidden);
@@ -142,7 +154,7 @@ impl SpaceMonger {
     /// window under the pointer.
     fn sync_zoom(&mut self, ctx: &egui::Context) {
         let z = &mut self.settings.general.ui_zoom;
-        crate::ui::settings::zoom_keys(ctx, z);
+        crate::helpers::zoom::zoom_keys(ctx, z);
         let want = *z as f32 / 100.0;
         let idle = !ctx.input(|i| i.pointer.any_down());
         if idle && (ctx.zoom_factor() - want).abs() > 1e-4 {
@@ -198,24 +210,13 @@ impl SpaceMonger {
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// region:Frame
+
 impl eframe::App for SpaceMonger {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        #[cfg(target_os = "linux")]
-        {
-            let bg = self.palette().background;
-            crate::ui::x11_sync::install(frame, &ctx, bg);
-            crate::ui::x11_dialog::remember_main(frame);
-            crate::ui::x11_sync::set_background(bg);
-            crate::ui::x11_wm::install(frame);
-            let full = ctx.input(|i| {
-                let v = i.viewport();
-                v.maximized.unwrap_or(false) || v.fullscreen.unwrap_or(false)
-            });
-            crate::ui::x11_wm::set_shadow(!full);
-        }
-        #[cfg(not(target_os = "linux"))]
-        let _ = frame;
+        platform::main_frame_start(frame, &ctx, self.palette.background);
         // Folder title bars fit the label font as it renders (its line height, not just its
         // size), so a taller system font doesn't get cut off.
         let title_h = fonts::title_height(&ctx, &self.settings.map_font());
@@ -226,17 +227,15 @@ impl eframe::App for SpaceMonger {
         self.poll_scan();
 
         let st = self.command_state();
-        let pal = self.palette();
+        let pal = self.palette.clone();
         let (bar_font, bar_h) = (self.settings.bar_font(), self.settings.bar_height());
+        // Not scanning: last frame's title (it's brought up to date at the end of the frame).
         let (title, progress) = match &self.scan {
             Some(job) => {
                 let (t, frac) = scan_title(job);
                 (t, Some(frac))
             }
-            None => (
-                window_title(self.tree.as_ref(), &self.selection, &self.zoom),
-                None,
-            ),
+            None => (self.title.clone(), None),
         };
         let mut act = egui::Panel::top("titlebar")
             .exact_size(titlebar::HEIGHT)
@@ -287,15 +286,13 @@ impl eframe::App for SpaceMonger {
         }
 
         // This frame is drawn at the window's current size: let the WM move on once it's shown.
-        #[cfg(target_os = "linux")]
-        crate::ui::x11_sync::frame_drawn(&ctx);
+        platform::main_frame_drawn(&ctx);
     }
 
     /// Runs once before every [`Self::ui`]. eframe 0.36 has no `update`; this is that hook.
     fn logic(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // The previous frame is on screen now; release the window manager's resize step.
-        #[cfg(target_os = "linux")]
-        crate::ui::x11_sync::acknowledge();
+        platform::frame_presented();
     }
 
     /// See-through, for the settings window's rounded corners (all windows share this). The

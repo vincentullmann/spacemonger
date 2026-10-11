@@ -1,7 +1,9 @@
 //! One laid-out box.
 
-use crate::core::geometry::Rect;
 use std::rc::Rc;
+
+use super::FOLDER_FRAME;
+use crate::core::geometry::Rect;
 
 /// A laid-out box: an entry, the free-space block, or an anonymous block of tiny entries.
 pub struct Item {
@@ -38,15 +40,17 @@ impl Item {
         )
     }
 
+    /// Is view point (`px`, `py`) strictly inside the box?
     pub fn contains(&self, px: f32, py: f32) -> bool {
         px > self.x && py > self.y && px < self.x + self.w && py < self.y + self.h
     }
 
     /// For folders: is the point on the frame / title bar (not the content area)?
     pub fn on_frame(&self, px: f32, py: f32, title_h: f32) -> bool {
-        px < self.x + 3.0
+        let frame = FOLDER_FRAME as f32;
+        px < self.x + frame
             || py < self.y + title_h
-            || px > self.x + self.w - 3.0
-            || py > self.y + self.h - 3.0
+            || px > self.x + self.w - frame
+            || py > self.y + self.h - frame
     }
 }

@@ -21,6 +21,7 @@ impl SpaceMonger {
         }
     }
 
+    /// End the camera move once it has run its course.
     pub(super) fn step_anim(&mut self) {
         if self.camera.anim.as_ref().is_some_and(|a| a.done()) {
             self.finish_anim();

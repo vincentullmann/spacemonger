@@ -1,20 +1,19 @@
 //! Progress while a scan runs, floating over the treemap as it fills in. Not modal: it can be
 //! dragged out of the way.
 
-use super::confirm_delete::buttons;
-use crate::core::fs::ScanJob;
-use crate::ui::theme::accent;
-use crate::ui::widgets::dialog::Dialog;
-use crate::utils::text::elide_start;
-use eframe::egui::{self, Align2, Vec2};
 use std::sync::atomic::Ordering;
 use std::time::Duration;
+
+use eframe::egui::{self, Align2, Vec2};
+
+use crate::core::fs::ScanJob;
+use crate::ui::theme::accent;
+use crate::ui::widgets::dialog::{button_row, Dialog};
+use crate::utils::text::elide_start;
 
 /// Show scan progress, with Pause / Resume and Cancel. Returns true when the user cancels.
 pub fn scan_dialog(ctx: &egui::Context, job: &ScanJob) -> bool {
     let ctl = &job.ctl;
-    let used = job.drive.total.saturating_sub(job.drive.free);
-    let bytes = ctl.bytes.load(Ordering::Relaxed);
     let paused = ctl.is_paused();
     let title = if paused { "Scan paused" } else { "Scanning…" };
     let shown = Dialog::new("scan", title)
@@ -35,20 +34,21 @@ pub fn scan_dialog(ctx: &egui::Context, job: &ScanJob) -> bool {
                     ui.weak("Folders");
                     ui.label(ctl.folders.load(Ordering::Relaxed).to_string());
                     ui.end_row();
+                    let errors = ctl.errors.load(Ordering::Relaxed);
+                    if errors > 0 {
+                        ui.weak("Unreadable");
+                        ui.label(errors.to_string());
+                        ui.end_row();
+                    }
                 });
             ui.add_space(6.0);
-            let frac = if used > 0 {
-                (bytes as f32 / used as f32).min(1.0)
-            } else {
-                0.0
-            };
             ui.add(
-                egui::ProgressBar::new(frac)
+                egui::ProgressBar::new(job.progress())
                     .show_percentage()
                     .fill(accent(ui.visuals())),
             );
             ui.add_space(10.0);
-            buttons(ui, |ui| {
+            button_row(ui, |ui| {
                 let cancel = ui.button("Cancel").clicked();
                 if ui.button(if paused { "Resume" } else { "Pause" }).clicked() {
                     ctl.set_paused(!paused);

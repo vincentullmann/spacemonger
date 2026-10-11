@@ -1,10 +1,12 @@
 //! Scannable locations: mounted volumes or an arbitrary folder.
 
-use super::FsError;
-use lfs_core::{read_mounts, Mount, ReadOptions};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+
+use lfs_core::{read_mounts, Mount, ReadOptions};
+
+use super::FsError;
 
 /// A scannable location (a mounted volume or an arbitrary folder).
 #[derive(Clone, Debug)]

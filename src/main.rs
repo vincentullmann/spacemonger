@@ -2,6 +2,8 @@
 
 use std::path::PathBuf;
 
+use spacemonger::constants::{APP_ID, APP_NAME, MIN_WINDOW_SIZE, WINDOW_SIZE};
+
 fn main() -> eframe::Result {
     let open_path = std::env::args_os().nth(1).map(PathBuf::from);
     if matches!(
@@ -13,10 +15,10 @@ fn main() -> eframe::Result {
     }
 
     let mut viewport = eframe::egui::ViewportBuilder::default()
-        .with_title(spacemonger::constants::APP_NAME)
-        .with_app_id("spacemonger")
-        .with_inner_size([1200.0, 800.0])
-        .with_min_inner_size([400.0, 300.0])
+        .with_title(APP_NAME)
+        .with_app_id(APP_ID)
+        .with_inner_size(WINDOW_SIZE)
+        .with_min_inner_size(MIN_WINDOW_SIZE)
         // The app draws its own title bar and frame (see ui::widgets::titlebar).
         .with_decorations(false)
         // With OpenGL every window shares the root window's GL config, and the settings
@@ -51,7 +53,7 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
     eframe::run_native(
-        "spacemonger",
+        APP_ID,
         options,
         Box::new(move |cc| {
             Ok(Box::new(spacemonger::ui::app::SpaceMonger::new(

@@ -2,6 +2,7 @@
 
 use super::Entry;
 
+/// A folder's contents.
 #[derive(Default)]
 pub struct Folder {
     /// Sorted by `size`, descending.

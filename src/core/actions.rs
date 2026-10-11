@@ -2,6 +2,7 @@
 
 use crate::core::selection::Nav;
 
+/// Something to do, whatever triggered it (key, menu, title bar icon, double-click).
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Action {
     Open,

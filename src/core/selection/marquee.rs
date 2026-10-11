@@ -1,9 +1,10 @@
 //! Shift+drag rectangle selection.
 
+use std::collections::HashSet;
+
 use super::Selection;
 use crate::core::layout::Item;
 use crate::core::model::EntryRef;
-use std::collections::HashSet;
 
 /// A rectangle selection in progress (view coordinates).
 pub struct Marquee {
@@ -14,6 +15,7 @@ pub struct Marquee {
 }
 
 impl Marquee {
+    /// A rectangle selection starting at view point `start`, adding to `base`.
     pub fn new(start: (f32, f32), base: Selection) -> Self {
         Self {
             start,

@@ -1,16 +1,23 @@
 //! Running actions, scanning, deleting and the dialogs.
 
+use std::path::PathBuf;
+
+use eframe::egui;
+
 use super::SpaceMonger;
 use crate::core::actions::Action;
 use crate::core::fs::{Drive, ScanJob, ScanStatus};
-use crate::core::model::EntryRef;
+use crate::core::model::{path_after_remove, EntryRef};
 use crate::ui::dialogs::{confirm_delete, error_dialog, scan_dialog, DriveDialog};
 use crate::ui::error::AppError;
 use crate::ui::settings::Theme;
-use eframe::egui;
-use std::path::PathBuf;
+use crate::utils::thread::drop_in_background;
 
 impl SpaceMonger {
+    ////////////////////////////////////////////////////////////////////////////
+    // region:Scanning
+
+    /// Show the Open dialog.
     pub(super) fn open_dialog(&mut self) {
         self.dialog = Some(DriveDialog::with_volumes());
     }
@@ -20,11 +27,9 @@ impl SpaceMonger {
         if !is_drive {
             self.settings.layout.show_free = false;
         }
-        if let Some(job) = self.scan.take() {
-            job.cancel();
-        }
-        self.tree = None;
-        self.live = None;
+        // Dropping a running job cancels it.
+        self.scan = None;
+        drop_in_background((self.tree.take(), self.live.take()));
         self.zoom.clear();
         self.camera.reset();
         self.selection.clear();
@@ -40,28 +45,39 @@ impl SpaceMonger {
         self.drive = Some(drive);
     }
 
+    /// Pick up a running scan's latest snapshot, or its result once it's done.
     pub(super) fn poll_scan(&mut self) {
         let Some(job) = &mut self.scan else { return };
         match job.poll() {
             ScanStatus::Running => {
                 if let Some(mut t) = job.take_snapshot() {
                     t.set_dotfiles_hidden(self.settings.scan.ignore_hidden);
-                    self.live = Some(t);
+                    drop_in_background(self.live.replace(t));
                     self.invalidate();
                 }
+            }
+            ScanStatus::Failed(e) => {
+                self.error = Some(e.into());
+                self.scan = None;
+                self.live = None;
+                self.invalidate();
             }
             ScanStatus::Finished(mut tree) => {
                 if let Some(t) = &mut tree {
                     t.set_dotfiles_hidden(self.settings.scan.ignore_hidden);
                 }
                 self.tree = tree;
-                self.live = None;
+                drop_in_background(self.live.take());
                 self.scan = None;
                 self.invalidate();
             }
         }
     }
 
+    ////////////////////////////////////////////////////////////////////////////
+    // region:Actions
+
+    /// Do what `action` asks.
     pub(super) fn run(&mut self, action: Action, ctx: &egui::Context) {
         match action {
             Action::Open => self.open_dialog(),
@@ -123,6 +139,9 @@ impl SpaceMonger {
         }
     }
 
+    ////////////////////////////////////////////////////////////////////////////
+    // region:Open / delete
+
     /// Run or open every selected entry with the system's default handler.
     fn open_selection(&mut self) {
         let Some(t) = &self.tree else { return };
@@ -143,11 +162,7 @@ impl SpaceMonger {
         let mut failed = Vec::new();
         for (r, path) in refs.into_iter().zip(paths) {
             match trash::delete(&path) {
-                Ok(()) => {
-                    if let Some(t) = &mut self.tree {
-                        t.remove(&r.folder, r.index);
-                    }
-                }
+                Ok(()) => self.entry_deleted(&r),
                 Err(e) => failed.push((path, e)),
             }
         }
@@ -157,6 +172,22 @@ impl SpaceMonger {
             self.error = Some(AppError::Trash(failed));
         }
     }
+
+    /// Take a deleted entry out of the tree, and keep the index paths that point into it
+    /// (zoomed folder, camera) valid.
+    fn entry_deleted(&mut self, r: &EntryRef) {
+        let Some(t) = &mut self.tree else { return };
+        t.remove(&r.folder, r.index);
+        self.zoom =
+            path_after_remove(&self.zoom, &r.folder, r.index).unwrap_or_else(|| r.folder.to_vec());
+        self.camera.entry_removed(&r.folder, r.index);
+        // This frame's layout still has the old indices; it's rebuilt before the next paint.
+        self.items.clear();
+        self.hovered = None;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // region:Dialogs
 
     /// Show whichever dialogs are open and act on their answers.
     pub(super) fn dialogs(&mut self, ctx: &egui::Context) {
@@ -175,7 +206,6 @@ impl SpaceMonger {
 
         if let Some(job) = &self.scan {
             if scan_dialog(ctx, job) {
-                job.cancel();
                 self.scan = None;
                 self.live = None;
                 self.invalidate();

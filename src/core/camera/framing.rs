@@ -1,10 +1,29 @@
 //! Camera moves that frame something: zoom to a folder, frame a set of entries, zoom out.
 
+use std::time::Instant;
+
 use super::{Anim, Camera, Fit};
 use crate::constants::MAX_ZOOM;
 use crate::core::geometry::{Rect, RectExt};
 use crate::core::layout::{self, Reshape, Scene};
-use std::time::Instant;
+
+/// Most rounds of the fixed-point camera solvers (folder frames don't scale with the camera,
+/// so each round only gets closer).
+const SOLVE_ROUNDS: usize = 40;
+
+/// The solvers stop once a round changes the zoom by less than this factor...
+const SOLVE_SCALE_EPS: f64 = 1e-9;
+
+/// ...and moves the target by less than this many points. Absolute, but loose enough to be
+/// reachable at the deepest zoom (camera coordinates near 1e11, where f64 steps are ~1e-5).
+const SOLVE_OFFSET_EPS: f64 = 1e-3;
+
+/// A solver round moved little enough to stop.
+fn converged(k: f64, off: crate::core::geometry::Vec2) -> bool {
+    (k - 1.0).abs() < SOLVE_SCALE_EPS
+        && off.x.abs() < SOLVE_OFFSET_EPS
+        && off.y.abs() < SOLVE_OFFSET_EPS
+}
 
 impl Camera {
     /// Even-zoom camera that centres the bounding box of the entries at `paths` (natural boxes)
@@ -21,7 +40,7 @@ impl Camera {
         // Folder frames don't scale with the camera, so converge on it.
         let fill = self.params.frame_fill;
         let mut cam = self.cam?;
-        for _ in 0..40 {
+        for _ in 0..SOLVE_ROUNDS {
             let b = bbox(cam)?;
             let k = (fill * vw / b.width())
                 .min(fill * vh / b.height())
@@ -29,7 +48,7 @@ impl Camera {
             let bc = b.center();
             let off = self.view.to_rect().center() - bc;
             cam = Self::scaled(cam, bc, k) + off;
-            if (k - 1.0).abs() < 1e-9 && off.x.abs() < 1e-6 && off.y.abs() < 1e-6 {
+            if converged(k, off) {
                 break;
             }
         }
@@ -41,7 +60,7 @@ impl Camera {
     pub(super) fn solve_fit(&self, scene: &Scene, path: &[usize]) -> Option<(Rect, Fit)> {
         let t = self.fill_box(scene.params.title_h);
         let mut cam = self.cam?;
-        for _ in 0..40 {
+        for _ in 0..SOLVE_ROUNDS {
             let n = scene.locate(cam, path, &[])?;
             if n.clamped_area() <= 0.0 {
                 return None;
@@ -49,13 +68,15 @@ impl Camera {
             let k = (t.clamped_area() / n.clamped_area()).sqrt();
             let (nc, off) = (n.center(), t.center() - n.center());
             cam = Self::scaled(cam, nc, k) + off;
-            if (k - 1.0).abs() < 1e-9 && off.x.abs() < 1e-6 && off.y.abs() < 1e-6 {
+            if converged(k, off) {
                 break;
             }
         }
         // Root coverage only (the fit itself isn't active yet).
         let cam = self.cover_root(cam);
-        let n = scene.locate(cam, path, &[])?;
+        let n = scene
+            .locate(cam, path, &[])
+            .filter(|n| n.width() > 0.0 && n.height() > 0.0)?;
         let reshape = Reshape::between(path.to_vec(), n, t);
         Some((
             cam,

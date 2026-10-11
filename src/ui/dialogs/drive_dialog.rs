@@ -3,13 +3,16 @@
 //! Laid out top to bottom: the folder line, the drives table, and (later) a list of recently
 //! scanned paths under it, built like the drives table.
 
+use std::path::PathBuf;
+
+use eframe::egui::{self, Align, Layout, RichText, Sense, Shape, Ui, Vec2};
+use egui_phosphor::regular as icon;
+use poll_promise::Promise;
+
 use crate::core::fs::{drive_for_path, volumes, Drive, FsError};
 use crate::ui::theme::accent;
 use crate::ui::widgets::dialog::Dialog;
 use crate::utils::format;
-use eframe::egui::{self, Align, Layout, RichText, Sense, Shape, Ui, Vec2};
-use egui_phosphor::regular as icon;
-use std::path::PathBuf;
 
 /// Width of the dialog's contents.
 const WIDTH: f32 = 520.0;
@@ -20,8 +23,13 @@ const BAR_H: f32 = 6.0;
 const SIZE_W: f32 = 130.0;
 const FS_W: f32 = 76.0;
 
+////////////////////////////////////////////////////////////////////////////////
+// region:Dialog
+
+/// The Open dialog's state.
 pub struct DriveDialog {
-    drives: Vec<Drive>,
+    /// Read on a background thread: a stuck network mount can take a while to answer.
+    drives: Promise<Vec<Drive>>,
     path: String,
     /// Put the cursor in the folder field on the first frame.
     focus: bool,
@@ -41,31 +49,36 @@ impl DriveDialog {
     /// A dialog listing the currently mounted volumes.
     pub fn with_volumes() -> Self {
         Self {
-            drives: volumes(),
+            drives: Promise::spawn_thread("volumes", volumes),
             path: String::new(),
             focus: true,
         }
     }
 
+    /// Draw the dialog; says what was chosen, if anything.
     pub fn show(&mut self, ctx: &egui::Context) -> DriveDialogOutcome {
         let mut out = DriveDialogOutcome::default();
         let shown = Dialog::new("open", "Open").width(WIDTH).show(ctx, |ui| {
             self.folder_line(ui, &mut out);
             ui.add_space(14.0);
             heading(ui, "Drives");
-            if self.drives.is_empty() {
-                ui.weak("No drives found.");
-            }
-            egui::ScrollArea::vertical()
-                .max_height(8.0 * ROW_H)
-                .show(ui, |ui| {
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    for d in &self.drives {
-                        if drive_row(ui, d).clicked() {
-                            out.chosen = Some((d.clone(), true));
-                        }
+            match self.drives.ready() {
+                None => {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.weak("Looking for drives…");
+                    });
+                }
+                Some(drives) if drives.is_empty() => {
+                    ui.weak("No drives found.");
+                }
+                Some(drives) => {
+                    // Only a click replaces a folder the line above may have picked.
+                    if let Some(c) = drive_list(ui, drives) {
+                        out.chosen = Some(c);
                     }
-                });
+                }
+            }
         });
         out.closed |= shown.close;
         out
@@ -114,6 +127,25 @@ impl DriveDialog {
             Err(e) => out.error = Some(e),
         }
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// region:Drive list
+
+/// The volumes, one clickable row each; returns the one clicked.
+fn drive_list(ui: &mut Ui, drives: &[Drive]) -> Option<(Drive, bool)> {
+    let mut chosen = None;
+    egui::ScrollArea::vertical()
+        .max_height(8.0 * ROW_H)
+        .show(ui, |ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            for d in drives {
+                if drive_row(ui, d).clicked() {
+                    chosen = Some((d.clone(), true));
+                }
+            }
+        });
+    chosen
 }
 
 /// A small section title over a list.

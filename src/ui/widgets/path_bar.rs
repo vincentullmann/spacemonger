@@ -1,9 +1,10 @@
 //! Breadcrumb bar: one treemap-style box per folder from the scan root to the current view.
 
+use eframe::egui::{self, FontId, Sense, Vec2};
+
 use crate::core::model::Tree;
 use crate::ui::painter::MapPainter;
 use crate::ui::palette::Palette;
-use eframe::egui::{self, FontId, Sense, Vec2};
 
 /// Draw the bar for the folder at `zoom`. Returns the zoom path to go to when a parent is
 /// clicked.
@@ -25,7 +26,11 @@ pub fn path_bar(
     let mut f = &tree.root;
     for (k, &i) in zoom.iter().enumerate() {
         let Some(e) = f.entries.get(i) else { break };
-        segs.push((e.name.clone(), zoom[..=k].to_vec(), pal.depth(k as i32)));
+        segs.push((
+            e.display_name().into_owned(),
+            zoom[..=k].to_vec(),
+            pal.depth(k as i32),
+        ));
         match e.child() {
             Some(c) => f = c,
             None => break,
@@ -38,7 +43,7 @@ pub fn path_bar(
         &painter,
         resp.rect.min,
         ui.ctx().pixels_per_point(),
-        pal.clone(),
+        pal,
         font.clone(),
     );
     let w = resp.rect.width() as i32;
