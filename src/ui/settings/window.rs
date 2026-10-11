@@ -368,12 +368,7 @@ impl SettingsWindow {
                                     }
                                 }
                                 let adding = self.capture == Some((cmd, None));
-                                if ui
-                                    .add(
-                                        egui::Button::new(if adding { "…" } else { "+" })
-                                            .small()
-                                            .selected(adding),
-                                    )
+                                if form::add_button(ui, adding)
                                     .on_hover_text("Add a shortcut")
                                     .clicked()
                                 {

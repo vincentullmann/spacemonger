@@ -259,30 +259,49 @@ pub fn outline(ui: &mut Ui, v: &mut Line, fallback: Color32, hint: &str) -> Resp
     r | number(ui, &mut v.width, 0.0..=6.0, 0.5, "px")
 }
 
-/// One swatch per colour, plus buttons to drop / add one.
+/// One swatch per colour (click to edit, right-click to remove), then "+" to add one.
 pub fn colors(ui: &mut Ui, colors: &mut Vec<Color32>) -> Response {
     ui.horizontal_wrapped(|ui| {
-        // Buttons first so they stay put as the list grows; small swatches.
-        if ui
-            .add_enabled(colors.len() > 1, egui::Button::new("−").small())
-            .on_hover_text("One colour fewer")
-            .clicked()
-        {
-            colors.pop();
+        ui.spacing_mut().interact_size.x = 22.0;
+        let mut remove = None;
+        let only_one = colors.len() <= 1;
+        for (i, c) in colors.iter_mut().enumerate() {
+            let tip = if only_one {
+                "Click to edit"
+            } else {
+                "Click to edit, right-click to remove"
+            };
+            let r = ui.color_edit_button_srgba(c).on_hover_text(tip);
+            if r.secondary_clicked() && !only_one {
+                remove = Some(i);
+            }
         }
-        if ui
-            .add_enabled(colors.len() < 64, egui::Button::new("+").small())
-            .on_hover_text("One colour more")
-            .clicked()
+        if let Some(i) = remove {
+            colors.remove(i);
+        }
+        if colors.len() < 64
+            && add_button(ui, false)
+                .on_hover_text("One colour more")
+                .clicked()
         {
             colors.push(colors.last().copied().unwrap_or(Color32::GRAY));
         }
-        ui.spacing_mut().interact_size.x = 22.0;
-        for c in colors.iter_mut() {
-            ui.color_edit_button_srgba(c);
-        }
     })
     .response
+}
+
+/// A small frameless "+" ("…" while `waiting`): no background until hovered, then a fill
+/// without an outline.
+pub fn add_button(ui: &mut Ui, waiting: bool) -> Response {
+    ui.scope(|ui| {
+        flat_items(ui);
+        ui.add(
+            egui::Button::new(if waiting { "…" } else { "+" })
+                .frame_when_inactive(false)
+                .selected(waiting),
+        )
+    })
+    .inner
 }
 
 /// System font picker ("Default" is egui's built-in font).

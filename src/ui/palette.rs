@@ -133,11 +133,13 @@ fn contrast_text(fill: Color32, text: Color32) -> Color32 {
 #[derive(Clone)]
 pub struct Palette {
     pub background: Color32,
+    /// Label and folder title colour (the setting, used as is).
     pub text: Color32,
     /// Thin outline drawn inside every box.
     pub border: Color32,
     boxes: Vec<Color32>,
-    /// Draw the thin outline (hover and selection outlines are always drawn).
+    /// Draw the thin outline: its width isn't 0 (hover and selection outlines are always
+    /// drawn).
     pub borders: bool,
     /// Space between neighbouring boxes, in points.
     pub gap: f32,
@@ -170,7 +172,7 @@ impl Palette {
     pub fn new(s: &Settings) -> Self {
         let Tiles {
             ref colors,
-            borders,
+            text_color,
             border: border_line,
             hover_border: hover_line,
             selection_color,
@@ -180,7 +182,7 @@ impl Palette {
         } = s.tiles;
         let (size, shadow) = (s.labels.font_size, s.labels.shadow);
         let boxes = colors.clone();
-        let (background, text) = (Self::BACKGROUND, Self::TEXT);
+        let (background, text) = (Self::BACKGROUND, text_color);
         let border = border_line.color.unwrap_or(Self::BORDER);
         // The standard selection is the text colour with the background colour on it.
         let selection = selection_color.unwrap_or(text);
@@ -193,7 +195,7 @@ impl Palette {
             text,
             border,
             boxes,
-            borders,
+            borders: border_line.width > 0.0,
             selection,
             selection_text,
             border_width: border_line.width,
@@ -210,10 +212,10 @@ impl Palette {
     /// Default outline of the hovered box.
     pub const HOVER_BORDER: Color32 = Color32::BLACK;
 
-    /// Label colour on a box filled with `fill`: the theme's text colour, unless the fill is
-    /// too close to it (custom colours), then the opposite.
-    pub fn text_on(&self, fill: Color32) -> Color32 {
-        contrast_text(fill, self.text)
+    /// Path bar text on a cell filled with `fill`: black, or near white on a dark fill. The
+    /// path bar keeps this whatever the tiles' text colour is.
+    pub fn bar_text_on(&self, fill: Color32) -> Color32 {
+        contrast_text(fill, Self::TEXT)
     }
 
     /// Fill colour for a nesting depth.

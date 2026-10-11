@@ -118,7 +118,9 @@ pub struct Tiles {
     pub scheme: Scheme,
     /// One colour per nesting level, repeating.
     pub colors: Vec<Color32>,
-    pub borders: bool,
+    /// Label and folder title colour, used as is.
+    pub text_color: Color32,
+    /// Outline of every box; width 0 for none.
     pub border: Line,
     /// Outline of the box under the mouse.
     pub hover_border: Line,
@@ -126,12 +128,26 @@ pub struct Tiles {
     pub selection_color: Option<Color32>,
     pub gap: u8,
     pub hover: u8,
+    /// The old "Borders" switch, read from saved settings only (see [`Settings::load`]).
+    #[serde(rename = "borders", skip_serializing, deserialize_with = "some_bool")]
+    pub legacy_borders: Option<bool>,
+}
+
+/// `after` is `before` with one colour taken out.
+fn removed_one(before: &[Color32], after: &[Color32]) -> bool {
+    after.len() + 1 == before.len()
+        && (0..before.len()).any(|i| before[..i] == after[..i] && before[i + 1..] == after[i..])
+}
+
+/// A plain `bool` read into an `Option` (RON wants `Some(..)` for an `Option` otherwise).
+fn some_bool<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<bool>, D::Error> {
+    bool::deserialize(d).map(Some)
 }
 
 impl Tiles {
     /// Keep scheme and colours consistent after an edit that started from `before`: a new
-    /// scheme starts over with its own colour count, a new count resamples the scheme, and
-    /// editing a colour makes it "Custom".
+    /// scheme starts over with its own colour count, a colour added resamples the scheme,
+    /// and removing or editing a colour makes it "Custom" (unless that's the scheme's own).
     pub fn reconcile(&mut self, before: &Tiles) {
         if self.scheme != before.scheme {
             if let Some(c) = self
@@ -140,6 +156,11 @@ impl Tiles {
                 .and_then(|n| self.scheme.colors(n))
             {
                 self.colors = c;
+            }
+        } else if removed_one(&before.colors, &self.colors) {
+            // A colour taken out of the list: keep the rest as they are.
+            if self.scheme.colors(self.colors.len()).as_ref() != Some(&self.colors) {
+                self.scheme = Scheme::Custom;
             }
         } else if self.colors.len() != before.colors.len() {
             if let Some(c) = self.scheme.colors(self.colors.len().max(1)) {
@@ -206,7 +227,18 @@ impl Settings {
         let Some(storage) = storage else {
             return Self::default();
         };
-        eframe::get_value(storage, KEY).unwrap_or_else(|| Self::load_old(storage))
+        let mut s: Self =
+            eframe::get_value(storage, KEY).unwrap_or_else(|| Self::load_old(storage));
+        s.upgrade();
+        s
+    }
+
+    /// Bring settings saved by older versions up to date.
+    fn upgrade(&mut self) {
+        // Borders used to be a switch; now a width of 0 turns them off.
+        if self.tiles.legacy_borders.take() == Some(false) {
+            self.tiles.border.width = 0.0;
+        }
     }
 
     pub fn save(&self, storage: &mut dyn eframe::Storage) {
@@ -364,6 +396,43 @@ mod tests {
         // Fields added later fall back to defaults.
         m.set_string(KEY, "(general: (theme: Dark))".into());
         assert_eq!(Settings::load(Some(&m)), with(Theme::Dark, true));
+    }
+
+    #[test]
+    fn borders_switch_becomes_width() {
+        let mut m = Mem::default();
+        // Borders switched off in an older version: width 0, and the switch is gone.
+        m.set_string(
+            KEY,
+            "(tiles: (borders: false, border: (color: None, width: 2.0)))".into(),
+        );
+        let s = Settings::load(Some(&m));
+        assert_eq!(s.tiles.border.width, 0.0);
+        assert_eq!(s.tiles.legacy_borders, None);
+        // Switched on: the width stays.
+        m.set_string(
+            KEY,
+            "(tiles: (borders: true, border: (color: None, width: 2.0)))".into(),
+        );
+        assert_eq!(Settings::load(Some(&m)).tiles.border.width, 2.0);
+        // Saving doesn't write it back.
+        s.save(&mut m);
+        assert!(!m.get_string(KEY).unwrap_or_default().contains("borders"));
+    }
+
+    #[test]
+    fn removing_a_colour_keeps_the_others() {
+        let before = Tiles::default();
+        let mut t = before.clone();
+        t.colors.remove(0);
+        t.reconcile(&before);
+        assert_eq!(t.colors, before.colors[1..]);
+        assert_eq!(t.scheme, Scheme::Custom);
+        // The last one gone is still the scheme's own list.
+        let mut t = before.clone();
+        t.colors.pop();
+        t.reconcile(&before);
+        assert_eq!(t.scheme, Scheme::Classic);
     }
 
     #[test]

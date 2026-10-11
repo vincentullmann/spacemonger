@@ -64,7 +64,7 @@ impl Default for Tiles {
 
             colors: Scheme::Classic.colors(8).unwrap_or_default(),
 
-            borders: true,
+            text_color: crate::ui::palette::Palette::TEXT,
             border: Line {
                 color: None,
                 width: 1.0,
@@ -75,6 +75,7 @@ impl Default for Tiles {
             },
             selection_color: None,
             gap: 0,
+            legacy_borders: None,
             hover: 20,
         }
     }

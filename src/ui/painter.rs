@@ -112,7 +112,7 @@ impl<'a> MapPainter<'a> {
             label,
             x + 6.0,
             y + 1.0 + (h - 1.0 - th) / 2.0,
-            self.pal.text_on(fill),
+            self.pal.bar_text_on(fill),
         );
     }
 
@@ -213,11 +213,7 @@ impl<'a> MapPainter<'a> {
         let p = self
             .painter
             .with_clip_rect(self.rect(x, y, w, h).intersect(self.painter.clip_rect()));
-        let fg = if sel {
-            pal.selection_text
-        } else {
-            pal.text_on(pal.depth(it.depth))
-        };
+        let fg = if sel { pal.selection_text } else { pal.text };
 
         if it.is_free {
             let ts = tree.total_space.max(1);

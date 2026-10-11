@@ -205,6 +205,13 @@ pub fn tiles(ui: &mut Ui, s: &mut Settings) {
             form::colors,
         );
         r.row(
+            "Text colour",
+            "Colour of the labels and folder titles in the boxes, used as is.",
+            &mut t.text_color,
+            &d.text_color,
+            |ui, v| ui.color_edit_button_srgba(v),
+        );
+        r.row(
             "Selection colour",
             "Fill and outline of selected boxes; their labels switch to black or white to stay readable.",
             &mut t.selection_color,
@@ -221,15 +228,8 @@ pub fn tiles(ui: &mut Ui, s: &mut Settings) {
     });
     group(ui, "Outlines", |r| {
         r.row(
-            "Borders",
-            "Thin outline around every box. With a gap of 0, neighbours share one line.",
-            &mut t.borders,
-            &d.borders,
-            form::check,
-        );
-        r.row(
             "Border",
-            "Colour and width (in screen pixels) of the box outlines. Leave the colour unset for the standard grey.",
+            "Colour and width (in screen pixels) of the thin outline around every box; 0 px for none. With a gap of 0, neighbours share one line. Leave the colour unset for the standard grey.",
             &mut t.border,
             &d.border,
             |ui, v| form::outline(ui, v, Palette::BORDER, "default"),
