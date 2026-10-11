@@ -158,8 +158,7 @@ pub struct Text {
 }
 
 /// Which details a file label or the tooltip shows.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
-#[derive(Default)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Default)]
 pub struct Shown {
     pub name: bool,
     /// Full path on disk.

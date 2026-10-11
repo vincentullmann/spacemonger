@@ -7,15 +7,12 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Write as _;
 use std::sync::RwLock;
 
-
 /// Default `strftime` pattern for dates.
 pub const DEFAULT_DATE_FORMAT: &str = "%d %b %Y   %-H:%M:%S";
-
 
 /// How file sizes are written.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum SizeFormat {
-
     /// "1,234,567 bytes".
     #[default]
     Bytes,
@@ -32,7 +29,6 @@ pub enum SizeFormat {
     /// "39.7 kB (39,718 bytes)".
     DecimalAndBytes,
 }
-
 
 /// App-wide formatting choices (set from the settings).
 #[derive(Clone, Debug, PartialEq)]

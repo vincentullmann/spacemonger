@@ -4,10 +4,8 @@ use super::{General, Labels, Layout, Line, PathBar, Scan, Shown, Text, Theme, Ti
 use crate::ui::palette::Scheme;
 use crate::utils::format::{SizeFormat, DEFAULT_DATE_FORMAT};
 
-
 ////////////////////////////////////////////////////////////////////////////////
 // region:General
-
 
 impl Default for General {
     fn default() -> Self {
@@ -21,7 +19,6 @@ impl Default for General {
     }
 }
 
-
 impl Default for Layout {
     fn default() -> Self {
         Self {
@@ -31,10 +28,8 @@ impl Default for Layout {
     }
 }
 
-
 ////////////////////////////////////////////////////////////////////////////////
 // region:Scan
-
 
 impl Default for Scan {
     fn default() -> Self {
@@ -47,10 +42,8 @@ impl Default for Scan {
     }
 }
 
-
 ////////////////////////////////////////////////////////////////////////////////
 // region:Display
-
 
 impl Default for Text {
     fn default() -> Self {
@@ -61,7 +54,6 @@ impl Default for Text {
         }
     }
 }
-
 
 impl Default for Tiles {
     fn default() -> Self {
@@ -86,7 +78,6 @@ impl Default for Tiles {
     }
 }
 
-
 // aka. tile labels
 impl Default for Labels {
     fn default() -> Self {
@@ -104,13 +95,11 @@ impl Default for Labels {
     }
 }
 
-
 impl Default for PathBar {
     fn default() -> Self {
         Self { font_size: 10.0 }
     }
 }
-
 
 impl Default for Tooltips {
     fn default() -> Self {

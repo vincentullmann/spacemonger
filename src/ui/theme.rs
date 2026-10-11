@@ -80,7 +80,8 @@ impl Theme {
         visuals.faint_bg_color = mix(self.background, self.text_color_dimmed, 0.08);
         visuals.code_bg_color = visuals.extreme_bg_color;
 
-        visuals.override_text_color = Some(self.text_color_main);
+        // Text colours go on the widget states (not `override_text_color`), so selected
+        // items can still show the selection's own text colour.
         visuals.weak_text_color = Some(self.text_color_dimmed);
 
         let line_color = mix(self.background, self.text_color_dimmed, 0.55);

@@ -37,24 +37,31 @@ pub fn remember_main(frame: &eframe::Frame) {
     }
 }
 
+/// What [`attach`] got to.
+pub enum Attach {
+    /// Not there yet (the window may not be mapped): try again next frame.
+    Pending,
+    /// Done; the window, if this is X11.
+    Done(Option<u32>),
+}
+
 /// Find this process's window titled `title` and make it a dialog of the main window.
-/// Returns `true` once done; call again on later frames until it is (the window may not be
-/// mapped yet). Not on X11: `true` at once, nothing to do.
-pub fn attach(title: &str) -> bool {
+/// Not on X11: done at once, nothing to do.
+pub fn attach(title: &str) -> Attach {
     let main = MAIN.load(Ordering::Relaxed);
     let Some((conn, screen)) = conn() else {
-        return true;
+        return Attach::Done(None);
     };
     if main == 0 {
-        return false;
+        return Attach::Pending;
     }
     let root = conn.setup().roots[*screen].root;
     match find(conn, root, title) {
         Some(w) => {
             let _ = make_dialog(conn, root, w, main);
-            true
+            Attach::Done(Some(w))
         }
-        None => false,
+        None => Attach::Pending,
     }
 }
 
