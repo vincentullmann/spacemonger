@@ -13,14 +13,15 @@ Shows a disk or folder as a treemap:
 
 ## Features
 
-adjusts when resizing the window  
-use the mousewheel or double click folders to zoom in and out  
+The layout adjusts when you resize the window. Use the mouse wheel, or double-click a folder, to zoom in and out.
 
-<video src=docs/img/demo.mp4 width=500px ></video>
+<!-- markdownlint-disable-next-line no-inline-html -->
+<video src="https://github.com/vincentullmann/spacemonger/raw/refs/heads/main/docs/demo.mp4" width="720" controls></video>
 
-extensive setting options
+Extensive settings.
 
-<video src=docs/img/settings.mp4 width=500px ></video>
+<!-- markdownlint-disable-next-line no-inline-html -->
+<video src="https://github.com/vincentullmann/spacemonger/raw/refs/heads/main/docs/settings.mp4" width="720" controls></video>
 
 ## Build & run
 
