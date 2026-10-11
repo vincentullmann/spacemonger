@@ -2,19 +2,8 @@
 
 use super::*;
 use crate::core::geometry::{Rect, Size};
+use crate::core::model::testing::file;
 use crate::core::model::{Entry, Folder, Kind};
-
-fn file(name: &str, size: u64) -> Entry {
-    Entry {
-        name: name.into(),
-        size,
-        actual: size,
-        mtime: 0,
-        created: 0,
-        kind: Kind::File,
-        hidden: false,
-    }
-}
 
 /// Rect from x, y, width, height.
 fn xywh(x: f64, y: f64, w: f64, h: f64) -> Rect {
@@ -128,15 +117,7 @@ fn nested() -> Folder {
     };
     Folder {
         entries: vec![
-            Entry {
-                name: "sub".into(),
-                size: 1000,
-                actual: 1000,
-                mtime: 0,
-                created: 0,
-                kind: Kind::Dir(Box::new(sub)),
-                hidden: false,
-            },
+            Entry::new("sub", 1000, Kind::Dir(Box::new(sub))),
             file("b", 500),
             file("c", 250),
         ],

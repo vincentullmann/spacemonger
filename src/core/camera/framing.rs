@@ -19,7 +19,9 @@ const SOLVE_OFFSET_EPS: f64 = 1e-3;
 
 /// A solver round moved little enough to stop.
 fn converged(k: f64, off: crate::core::geometry::Vec2) -> bool {
-    (k - 1.0).abs() < SOLVE_SCALE_EPS && off.x.abs() < SOLVE_OFFSET_EPS && off.y.abs() < SOLVE_OFFSET_EPS
+    (k - 1.0).abs() < SOLVE_SCALE_EPS
+        && off.x.abs() < SOLVE_OFFSET_EPS
+        && off.y.abs() < SOLVE_OFFSET_EPS
 }
 
 impl Camera {

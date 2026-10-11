@@ -164,7 +164,8 @@ impl SpaceMonger {
     fn entry_deleted(&mut self, r: &EntryRef) {
         let Some(t) = &mut self.tree else { return };
         t.remove(&r.folder, r.index);
-        self.zoom = path_after_remove(&self.zoom, &r.folder, r.index).unwrap_or_else(|| r.folder.to_vec());
+        self.zoom =
+            path_after_remove(&self.zoom, &r.folder, r.index).unwrap_or_else(|| r.folder.to_vec());
         self.camera.entry_removed(&r.folder, r.index);
         // This frame's layout still has the old indices; it's rebuilt before the next paint.
         self.items.clear();

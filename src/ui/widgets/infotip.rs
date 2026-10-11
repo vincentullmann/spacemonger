@@ -23,7 +23,10 @@ pub fn infotip(ctx: &egui::Context, pos: Pos2, entry: &Entry, path: &Path, opts:
                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
                 // The name bold in the main colour; the details under it dimmed.
                 if shown.name {
-                    ui.label(text(entry.name.clone()).family(crate::ui::fonts::bold_family()));
+                    ui.label(
+                        text(entry.display_name().into_owned())
+                            .family(crate::ui::fonts::bold_family()),
+                    );
                 }
                 // (label, value) rows under the name.
                 let mut rows: Vec<(&str, String)> = Vec::new();

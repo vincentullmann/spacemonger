@@ -6,6 +6,7 @@ use super::{Drive, FsError};
 use crate::core::model::{Entry, Folder, Kind, Tree};
 use dashmap::DashSet;
 use rayon::prelude::*;
+use std::ffi::OsStr;
 use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -144,7 +145,7 @@ fn scan_dir(path: &Path, dev: u64, ctl: &ScanControl, chain: &Chain) {
             ctl.failed();
             continue;
         };
-        let name = item.file_name().to_string_lossy().to_string();
+        let name = item.file_name().into_boxed_os_str();
         if m.is_dir {
             if (ctl.opts.one_filesystem && m.dev != dev) || !ctl.first_sighting(m.id) {
                 continue; // other filesystem, or already seen via a bind mount
@@ -191,15 +192,7 @@ fn scan_dir(path: &Path, dev: u64, ctl: &ScanControl, chain: &Chain) {
 
 /// A tree from a scanned (or partly scanned) root folder, with the free space block added.
 fn make_tree(drive: &Drive, mut root: Folder, ctl: &ScanControl) -> Tree {
-    root.entries.push(Entry {
-        name: String::new(),
-        size: drive.free,
-        actual: drive.free,
-        mtime: 0,
-        created: 0,
-        kind: Kind::Free,
-        hidden: false,
-    });
+    root.entries.push(Entry::new("", drive.free, Kind::Free));
     root.finalize();
     Tree {
         root,
@@ -229,7 +222,7 @@ pub fn scan(drive: &Drive, ctl: &ScanControl) -> Result<Option<Tree>, FsError> {
         .build()
         .map_err(|e| io_err(std::io::Error::other(e)))?;
     let root = Arc::new(LiveDir::new(
-        String::new(),
+        OsStr::new("").into(),
         root_meta.mtime,
         root_meta.created,
     ));
@@ -280,7 +273,10 @@ mod tests {
     /// Index of the entry called `name` in `folder`.
     fn index_of(tree: &Tree, folder: &[usize], name: &str) -> usize {
         let f = tree.folder_at(folder).unwrap();
-        f.entries.iter().position(|e| e.name == name).unwrap()
+        f.entries
+            .iter()
+            .position(|e| e.display_name() == name)
+            .unwrap()
     }
 
     #[test]
@@ -369,6 +365,40 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(tree.num_files, 1);
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn non_utf8_names_keep_their_bytes() {
+        use std::os::unix::ffi::OsStrExt;
+        let dir = std::env::temp_dir().join(format!("sm_test_bytes_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        // Two names that only differ in invalid bytes: both lossy forms are "a\u{fffd}".
+        for name in [&b"a\xff"[..], &b"a\xfe"[..]] {
+            fs::write(dir.join(OsStr::from_bytes(name)), noise(4096)).unwrap();
+        }
+
+        let tree = scan(&drive_for_path(&dir).unwrap(), &ScanControl::default())
+            .unwrap()
+            .unwrap();
+        let files: Vec<_> = tree
+            .root
+            .entries
+            .iter()
+            .filter(|e| matches!(e.kind, Kind::File))
+            .collect();
+        assert_eq!(files.len(), 2);
+        // Each path leads back to its own file.
+        for i in 0..tree.root.entries.len() {
+            if matches!(tree.root.entries[i].kind, Kind::File) {
+                assert!(tree.full_path(&[], Some(i)).exists());
+            }
+        }
+        assert_ne!(files[0].name, files[1].name);
+        assert_eq!(files[0].display_name(), files[1].display_name());
 
         fs::remove_dir_all(&dir).unwrap();
     }

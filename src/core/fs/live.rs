@@ -1,12 +1,13 @@
 //! The tree as it's being scanned: scanner threads fill it in while the UI takes snapshots.
 
 use crate::core::model::{Entry, Folder, Kind};
+use std::ffi::OsStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 
 /// A folder whose contents are being scanned.
 pub(super) struct LiveDir {
-    name: String,
+    name: Box<OsStr>,
     mtime: i64,
     created: i64,
     /// Bytes found so far in this folder and below.
@@ -38,7 +39,7 @@ impl Chain<'_> {
 }
 
 impl LiveDir {
-    pub fn new(name: String, mtime: i64, created: i64) -> Self {
+    pub fn new(name: Box<OsStr>, mtime: i64, created: i64) -> Self {
         Self {
             name,
             mtime,
@@ -102,7 +103,7 @@ impl LiveDir {
     }
 }
 
-fn dir_entry(name: String, (mtime, created): (i64, i64), size: u64, folder: Folder) -> Entry {
+fn dir_entry(name: Box<OsStr>, (mtime, created): (i64, i64), size: u64, folder: Folder) -> Entry {
     Entry {
         name,
         size,
@@ -117,29 +118,18 @@ fn dir_entry(name: String, (mtime, created): (i64, i64), size: u64, folder: Fold
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn file(name: &str, size: u64) -> Entry {
-        Entry {
-            name: name.into(),
-            size,
-            actual: size,
-            mtime: 0,
-            created: 0,
-            kind: Kind::File,
-            hidden: false,
-        }
-    }
+    use crate::core::model::testing::file;
 
     #[test]
     fn snapshot_while_filling_in() {
-        let root = LiveDir::new(String::new(), 0, 0);
+        let root = LiveDir::new(OsStr::new("").into(), 0, 0);
         let root_chain = Chain {
             dir: &root,
             parent: None,
         };
         let dirs = root.set_contents(
             vec![file("big", 1000), file("tiny", 1)],
-            vec![LiveDir::new("d".into(), 0, 0)],
+            vec![LiveDir::new(OsStr::new("d").into(), 0, 0)],
         );
         root_chain.add_bytes(1001);
 
@@ -148,7 +138,7 @@ mod tests {
         assert_eq!(
             s.entries
                 .iter()
-                .map(|e| e.name.as_str())
+                .map(|e| e.display_name())
                 .collect::<Vec<_>>(),
             ["big", "tiny"]
         );
@@ -166,9 +156,9 @@ mod tests {
         assert_eq!(
             s.entries
                 .iter()
-                .map(|e| (e.name.as_str(), e.size))
+                .map(|e| (e.display_name().into_owned(), e.size))
                 .collect::<Vec<_>>(),
-            [("d", 5000), ("big", 1000)]
+            [("d".to_string(), 5000), ("big".to_string(), 1000)]
         );
         assert_eq!(s.entries[0].child().unwrap().entries.len(), 1);
 
@@ -177,7 +167,7 @@ mod tests {
         assert_eq!(
             f.entries
                 .iter()
-                .map(|e| e.name.as_str())
+                .map(|e| e.display_name())
                 .collect::<Vec<_>>(),
             ["d", "big", "tiny"]
         );

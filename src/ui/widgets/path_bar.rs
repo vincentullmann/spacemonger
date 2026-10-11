@@ -25,7 +25,11 @@ pub fn path_bar(
     let mut f = &tree.root;
     for (k, &i) in zoom.iter().enumerate() {
         let Some(e) = f.entries.get(i) else { break };
-        segs.push((e.name.clone(), zoom[..=k].to_vec(), pal.depth(k as i32)));
+        segs.push((
+            e.display_name().into_owned(),
+            zoom[..=k].to_vec(),
+            pal.depth(k as i32),
+        ));
         match e.child() {
             Some(c) => f = c,
             None => break,

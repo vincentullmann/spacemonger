@@ -18,10 +18,6 @@ pub struct Tree {
     pub dotfiles_hidden: bool,
 }
 
-fn is_dotfile(e: &Entry) -> bool {
-    e.name.starts_with('.')
-}
-
 impl Tree {
     pub fn folder_at(&self, path: &[usize]) -> Option<&Folder> {
         self.root.descendant(path)
@@ -47,7 +43,7 @@ impl Tree {
         for &i in folder {
             // A stale path (the tree changed under it) stops at the last folder that exists.
             let Some(e) = f.entries.get(i) else { return p };
-            p.push(&e.name);
+            p.push(&*e.name);
             match e.child() {
                 Some(c) => f = c,
                 None => return p,
@@ -55,7 +51,7 @@ impl Tree {
         }
         if let Some(i) = index {
             if let Some(e) = f.entries.get(i) {
-                p.push(&e.name);
+                p.push(&*e.name);
             }
         }
         p
@@ -100,7 +96,7 @@ impl Tree {
 
     /// Whether an entry is left out of folder sizes and the layout.
     pub fn is_left_out(&self, e: &Entry) -> bool {
-        e.hidden || (self.dotfiles_hidden && is_dotfile(e))
+        e.hidden || (self.dotfiles_hidden && e.is_dotfile())
     }
 
     /// Recompute every folder's size from the entries that are still shown.
@@ -112,7 +108,7 @@ impl Tree {
                     e.size = walk(c, dots);
                     e.actual = e.size;
                 }
-                if !(e.hidden || (dots && is_dotfile(e))) {
+                if !(e.hidden || (dots && e.is_dotfile())) {
                     total += e.size;
                 }
             }
@@ -169,6 +165,7 @@ impl Tree {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::model::testing::file;
 
     /// A tree over `root` with the counts the tests start from.
     fn tree(root: Folder, root_path: &str) -> Tree {
@@ -185,18 +182,6 @@ mod tests {
         }
     }
 
-    fn file(name: &str, size: u64) -> Entry {
-        Entry {
-            name: name.into(),
-            size,
-            actual: size,
-            mtime: 0,
-            created: 0,
-            kind: Kind::File,
-            hidden: false,
-        }
-    }
-
     #[test]
     fn hide_and_unhide_restore_sizes() {
         let sub = Folder {
@@ -204,18 +189,7 @@ mod tests {
             total: 15,
         };
         let root = Folder {
-            entries: vec![
-                Entry {
-                    name: "d".into(),
-                    size: 15,
-                    actual: 15,
-                    mtime: 0,
-                    created: 0,
-                    kind: Kind::Dir(Box::new(sub)),
-                    hidden: false,
-                },
-                file("x", 7),
-            ],
+            entries: vec![Entry::new("d", 15, Kind::Dir(Box::new(sub))), file("x", 7)],
             total: 22,
         };
         let mut t = tree(root, "/");
@@ -238,18 +212,7 @@ mod tests {
             total: 15,
         };
         let root = Folder {
-            entries: vec![
-                Entry {
-                    name: "d".into(),
-                    size: 15,
-                    actual: 15,
-                    mtime: 0,
-                    created: 0,
-                    kind: Kind::Dir(Box::new(sub)),
-                    hidden: false,
-                },
-                file(".x", 7),
-            ],
+            entries: vec![Entry::new("d", 15, Kind::Dir(Box::new(sub))), file(".x", 7)],
             total: 22,
         };
         let mut t = tree(root, "/");
@@ -270,18 +233,7 @@ mod tests {
             total: 15,
         };
         let root = Folder {
-            entries: vec![
-                Entry {
-                    name: "d".into(),
-                    size: 15,
-                    actual: 15,
-                    mtime: 0,
-                    created: 0,
-                    kind: Kind::Dir(Box::new(sub)),
-                    hidden: false,
-                },
-                file("x", 7),
-            ],
+            entries: vec![Entry::new("d", 15, Kind::Dir(Box::new(sub))), file("x", 7)],
             total: 22,
         };
         let mut t = tree(root, "/r");

@@ -244,7 +244,8 @@ impl<'a> MapPainter<'a> {
             return;
         }
 
-        let (tw, th) = self.text_width(&entry.name);
+        let name = entry.display_name();
+        let (tw, th) = self.text_width(&name);
         let tx = if tw > w - 2.0 || it.is_folder {
             x + 3.0
         } else {
@@ -305,6 +306,6 @@ impl<'a> MapPainter<'a> {
         if !show_name {
             return;
         }
-        self.text(&p, &entry.name, tx, ty, fg);
+        self.text(&p, &name, tx, ty, fg);
     }
 }
