@@ -21,15 +21,19 @@ use crate::ui::widgets::{move_on_drag, window_frame};
 
 /// Window title (also how the window is found to make it a dialog, see [`platform`]).
 const TITLE: &str = "Settings";
+
 /// Window size to start with, and the smallest it can be resized to.
 const SIZE: [f32; 2] = [760.0, 600.0];
 const MIN_SIZE: [f32; 2] = [560.0, 360.0];
+
 /// Sidebar width, its side padding, and the height of a page entry.
-const SIDEBAR_W: f32 = 190.0;
+const SIDEBAR_W: f32 = 140.0;
 const SIDEBAR_PAD: f32 = 10.0;
 const SIDEBAR_ITEM_H: f32 = 30.0;
+
 /// Size of the page icons in the sidebar.
 const SIDEBAR_ICON: f32 = 15.0;
+
 /// Frames to keep trying to make the window a dialog before giving up (about two seconds).
 const ATTACH_TRIES: u32 = 120;
 
@@ -71,7 +75,7 @@ const SIDEBAR: [(&str, &[Entry]); 2] = [
             (Page::Appearance, icon::PALETTE, "Appearance"),
             (Page::PathBar, icon::PATH, "Path bar"),
             (Page::Tiles, icon::SQUARES_FOUR, "Tiles"),
-            (Page::TileLabels, icon::TAG, "Tile labels"),
+            (Page::TileLabels, icon::ARTICLE, "Tile labels"),
             (Page::Tooltips, icon::CHAT_TEXT, "Tooltips"),
         ],
     ),
@@ -186,16 +190,19 @@ impl SettingsWindow {
                 .layout(Layout::top_down(Align::Min)),
         );
         main.spacing_mut().item_spacing.y = 0.0;
+
         let title = SIDEBAR
             .iter()
             .flat_map(|(_, pages)| pages.iter())
             .find(|(p, _, _)| *p == self.page)
             .map_or("", |(_, _, name)| *name);
+
         let close = dialog::header(&mut main, title, true);
         let close_rect = Rect::from_min_size(
             egui::pos2(content.right() - HEADER_H, content.top()),
             Vec2::splat(HEADER_H),
         );
+
         egui::Frame::NONE
             .inner_margin(Margin {
                 left: PADDING as i8,
