@@ -80,13 +80,19 @@ impl Theme {
         visuals.faint_bg_color = mix(self.background, self.text_color_dimmed, 0.08);
         visuals.code_bg_color = visuals.extreme_bg_color;
 
-        visuals.override_text_color = Some(self.text_color_main);
+        // Text colours go on the widget states (not `override_text_color`), so selected
+        // items can still show the selection's own text colour.
         visuals.weak_text_color = Some(self.text_color_dimmed);
 
+        // Outlines (windows, dialogs, hovered buttons) and the fainter separators.
         let line_color = mix(self.background, self.text_color_dimmed, 0.55);
         let line = Stroke::new(1.0, line_color);
         visuals.window_stroke = line;
-        visuals.widgets.noninteractive.bg_stroke = line;
+        // `noninteractive.bg_stroke` is what `ui.separator()` draws.
+        visuals.widgets.noninteractive.bg_stroke = Stroke::new(
+            1.0,
+            mix(self.background, self.text_color_dimmed, 0.55 / 2.0),
+        );
         visuals.widgets.noninteractive.weak_bg_fill = self.background;
         visuals.widgets.noninteractive.bg_fill = self.background;
 
@@ -116,20 +122,35 @@ impl Theme {
         fill(&mut widgets.open, raised(0.08));
         widgets.open.bg_fill = self.background;
         widgets.hovered.bg_stroke = line;
+        for w in [
+            &mut widgets.noninteractive,
+            &mut widgets.inactive,
+            &mut widgets.hovered,
+            &mut widgets.active,
+            &mut widgets.open,
+        ] {
+            w.corner_radius = CORNER_RADIUS.into();
+        }
 
+        // Selected items: a soft fill of the dimmed text colour, normal text on it. The accent
+        // is kept for progress, links, the changed marker and the text cursor.
         visuals.hyperlink_color = self.accent_color;
-        visuals.selection.bg_fill = self.accent_color;
-        visuals.selection.stroke.color = if self.accent_color.intensity() > 0.6 {
-            Color32::BLACK
-        } else {
-            Color32::WHITE
-        };
+        visuals.selection.bg_fill = self.text_color_dimmed.gamma_multiply(0.5);
+        visuals.selection.stroke.color = self.text_color_main;
         visuals.text_cursor.stroke.color = self.accent_color;
         // One glyph rasterizer for both themes. Dark mode thickens antialiased edges, which
         // makes the treemap's black labels look like they grew a shadow.
         visuals.text_options.color_transfer_function =
             egui::epaint::FontColorTransferFunction::LIGHT_MODE_DEFAULT;
     }
+}
+
+/// Corner radius of buttons, list items and inputs.
+const CORNER_RADIUS: u8 = 4;
+
+/// The accent colour (progress, links, the changed marker).
+pub fn accent(visuals: &egui::Visuals) -> Color32 {
+    visuals.hyperlink_color
 }
 
 fn mix(from: Color32, to: Color32, t: f32) -> Color32 {
@@ -163,6 +184,6 @@ mod tests {
         assert_eq!(visuals.weak_text_color(), theme.text_color_dimmed);
         assert_eq!(visuals.strong_text_color(), theme.text_color_header);
         assert_eq!(visuals.hyperlink_color, theme.accent_color);
-        assert_eq!(visuals.selection.bg_fill, theme.accent_color);
+        assert_eq!(accent(&visuals), theme.accent_color);
     }
 }

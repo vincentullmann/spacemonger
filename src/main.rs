@@ -18,7 +18,11 @@ fn main() -> eframe::Result {
         .with_inner_size([1200.0, 800.0])
         .with_min_inner_size([400.0, 300.0])
         // The app draws its own title bar and frame (see ui::widgets::titlebar).
-        .with_decorations(false);
+        .with_decorations(false)
+        // With OpenGL every window shares the root window's GL config, and the settings
+        // window needs one with alpha for its rounded corners. The main window paints
+        // every pixel opaque.
+        .with_transparent(true);
     if let Ok(icon) = eframe::icon_data::from_png_bytes(include_bytes!("../assets/SpaceMonger.png"))
     {
         viewport = viewport.with_icon(icon);

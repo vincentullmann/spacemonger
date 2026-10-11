@@ -1,7 +1,8 @@
-//! The contents of the General, Scan and Display tabs.
+//! The contents of the settings pages (all but Hotkeys, which the window draws itself).
 
-use super::form::{self, group};
+use super::form::{self, group, rows};
 use super::{General, Labels, Layout, PathBar, Scan, Settings, Text, Theme, Tiles, Tooltips};
+use crate::constants::UI_ZOOM;
 use crate::ui::palette::{Palette, Scheme};
 use crate::utils::format::SizeFormat;
 use eframe::egui::Ui;
@@ -39,16 +40,9 @@ const SCHEMES: [(Scheme, &str); 10] = [
     (Scheme::Custom, "Custom"),
 ];
 
-pub fn general(ui: &mut Ui, s: &mut Settings) {
+pub fn navigation(ui: &mut Ui, s: &mut Settings) {
     let (g, d) = (&mut s.general, General::default());
-    group(ui, "General", |r| {
-        r.row(
-            "Theme",
-            "Light or dark colours, or follow the desktop's preference.",
-            &mut g.theme,
-            &d.theme,
-            |ui, v| form::choice(ui, "theme", v, &THEMES),
-        );
+    rows(ui, |r| {
         r.row(
             "Animation",
             "Length of zoom and frame moves. 0 jumps straight there.",
@@ -63,13 +57,12 @@ pub fn general(ui: &mut Ui, s: &mut Settings) {
             &d.zoom_speed,
             |ui, v| form::number(ui, v, 10..=500, 5.0, "%"),
         );
-        r.row(
-            "Frame selection fill",
-            "Framing the selection (F) zooms until its bounding box fills this much of the view.",
-            &mut g.frame_fill,
-            &d.frame_fill,
-            |ui, v| form::number(ui, v, 10..=100, 1.0, "%"),
-        );
+    });
+}
+
+pub fn actions(ui: &mut Ui, s: &mut Settings) {
+    let (g, d) = (&mut s.general, General::default());
+    rows(ui, |r| {
         r.row(
             "Confirm before delete",
             "Ask before moving the selection to the trash.",
@@ -77,30 +70,19 @@ pub fn general(ui: &mut Ui, s: &mut Settings) {
             &d.confirm_delete,
             form::check,
         );
-    });
-
-    let (l, d) = (&mut s.layout, Layout::default());
-    group(ui, "Layout", |r| {
         r.row(
-            "Split bias",
-            "Negative prefers side-by-side boxes, positive prefers stacked ones.",
-            &mut l.bias,
-            &d.bias,
-            |ui, v| form::number(ui, v, -20..=20, 1.0, ""),
-        );
-        r.row(
-            "Show free space",
-            "Show the drive's free space as a box of its own (also the Free Space button).",
-            &mut l.show_free,
-            &d.show_free,
-            form::check,
+            "Frame selection fill",
+            "Framing the selection (F) zooms until its bounding box fills this much of the view.",
+            &mut g.frame_fill,
+            &d.frame_fill,
+            |ui, v| form::number(ui, v, 10..=100, 1.0, "%"),
         );
     });
 }
 
 pub fn scan(ui: &mut Ui, s: &mut Settings) {
     let (sc, d) = (&mut s.scan, Scan::default());
-    group(ui, "Scan", |r| {
+    rows(ui, |r| {
         r.row(
             "Ignore hidden files",
             "Leave out files and folders whose name starts with a dot. Applies at once, no rescan needed.",
@@ -130,20 +112,44 @@ pub fn scan(ui: &mut Ui, s: &mut Settings) {
             |ui, v| form::excludes(ui, v),
         );
     });
-    ui.add_space(6.0);
+    ui.add_space(10.0);
     ui.weak("Filesystem and hard-link options apply from the next scan.");
 }
 
-pub fn display(ui: &mut Ui, s: &mut Settings) {
+pub fn appearance(ui: &mut Ui, s: &mut Settings) {
+    let (g, dg) = (&mut s.general, General::default());
     let (f, d) = (&mut s.text, Text::default());
-    group(ui, "Text", |r| {
+    rows(ui, |r| {
         r.row(
-            "Font",
+            "Theme",
+            "Light or dark colours, or follow the desktop's preference.",
+            &mut g.theme,
+            &dg.theme,
+            |ui, v| form::choice(ui, "theme", v, &THEMES),
+        );
+        r.row(
+            "UI zoom",
+            "Scales the whole window: text, buttons, bars and the map. Also Ctrl + / Ctrl - / Ctrl 0.",
+            &mut g.ui_zoom,
+            &dg.ui_zoom,
+            |ui, v| form::number(ui, v, UI_ZOOM.0..=UI_ZOOM.1, 5.0, "%"),
+        );
+        r.row(
+            "UI font size",
+            "Text size of menus, dialogs, settings and the title bar. Map labels have their own.",
+            &mut g.ui_font_size,
+            &dg.ui_font_size,
+            |ui, v| form::number(ui, v, 9.0..=20.0, 0.5, "px"),
+        );
+        r.row(
+            "Map font",
             "Font for box labels and the path bar. Default is the built-in font.",
             &mut f.family,
             &d.family,
             form::font_family,
         );
+    });
+    group(ui, "Formats", |r| {
         r.row(
             "Size format",
             "How file sizes are shown in labels and tips. Totals (title bar, free space) use binary or decimal units.",
@@ -159,17 +165,31 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
             |ui, v| ui.text_edit_singleline(v),
         );
     });
+}
 
+pub fn path_bar(ui: &mut Ui, s: &mut Settings) {
+    let (p, d) = (&mut s.path_bar, PathBar::default());
+    rows(ui, |r| {
+        r.row(
+            "Font size",
+            "Text size in the path bar; the bar's height follows it.",
+            &mut p.font_size,
+            &d.font_size,
+            |ui, v| form::number(ui, v, 6.0..=32.0, 0.5, "px"),
+        );
+    });
+}
+
+pub fn tiles(ui: &mut Ui, s: &mut Settings) {
     let before = s.tiles.clone();
     let (t, d) = (&mut s.tiles, Tiles::default());
-    let (lb, dl) = (&mut s.labels, Labels::default());
     // The colours' default is the scheme's own set (Classic's for Custom).
     let scheme_colors = t
         .scheme
         .native_count()
         .and_then(|n| t.scheme.colors(n))
         .unwrap_or_else(|| d.colors.clone());
-    group(ui, "Tiles", |r| {
+    group(ui, "Colours", |r| {
         r.row(
             "Colour scheme",
             "Where the depth colours come from. Picking one resets the colour list; editing a colour makes the scheme Custom.",
@@ -184,6 +204,22 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
             &scheme_colors,
             form::colors,
         );
+        r.row(
+            "Selection colour",
+            "Fill and outline of selected boxes; their labels switch to black or white to stay readable.",
+            &mut t.selection_color,
+            &d.selection_color,
+            |ui, v| form::auto_color(ui, v, Palette::TEXT, "default"),
+        );
+        r.row(
+            "Hover highlight",
+            "How much the box under the mouse lightens.",
+            &mut t.hover,
+            &d.hover,
+            |ui, v| form::number(ui, v, 0..=100, 1.0, "%"),
+        );
+    });
+    group(ui, "Outlines", |r| {
         r.row(
             "Borders",
             "Thin outline around every box. With a gap of 0, neighbours share one line.",
@@ -206,75 +242,74 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
             |ui, v| form::outline(ui, v, Palette::HOVER_BORDER, "default"),
         );
         r.row(
-            "Selection colour",
-            "Fill and outline of selected boxes; their labels switch to black or white to stay readable.",
-            &mut t.selection_color,
-            &d.selection_color,
-            |ui, v| form::auto_color(ui, v, Palette::TEXT, "default"),
-        );
-        r.row(
             "Gap",
             "Space between neighbouring boxes.",
             &mut t.gap,
             &d.gap,
             |ui, v| form::number(ui, v, 0..=8, 1.0, "px"),
         );
-        r.row(
-            "Hover highlight",
-            "How much the box under the mouse lightens.",
-            &mut t.hover,
-            &d.hover,
-            |ui, v| form::number(ui, v, 0..=100, 1.0, "%"),
-        );
-        r.subgroup("Labels", |r| {
-            r.row(
-                "Font size",
-                "Text size of the labels in boxes. Folder title bars grow with it.",
-                &mut lb.font_size,
-                &dl.font_size,
-                |ui, v| form::number(ui, v, 6.0..=32.0, 0.5, "px"),
-            );
-            r.row(
-                "Drop shadow",
-                "Draw a soft shadow behind label text.",
-                &mut lb.shadow,
-                &dl.shadow,
-                form::check,
-            );
-            r.row(
-                "Density",
-                "Smallest box that gets a label (and shows a folder's contents): higher labels smaller boxes.",
-                &mut lb.density,
-                &dl.density,
-                |ui, v| form::number(ui, v, -3..=3, 1.0, ""),
-            );
-            r.row(
-                "Elements",
-                "What elements to show in the labels, as far as the box is big enough.",
-                &mut lb.shown,
-                &dl.shown,
-                |ui, v| form::shown(ui, "label_shown", v),
-            );
-        });
     });
     // A colour list reset to the scheme's own stays with that scheme.
     if !(s.tiles.scheme == before.scheme && s.tiles.colors == scheme_colors) {
         s.tiles.reconcile(&before);
     }
 
-    let (p, d) = (&mut s.path_bar, PathBar::default());
-    group(ui, "Path bar", |r| {
+    let (l, d) = (&mut s.layout, Layout::default());
+    group(ui, "Layout", |r| {
+        r.row(
+            "Split bias",
+            "Negative prefers side-by-side boxes, positive prefers stacked ones.",
+            &mut l.bias,
+            &d.bias,
+            |ui, v| form::number(ui, v, -20..=20, 1.0, ""),
+        );
+        r.row(
+            "Show free space",
+            "Show the drive's free space as a box of its own (also in the main menu).",
+            &mut l.show_free,
+            &d.show_free,
+            form::check,
+        );
+    });
+}
+
+pub fn tile_labels(ui: &mut Ui, s: &mut Settings) {
+    let (lb, d) = (&mut s.labels, Labels::default());
+    rows(ui, |r| {
         r.row(
             "Font size",
-            "Text size in the path bar; the bar's height follows it.",
-            &mut p.font_size,
+            "Text size of the labels in boxes. Folder title bars grow with it.",
+            &mut lb.font_size,
             &d.font_size,
             |ui, v| form::number(ui, v, 6.0..=32.0, 0.5, "px"),
         );
+        r.row(
+            "Drop shadow",
+            "Draw a soft shadow behind label text.",
+            &mut lb.shadow,
+            &d.shadow,
+            form::check,
+        );
+        r.row(
+            "Density",
+            "Smallest box that gets a label (and shows a folder's contents): higher labels smaller boxes.",
+            &mut lb.density,
+            &d.density,
+            |ui, v| form::number(ui, v, -3..=3, 1.0, ""),
+        );
+        r.row(
+            "Elements",
+            "What elements to show in the labels, as far as the box is big enough.",
+            &mut lb.shown,
+            &d.shown,
+            |ui, v| form::shown(ui, "label_shown", v),
+        );
     });
+}
 
+pub fn tooltips(ui: &mut Ui, s: &mut Settings) {
     let (tt, d) = (&mut s.tooltips, Tooltips::default());
-    group(ui, "Tooltips", |r| {
+    rows(ui, |r| {
         r.row(
             "Elements",
             "What elements to show in the tooltips.",

@@ -62,6 +62,7 @@ impl SpaceMonger {
     pub fn new(cc: &eframe::CreationContext<'_>, open_path: Option<PathBuf>) -> Self {
         let settings = Settings::load(cc.storage);
         Theme::install(&cc.egui_ctx);
+        cc.egui_ctx.options_mut(|o| o.zoom_with_keyboard = false);
         let mut app = Self {
             tree: None,
             live: None,
@@ -115,6 +116,9 @@ impl SpaceMonger {
         if old.is_none_or(|o| o.text.family != s.text.family) {
             fonts::apply(ctx, &s.text.family);
         }
+        if old.is_none_or(|o| o.general.ui_font_size != s.general.ui_font_size) {
+            fonts::set_ui_size(ctx, s.general.ui_font_size);
+        }
         if old.is_none_or(|o| o.format_options() != s.format_options()) {
             crate::utils::format::set_options(s.format_options());
         }
@@ -130,6 +134,20 @@ impl SpaceMonger {
             self.generation += 1;
         }
         self.applied = Some(self.settings.clone());
+    }
+
+    /// Ctrl + / Ctrl - / Ctrl 0 step the UI zoom setting (egui's own handling of those keys
+    /// is off, so the setting stays the one place the zoom comes from). The zoom itself is
+    /// applied once no mouse button is down, so dragging its slider doesn't rescale the
+    /// window under the pointer.
+    fn sync_zoom(&mut self, ctx: &egui::Context) {
+        let z = &mut self.settings.general.ui_zoom;
+        crate::ui::settings::zoom_keys(ctx, z);
+        let want = *z as f32 / 100.0;
+        let idle = !ctx.input(|i| i.pointer.any_down());
+        if idle && (ctx.zoom_factor() - want).abs() > 1e-4 {
+            ctx.set_zoom_factor(want);
+        }
     }
 
     /// Force a layout rebuild (the tree or layout settings changed).
@@ -243,6 +261,7 @@ impl eframe::App for SpaceMonger {
             .inner;
         act = act.or(tm);
 
+        self.sync_zoom(&ctx);
         if !self.modal_open() && !self.settings_window.capturing() && !ctx.text_edit_focused() {
             act = act.or(ctx.input(|i| self.settings.keys.action_for_keys(i)));
         }
@@ -256,7 +275,7 @@ impl eframe::App for SpaceMonger {
             self.apply_settings(&ctx);
         }
 
-        window_frame(&ctx);
+        window_frame(&ctx, 0.0);
 
         // The taskbar still shows the title.
         let title = window_title(self.tree.as_ref(), &self.selection, &self.zoom);
@@ -272,10 +291,6 @@ impl eframe::App for SpaceMonger {
         crate::ui::x11_sync::frame_drawn(&ctx);
     }
 
-    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
-        crate::ui::widgets::release_after_grab(ctx, raw_input);
-    }
-
     /// Runs once before every [`Self::ui`]. eframe 0.36 has no `update`; this is that hook.
     fn logic(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // The previous frame is on screen now; release the window manager's resize step.
@@ -283,10 +298,10 @@ impl eframe::App for SpaceMonger {
         crate::ui::x11_sync::acknowledge();
     }
 
-    fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {
-        Theme::of(visuals.dark_mode)
-            .background
-            .to_normalized_gamma_f32()
+    /// See-through, for the settings window's rounded corners (all windows share this). The
+    /// main window's panels cover all of it.
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        [0.0; 4]
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {

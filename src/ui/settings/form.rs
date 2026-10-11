@@ -3,6 +3,7 @@
 
 use super::{Line, Shown};
 use crate::ui::fonts;
+use crate::ui::widgets::flat_items;
 use eframe::egui::{self, emath::Numeric, Color32, Response, RichText, Ui};
 use std::ops::RangeInclusive;
 
@@ -47,7 +48,7 @@ pub fn pad_to(ui: &mut Ui, x: f32) {
 pub fn changed_dot(ui: &mut Ui, changed: bool) {
     let (dot, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
     if changed {
-        let color = ui.visuals().hyperlink_color;
+        let color = crate::ui::theme::accent(ui.visuals());
         ui.painter().circle_filled(dot.center(), 3.0, color);
     }
 }
@@ -57,47 +58,28 @@ pub struct Rows<'a> {
     ui: &'a mut Ui,
 }
 
-/// A titled group of rows.
-pub fn group(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Rows)) {
-    section(ui, title, |ui| {
+/// Rows without a title of their own (a page's only group: the page title names it).
+pub fn rows(ui: &mut Ui, add: impl FnOnce(&mut Rows)) {
+    ui.scope(|ui| {
         ui.spacing_mut().item_spacing.y = 6.0;
         add(&mut Rows { ui });
     });
 }
 
-/// A collapsible section: a title in the strong text colour (egui's heading colour is too
-/// dim in dark mode) with a rule under it, open to begin with. Remembers being collapsed.
-pub fn section(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Ui)) {
-    ui.add_space(8.0);
-    let color = ui.visuals().strong_text_color();
-    egui::CollapsingHeader::new(RichText::new(title).heading().color(color))
-        .id_salt(("section", title))
-        .default_open(true)
-        .show_unindented(ui, |ui| {
-            ui.separator();
-            add(ui);
-        });
+/// A titled group of rows.
+pub fn group(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Rows)) {
+    section(ui, title, |ui| rows(ui, add));
 }
 
-/// A collapsible group of rows inside another group (e.g. Tiles / Labels).
-fn subgroup(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Rows)) {
-    ui.add_space(6.0);
-    let color = ui.visuals().strong_text_color();
-    egui::CollapsingHeader::new(RichText::new(title).strong().color(color))
-        .id_salt(("subgroup", title))
-        .default_open(true)
-        .show_unindented(ui, |ui| {
-            ui.spacing_mut().item_spacing.y = 6.0;
-            add(&mut Rows { ui });
-        });
+/// A section: a title in the strong text colour with a rule under it.
+pub fn section(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Ui)) {
+    ui.add_space(18.0);
+    ui.label(heading(title));
+    ui.separator();
+    add(ui);
 }
 
 impl Rows<'_> {
-    /// A collapsible group of rows nested in this one.
-    pub fn subgroup(&mut self, title: &str, add: impl FnOnce(&mut Rows)) {
-        subgroup(self.ui, title, add);
-    }
-
     /// A row for `v`: `label` on the left, the input `add` draws, and a reset button.
     /// A value that isn't `default` gets a bold label with a dot and an active reset button;
     /// right-click on the label or input offers the reset too. `tip` shows when hovering the
@@ -194,6 +176,7 @@ pub fn choice<T: PartialEq + Copy>(
     let r = egui::ComboBox::from_id_salt(id)
         .selected_text(shown)
         .show_ui(ui, |ui| {
+            flat_items(ui);
             for (o, label) in options {
                 ui.selectable_value(v, *o, *label);
             }
@@ -225,6 +208,7 @@ pub fn shown(ui: &mut Ui, id: &str, v: &mut Shown) -> Response {
         .width(260.0)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show_ui(ui, |ui| {
+            flat_items(ui);
             for (label, field) in v.fields() {
                 ui.checkbox(field, label);
             }
@@ -312,6 +296,7 @@ pub fn font_family(ui: &mut Ui, family: &mut String) -> Response {
         .selected_text(shown.to_string())
         .height(f32::INFINITY)
         .show_ui(ui, |ui| {
+            flat_items(ui);
             // Each name in its own font. Only the rows in view are drawn (and their fonts
             // loaded), so a long font list stays quick.
             let names = fonts::system_families();
@@ -371,4 +356,9 @@ pub fn excludes(ui: &mut Ui, list: &mut [String]) -> Response {
 /// A checkbox without a label of its own (the row has one).
 pub fn check(ui: &mut Ui, v: &mut bool) -> Response {
     ui.checkbox(v, "")
+}
+
+/// A section title: bold, in the strong text colour.
+pub fn heading(title: &str) -> RichText {
+    RichText::new(title).family(fonts::bold_family()).strong()
 }

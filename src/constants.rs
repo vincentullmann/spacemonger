@@ -22,3 +22,6 @@ pub const LIVE_SCAN_INTERVAL: Duration = Duration::from_millis(100);
 
 /// Path bar height at the default path-bar font size.
 pub const BAR_H: i32 = 18;
+
+/// Range of the UI zoom setting, in percent.
+pub const UI_ZOOM: (u32, u32) = (50, 200);

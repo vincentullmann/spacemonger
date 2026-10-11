@@ -64,6 +64,10 @@ impl From<Theme> for egui::ThemePreference {
 #[serde(default)]
 pub struct General {
     pub theme: Theme,
+    /// Zoom of the whole window, in percent (also Ctrl + / - / 0).
+    pub ui_zoom: u32,
+    /// Size of the UI's body text in px; the other text styles follow.
+    pub ui_font_size: f32,
     pub anim_ms: u32,
     pub zoom_speed: u32,
     pub frame_fill: u32,
@@ -158,8 +162,7 @@ pub struct Text {
 }
 
 /// Which details a file label or the tooltip shows.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
-#[derive(Default)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Default)]
 pub struct Shown {
     pub name: bool,
     /// Full path on disk.
@@ -293,6 +296,22 @@ impl Settings {
     pub fn bar_font(&self) -> egui::FontId {
         egui::FontId::new(self.path_bar.font_size, fonts::map_family())
     }
+}
+
+/// Ctrl + / Ctrl - / Ctrl 0 in this viewport: step the UI zoom setting `z` (percent).
+pub fn zoom_keys(ctx: &egui::Context, z: &mut u32) {
+    use crate::constants::UI_ZOOM;
+    use egui::gui_zoom::kb_shortcuts as kb;
+    let step = |z: u32, d: i32| (z as i32 + d).clamp(UI_ZOOM.0 as i32, UI_ZOOM.1 as i32) as u32;
+    ctx.input_mut(|i| {
+        if i.consume_shortcut(&kb::ZOOM_RESET) {
+            *z = 100;
+        } else if i.consume_shortcut(&kb::ZOOM_IN) || i.consume_shortcut(&kb::ZOOM_IN_SECONDARY) {
+            *z = step(*z, 10);
+        } else if i.consume_shortcut(&kb::ZOOM_OUT) {
+            *z = step(*z, -10);
+        }
+    });
 }
 
 #[cfg(test)]
