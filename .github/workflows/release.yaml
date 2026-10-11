@@ -1,6 +1,10 @@
 on:
   workflow_dispatch:
 
+permissions:
+  # to write the changelog
+  contents: write
+
 jobs:
   release:
     name: Release - ${{ matrix.platform.os-name }}
@@ -33,5 +37,6 @@ jobs:
       - name: Publish artifacts and release
         uses: houseabsolute/actions-rust-release@v0
         with:
-          executable-name: ubi
+          executable-name: spacemonger
           target: ${{ matrix.platform.target }}
+          changes-file: ""
