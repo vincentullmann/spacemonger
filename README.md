@@ -16,12 +16,12 @@ Shows a disk or folder as a treemap:
 The layout adjusts when you resize the window. Use the mouse wheel, or double-click a folder, to zoom in and out.
 
 <!-- markdownlint-disable-next-line no-inline-html -->
-<video src="https://github.com/vincentullmann/spacemonger/raw/refs/heads/main/docs/demo.mp4" width="720" controls></video>
+<video src="https://github.com/user-attachments/assets/fd559264-df0a-45bd-95c1-85043a713ecc" width="720" controls></video>
 
 Extensive settings.
 
 <!-- markdownlint-disable-next-line no-inline-html -->
-<video src="https://github.com/vincentullmann/spacemonger/raw/refs/heads/main/docs/settings.mp4" width="720" controls></video>
+<video src="https://github.com/user-attachments/assets/7d1e5143-cfe3-4e99-9d11-36e89c85174b" width="720" controls></video>
 
 ## Build & run
 
