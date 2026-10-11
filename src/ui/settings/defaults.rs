@@ -11,6 +11,8 @@ impl Default for General {
     fn default() -> Self {
         Self {
             theme: Theme::Light,
+            ui_zoom: 100,
+            ui_font_size: crate::ui::fonts::DEFAULT_UI_SIZE,
             anim_ms: 250,
             zoom_speed: 100,
             frame_fill: 90,

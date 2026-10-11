@@ -1,9 +1,15 @@
-//! The treemap / path-bar font: egui's default, or a system font found with fontdb.
+//! Fonts: the treemap / path-bar font (egui's default, or a system font found with fontdb),
+//! the bold font for section titles, and the UI text size.
 
 use eframe::egui::{self, FontData, FontDefinitions, FontFamily};
 use eframe::epaint::text::{FontInsert, FontPriority, InsertFontFamily};
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex, OnceLock};
+
+/// Bold text (section titles): Ubuntu Bold, the heavy cut of egui's default font.
+pub fn bold_family() -> FontFamily {
+    FontFamily::Name("bold".into())
+}
 
 /// Font family used for treemap and path-bar labels.
 pub fn map_family() -> FontFamily {
@@ -116,6 +122,15 @@ pub fn apply(ctx: &egui::Context, family: &str) {
         .get(&FontFamily::Proportional)
         .cloned()
         .unwrap_or_default();
+    defs.font_data.insert(
+        "Ubuntu-B".into(),
+        Arc::new(FontData::from_static(include_bytes!(
+            "../../assets/fonts/Ubuntu-B.ttf"
+        ))),
+    );
+    let mut bold = vec!["Ubuntu-B".to_string()];
+    bold.extend(list.iter().cloned());
+    defs.families.insert(bold_family(), bold);
     if !family.is_empty() {
         if let Some((bytes, index)) = load_family(family) {
             let mut data = FontData::from_owned(bytes);
@@ -158,3 +173,22 @@ pub fn preview_family(ctx: &egui::Context, name: &str) -> Option<FontFamily> {
     }
     None
 }
+
+/// egui's default text sizes, the UI font size's 100%.
+const BASE_BODY: f32 = 12.5;
+
+/// Set the UI text size: body and button text to `body` px, the other styles in proportion.
+pub fn set_ui_size(ctx: &egui::Context, body: f32) {
+    let defaults = egui::Style::default().text_styles;
+    let k = body / BASE_BODY;
+    ctx.all_styles_mut(|style| {
+        for (ts, font) in style.text_styles.iter_mut() {
+            if let Some(d) = defaults.get(ts) {
+                font.size = d.size * k;
+            }
+        }
+    });
+}
+
+/// Default UI font size (egui's body text).
+pub const DEFAULT_UI_SIZE: f32 = BASE_BODY;

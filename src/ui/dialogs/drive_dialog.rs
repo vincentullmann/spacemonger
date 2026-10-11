@@ -4,6 +4,7 @@
 //! scanned paths under it, built like the drives table.
 
 use crate::core::fs::{drive_for_path, volumes, Drive, FsError};
+use crate::ui::theme::accent;
 use crate::ui::widgets::dialog::Dialog;
 use crate::utils::format;
 use eframe::egui::{self, Align, Layout, RichText, Sense, Shape, Ui, Vec2};
@@ -166,6 +167,7 @@ fn drive_row(ui: &mut Ui, d: &Drive) -> egui::Response {
     fixed(&mut row, BAR_W, &mut |ui| {
         ui.add(
             egui::ProgressBar::new(frac)
+                .fill(accent(ui.visuals()))
                 .desired_width(BAR_W)
                 .desired_height(BAR_H),
         );

@@ -3,6 +3,7 @@
 
 use super::confirm_delete::buttons;
 use crate::core::fs::ScanJob;
+use crate::ui::theme::accent;
 use crate::ui::widgets::dialog::Dialog;
 use crate::utils::text::elide_start;
 use eframe::egui::{self, Align2, Vec2};
@@ -41,7 +42,11 @@ pub fn scan_dialog(ctx: &egui::Context, job: &ScanJob) -> bool {
             } else {
                 0.0
             };
-            ui.add(egui::ProgressBar::new(frac).show_percentage());
+            ui.add(
+                egui::ProgressBar::new(frac)
+                    .show_percentage()
+                    .fill(accent(ui.visuals())),
+            );
             ui.add_space(10.0);
             buttons(ui, |ui| {
                 let cancel = ui.button("Cancel").clicked();
