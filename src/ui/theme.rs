@@ -22,7 +22,6 @@ pub struct Theme {
     pub accent_color: Color32,
 }
 
-
 impl Theme {
     pub const fn light() -> Self {
         Self {
@@ -84,7 +83,8 @@ impl Theme {
         visuals.override_text_color = Some(self.text_color_main);
         visuals.weak_text_color = Some(self.text_color_dimmed);
 
-        let line = Stroke::new(1.0, mix(self.background, self.text_color_dimmed, 0.55));
+        let line_color = mix(self.background, self.text_color_dimmed, 0.55);
+        let line = Stroke::new(1.0, line_color);
         visuals.window_stroke = line;
         visuals.widgets.noninteractive.bg_stroke = line;
         visuals.widgets.noninteractive.weak_bg_fill = self.background;
@@ -115,7 +115,7 @@ impl Theme {
         fill(&mut widgets.active, raised(0.24));
         fill(&mut widgets.open, raised(0.08));
         widgets.open.bg_fill = self.background;
-        widgets.hovered.bg_stroke = Stroke::new(1.0, self.accent_color);
+        widgets.hovered.bg_stroke = line;
 
         visuals.hyperlink_color = self.accent_color;
         visuals.selection.bg_fill = self.accent_color;

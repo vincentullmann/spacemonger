@@ -172,13 +172,13 @@ fn move_or_maximize(
     }
 }
 
-/// The window title in `mid`, dimmed, centred on the whole bar (`full`) when it fits, cut
+/// The window title in `mid`, centred on the whole bar (`full`) when it fits, cut
 /// short with "…" when it doesn't.
 fn title_text(ui: &Ui, mid: Rect, full: Rect, title: &str) {
     if mid.width() < 24.0 {
         return;
     }
-    let color = ui.visuals().weak_text_color();
+    let color = ui.visuals().text_color();
     let font = egui::TextStyle::Body.resolve(ui.style());
     let mut job = egui::text::LayoutJob::simple_singleline(title.to_owned(), font, color);
     job.wrap = egui::text::TextWrapping::truncate_at_width(mid.width());
@@ -199,7 +199,9 @@ fn tip(keys: &Keymap, cmd: Command, name: &str) -> String {
 }
 
 fn icon_button(ui: &mut Ui, glyph: &str, enabled: bool, tip: &str) -> egui::Response {
-    let b = Button::new(RichText::new(glyph).size(ICON_SIZE))
+    let label = RichText::new(glyph).size(ICON_SIZE);
+
+    let b = Button::new(label)
         .frame_when_inactive(false)
         .min_size(BUTTON);
     ui.add_enabled(enabled, b)
