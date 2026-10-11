@@ -25,6 +25,7 @@ kurbo = "0.13.1"
 colorgrad = { version = "0.9", default-features = false, features = ["std", "preset"] }
 fontdb = "0.24"
 skrifa = "0.44"
+egui-phosphor = "0.14"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 raw-window-handle = "0.6"

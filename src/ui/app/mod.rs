@@ -17,7 +17,7 @@ use crate::ui::fonts;
 use crate::ui::palette::Palette;
 use crate::ui::settings::{Settings, SettingsWindow};
 use crate::ui::title::window_title;
-use crate::ui::widgets::{path_bar, toolbar, CommandState};
+use crate::ui::widgets::{path_bar, titlebar, window_frame, CommandState};
 use eframe::egui::{self, Vec2};
 use std::path::PathBuf;
 use std::time::Instant;
@@ -204,11 +204,15 @@ impl eframe::App for SpaceMonger {
         self.poll_scan();
 
         let st = self.command_state();
-        let mut act = egui::Panel::top("toolbar")
-            .show(ui, |ui| toolbar(ui, &st))
-            .inner;
         let pal = self.palette(&ctx);
         let (bar_font, bar_h) = (self.settings.bar_font(), self.settings.bar_height());
+        let title = window_title(self.tree.as_ref(), &self.selection, &self.zoom);
+        let mut act = egui::Panel::top("titlebar")
+            .exact_size(titlebar::HEIGHT)
+            .resizable(false)
+            .frame(egui::Frame::NONE.fill(ctx.global_style().visuals.panel_fill))
+            .show(ui, |ui| titlebar(ui, &st, &self.settings.keys, &title))
+            .inner;
         let tm = egui::CentralPanel::no_frame()
             .frame(egui::Frame::NONE.fill(pal.background))
             .show(ui, |ui| {
@@ -237,9 +241,14 @@ impl eframe::App for SpaceMonger {
             self.apply_settings(&ctx);
         }
 
+        window_frame(&ctx);
+
+        // The taskbar still shows the title.
         let title = window_title(self.tree.as_ref(), &self.selection, &self.zoom);
         if title != self.title {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
+            // The title bar drew the old one.
+            ctx.request_repaint();
             self.title = title;
         }
 
