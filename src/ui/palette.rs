@@ -39,37 +39,10 @@ const BOX_LIGHT: [Color32; 24] = [
     c(0xBF, 0x7F, 0xBF),
 ];
 
-const BOX_DARK: [Color32; 24] = [
-    c(0x8F, 0x3F, 0x3F),
-    c(0x90, 0x60, 0x32),
-    c(0x8A, 0x82, 0x28),
-    c(0x3F, 0x78, 0x3F),
-    c(0x35, 0x78, 0x78),
-    c(0x55, 0x55, 0x9A),
-    c(0x62, 0x62, 0x62),
-    c(0x82, 0x42, 0x82),
-    c(0x75, 0x48, 0x48),
-    c(0x78, 0x58, 0x3F),
-    c(0x78, 0x72, 0x40),
-    c(0x48, 0x70, 0x48),
-    c(0x42, 0x70, 0x70),
-    c(0x5A, 0x5A, 0x85),
-    c(0x50, 0x50, 0x50),
-    c(0x70, 0x48, 0x70),
-    c(0x55, 0x28, 0x28),
-    c(0x55, 0x3A, 0x20),
-    c(0x55, 0x50, 0x18),
-    c(0x28, 0x50, 0x28),
-    c(0x25, 0x50, 0x50),
-    c(0x38, 0x38, 0x70),
-    c(0x38, 0x38, 0x38),
-    c(0x50, 0x28, 0x50),
-];
-
 /// Where the depth colours come from.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum Scheme {
-    /// The original SpaceMonger rainbow (with its own dark-mode table).
+    /// The original SpaceMonger rainbow.
     #[default]
     Classic,
     Turbo,
@@ -187,9 +160,15 @@ pub struct Palette {
 }
 
 impl Palette {
-    pub fn new(dark: bool, s: &Settings) -> Self {
+    /// Map background. The window theme does not change it.
+    pub const BACKGROUND: Color32 = c(238, 238, 238);
+    /// Label colour. The window theme does not change it.
+    pub const TEXT: Color32 = Color32::BLACK;
+    /// Outline colour when the settings don't pick one.
+    pub const BORDER: Color32 = c(0x55, 0x55, 0x55);
+
+    pub fn new(s: &Settings) -> Self {
         let Tiles {
-            scheme,
             ref colors,
             borders,
             border: border_line,
@@ -197,20 +176,13 @@ impl Palette {
             selection_color,
             gap,
             hover,
+            ..
         } = s.tiles;
         let (size, shadow) = (s.labels.font_size, s.labels.shadow);
-        // Only the classic scheme has dark-mode colours of its own.
-        let boxes = match (dark, scheme) {
-            (true, Scheme::Classic) => classic(&BOX_DARK, colors.len()),
-            _ => colors.clone(),
-        };
-        let (background, text) = if dark {
-            (c(0x16, 0x17, 0x18), c(0xD0, 0xD0, 0xC8))
-        } else {
-            (c(0xEE, 0xEE, 0xEE), Color32::BLACK)
-        };
-        let border = border_line.color.unwrap_or(Self::theme_border(dark));
-        // The theme's selection is its text colour with the background colour on it.
+        let boxes = colors.clone();
+        let (background, text) = (Self::BACKGROUND, Self::TEXT);
+        let border = border_line.color.unwrap_or(Self::BORDER);
+        // The standard selection is the text colour with the background colour on it.
         let selection = selection_color.unwrap_or(text);
         let selection_text = match selection_color {
             None => background,
@@ -232,24 +204,6 @@ impl Palette {
             shadow,
             shown: s.labels.shown,
             text_scale: size / 10.0,
-        }
-    }
-
-    /// The theme's border colour (when the settings don't pick one).
-    pub fn theme_border(dark: bool) -> Color32 {
-        if dark {
-            c(0x10, 0x10, 0x10)
-        } else {
-            c(0x55, 0x55, 0x55)
-        }
-    }
-
-    /// The theme's selection colour (its text colour).
-    pub fn theme_selection(dark: bool) -> Color32 {
-        if dark {
-            c(0xD0, 0xD0, 0xC8)
-        } else {
-            Color32::BLACK
         }
     }
 
@@ -278,19 +232,17 @@ mod tests {
     #[test]
     fn selection_colour() {
         let mut s = Settings::default();
-        let p = Palette::new(false, &s);
+        let p = Palette::new(&s);
         assert_eq!(
             (p.selection, p.selection_text),
             (Color32::BLACK, p.background)
         );
         s.tiles.selection_color = Some(Color32::YELLOW);
-        let p = Palette::new(false, &s);
+        let p = Palette::new(&s);
         assert_eq!(
             (p.selection, p.selection_text),
             (Color32::YELLOW, Color32::BLACK)
         );
-        let p = Palette::new(true, &s);
-        assert_eq!(p.selection_text, Color32::BLACK);
     }
 
     #[test]

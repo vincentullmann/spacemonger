@@ -16,8 +16,9 @@ use crate::ui::error::AppError;
 use crate::ui::fonts;
 use crate::ui::palette::Palette;
 use crate::ui::settings::{Settings, SettingsWindow};
-use crate::ui::title::window_title;
-use crate::ui::widgets::{path_bar, toolbar, CommandState};
+use crate::ui::theme::Theme;
+use crate::ui::title::{scan_title, window_title};
+use crate::ui::widgets::{path_bar, titlebar, window_frame, CommandState};
 use eframe::egui::{self, Vec2};
 use std::path::PathBuf;
 use std::time::Instant;
@@ -60,10 +61,7 @@ pub struct SpaceMonger {
 impl SpaceMonger {
     pub fn new(cc: &eframe::CreationContext<'_>, open_path: Option<PathBuf>) -> Self {
         let settings = Settings::load(cc.storage);
-        // Buttons, check boxes, drop-downs etc. show a hand cursor (both themes).
-        cc.egui_ctx.all_styles_mut(|s| {
-            s.visuals.interact_cursor = Some(egui::CursorIcon::PointingHand);
-        });
+        Theme::install(&cc.egui_ctx);
         let mut app = Self {
             tree: None,
             live: None,
@@ -103,8 +101,8 @@ impl SpaceMonger {
         ctx.theme() == egui::Theme::Dark
     }
 
-    fn palette(&self, ctx: &egui::Context) -> Palette {
-        Palette::new(self.dark(ctx), &self.settings)
+    fn palette(&self) -> Palette {
+        Palette::new(&self.settings)
     }
 
     /// Push changed settings out to egui, the camera, the tree and the layout.
@@ -187,10 +185,16 @@ impl eframe::App for SpaceMonger {
         let ctx = ui.ctx().clone();
         #[cfg(target_os = "linux")]
         {
-            let bg = self.palette(&ctx).background;
+            let bg = self.palette().background;
             crate::ui::x11_sync::install(frame, &ctx, bg);
             crate::ui::x11_dialog::remember_main(frame);
             crate::ui::x11_sync::set_background(bg);
+            crate::ui::x11_wm::install(frame);
+            let full = ctx.input(|i| {
+                let v = i.viewport();
+                v.maximized.unwrap_or(false) || v.fullscreen.unwrap_or(false)
+            });
+            crate::ui::x11_wm::set_shadow(!full);
         }
         #[cfg(not(target_os = "linux"))]
         let _ = frame;
@@ -204,11 +208,26 @@ impl eframe::App for SpaceMonger {
         self.poll_scan();
 
         let st = self.command_state();
-        let mut act = egui::Panel::top("toolbar")
-            .show(ui, |ui| toolbar(ui, &st))
-            .inner;
-        let pal = self.palette(&ctx);
+        let pal = self.palette();
         let (bar_font, bar_h) = (self.settings.bar_font(), self.settings.bar_height());
+        let (title, progress) = match &self.scan {
+            Some(job) => {
+                let (t, frac) = scan_title(job);
+                (t, Some(frac))
+            }
+            None => (
+                window_title(self.tree.as_ref(), &self.selection, &self.zoom),
+                None,
+            ),
+        };
+        let mut act = egui::Panel::top("titlebar")
+            .exact_size(titlebar::HEIGHT)
+            .resizable(false)
+            .frame(egui::Frame::NONE.fill(ctx.global_style().visuals.panel_fill))
+            .show(ui, |ui| {
+                titlebar(ui, &st, &self.settings.keys, &title, progress)
+            })
+            .inner;
         let tm = egui::CentralPanel::no_frame()
             .frame(egui::Frame::NONE.fill(pal.background))
             .show(ui, |ui| {
@@ -237,15 +256,24 @@ impl eframe::App for SpaceMonger {
             self.apply_settings(&ctx);
         }
 
+        window_frame(&ctx);
+
+        // The taskbar still shows the title.
         let title = window_title(self.tree.as_ref(), &self.selection, &self.zoom);
         if title != self.title {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
+            // The title bar drew the old one.
+            ctx.request_repaint();
             self.title = title;
         }
 
         // This frame is drawn at the window's current size: let the WM move on once it's shown.
         #[cfg(target_os = "linux")]
         crate::ui::x11_sync::frame_drawn(&ctx);
+    }
+
+    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        crate::ui::widgets::release_after_grab(ctx, raw_input);
     }
 
     /// Runs once before every [`Self::ui`]. eframe 0.36 has no `update`; this is that hook.
@@ -256,7 +284,7 @@ impl eframe::App for SpaceMonger {
     }
 
     fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {
-        Palette::new(visuals.dark_mode, &self.settings)
+        Theme::of(visuals.dark_mode)
             .background
             .to_normalized_gamma_f32()
     }

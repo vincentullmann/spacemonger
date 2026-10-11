@@ -109,6 +109,8 @@ fn load_family(name: &str) -> Option<(Vec<u8>, u32)> {
 /// default fonts as fallback. An empty name keeps egui's default font.
 pub fn apply(ctx: &egui::Context, family: &str) {
     let mut defs = FontDefinitions::default();
+    // Icon font for the title bar, as a fallback after the text font.
+    egui_phosphor::add_to_fonts(&mut defs, egui_phosphor::Variant::Regular);
     let mut list = defs
         .families
         .get(&FontFamily::Proportional)
