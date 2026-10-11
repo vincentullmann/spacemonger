@@ -135,7 +135,6 @@ pub fn scan(ui: &mut Ui, s: &mut Settings) {
 }
 
 pub fn display(ui: &mut Ui, s: &mut Settings) {
-    let dark = ui.visuals().dark_mode;
     let (f, d) = (&mut s.text, Text::default());
     group(ui, "Text", |r| {
         r.row(
@@ -194,10 +193,10 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
         );
         r.row(
             "Border",
-            "Colour and width (in screen pixels) of the box outlines. The colour follows the theme until you pick one.",
+            "Colour and width (in screen pixels) of the box outlines. Leave the colour unset for the standard grey.",
             &mut t.border,
             &d.border,
-            |ui, v| form::outline(ui, v, Palette::theme_border(dark), "theme"),
+            |ui, v| form::outline(ui, v, Palette::BORDER, "default"),
         );
         r.row(
             "Hover border",
@@ -211,7 +210,7 @@ pub fn display(ui: &mut Ui, s: &mut Settings) {
             "Fill and outline of selected boxes; their labels switch to black or white to stay readable.",
             &mut t.selection_color,
             &d.selection_color,
-            |ui, v| form::auto_color(ui, v, Palette::theme_selection(dark), "theme"),
+            |ui, v| form::auto_color(ui, v, Palette::TEXT, "default"),
         );
         r.row(
             "Gap",

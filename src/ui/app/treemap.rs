@@ -24,7 +24,7 @@ impl SpaceMonger {
             &painter,
             resp.rect.min,
             ppp,
-            self.palette(ui.ctx()),
+            self.palette(),
             self.settings.map_font(),
         );
         let (w, h) = (resp.rect.width(), resp.rect.height());
