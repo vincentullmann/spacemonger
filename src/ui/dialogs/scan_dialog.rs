@@ -1,10 +1,9 @@
 //! Progress while a scan runs, floating over the treemap as it fills in. Not modal: it can be
 //! dragged out of the way.
 
-use super::confirm_delete::buttons;
 use crate::core::fs::ScanJob;
 use crate::ui::theme::accent;
-use crate::ui::widgets::dialog::Dialog;
+use crate::ui::widgets::dialog::{button_row, Dialog};
 use crate::utils::text::elide_start;
 use eframe::egui::{self, Align2, Vec2};
 use std::sync::atomic::Ordering;
@@ -47,7 +46,7 @@ pub fn scan_dialog(ctx: &egui::Context, job: &ScanJob) -> bool {
                     .fill(accent(ui.visuals())),
             );
             ui.add_space(10.0);
-            buttons(ui, |ui| {
+            button_row(ui, |ui| {
                 let cancel = ui.button("Cancel").clicked();
                 if ui.button(if paused { "Resume" } else { "Pause" }).clicked() {
                     ctl.set_paused(!paused);

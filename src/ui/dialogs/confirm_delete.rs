@@ -1,7 +1,7 @@
 //! "Move to trash?" confirmation.
 
-use crate::ui::widgets::dialog::Dialog;
-use eframe::egui::{self, Align, Layout};
+use crate::ui::widgets::dialog::{button_row, Dialog};
+use eframe::egui;
 use std::path::PathBuf;
 
 /// Ask before moving `paths` to the trash. `Some(true)` = go ahead, `Some(false)` = cancel,
@@ -26,7 +26,7 @@ pub fn confirm_delete(ctx: &egui::Context, paths: &[PathBuf]) -> Option<bool> {
                     });
             }
             ui.add_space(12.0);
-            buttons(ui, |ui| {
+            button_row(ui, |ui| {
                 // Right to left: the default action sits at the far right.
                 if ui.button("Move to Trash").clicked() {
                     Some(true)
@@ -42,11 +42,4 @@ pub fn confirm_delete(ctx: &egui::Context, paths: &[PathBuf]) -> Option<bool> {
     } else {
         shown.inner
     }
-}
-
-/// A row of buttons along the bottom right of a dialog, laid out right to left.
-pub(super) fn buttons<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    let size = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
-    ui.allocate_ui_with_layout(size, Layout::right_to_left(Align::Center), add)
-        .inner
 }

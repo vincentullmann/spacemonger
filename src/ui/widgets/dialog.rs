@@ -207,3 +207,10 @@ pub fn header(ui: &mut Ui, title: &str, closable: bool) -> bool {
     })
     .inner
 }
+
+/// A row of buttons along the bottom right of a dialog, laid out right to left.
+pub fn button_row<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let size = Vec2::new(ui.available_width(), ui.spacing().interact_size.y);
+    ui.allocate_ui_with_layout(size, Layout::right_to_left(Align::Center), add)
+        .inner
+}
