@@ -131,7 +131,7 @@ fn progress_line(ui: &Ui, full: Rect, frac: f32) {
         Vec2::new(w, PROGRESS_H),
     );
     ui.painter()
-        .rect_filled(line, 0.0, ui.visuals().selection.bg_fill);
+        .rect_filled(line, 0.0, crate::ui::theme::accent(ui.visuals()));
 }
 
 /// Drag empty bar space to move the window, double-click it to toggle maximised.
@@ -268,6 +268,7 @@ fn main_menu(ui: &mut Ui, st: &CommandState, keys: &Keymap) -> Option<Action> {
     let mut act = None;
     let (resp, _) = egui::containers::menu::MenuButton::from_button(button).ui(ui, |ui| {
         ui.set_min_width(200.0);
+        super::flat_items(ui);
         let mut item = |ui: &mut Ui, glyph: &str, label: &str, enabled: bool, c: Command| {
             let shortcut = keys
                 .for_command(c)

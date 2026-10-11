@@ -3,6 +3,7 @@
 
 use super::{Line, Shown};
 use crate::ui::fonts;
+use crate::ui::widgets::flat_items;
 use eframe::egui::{self, emath::Numeric, Color32, Response, RichText, Ui};
 use std::ops::RangeInclusive;
 
@@ -47,7 +48,7 @@ pub fn pad_to(ui: &mut Ui, x: f32) {
 pub fn changed_dot(ui: &mut Ui, changed: bool) {
     let (dot, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
     if changed {
-        let color = ui.visuals().hyperlink_color;
+        let color = crate::ui::theme::accent(ui.visuals());
         ui.painter().circle_filled(dot.center(), 3.0, color);
     }
 }
@@ -72,8 +73,8 @@ pub fn group(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Rows)) {
 
 /// A section: a title in the strong text colour with a rule under it.
 pub fn section(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Ui)) {
-    ui.add_space(14.0);
-    ui.label(RichText::new(title).strong());
+    ui.add_space(18.0);
+    ui.label(heading(title));
     ui.separator();
     add(ui);
 }
@@ -175,6 +176,7 @@ pub fn choice<T: PartialEq + Copy>(
     let r = egui::ComboBox::from_id_salt(id)
         .selected_text(shown)
         .show_ui(ui, |ui| {
+            flat_items(ui);
             for (o, label) in options {
                 ui.selectable_value(v, *o, *label);
             }
@@ -206,6 +208,7 @@ pub fn shown(ui: &mut Ui, id: &str, v: &mut Shown) -> Response {
         .width(260.0)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show_ui(ui, |ui| {
+            flat_items(ui);
             for (label, field) in v.fields() {
                 ui.checkbox(field, label);
             }
@@ -293,6 +296,7 @@ pub fn font_family(ui: &mut Ui, family: &mut String) -> Response {
         .selected_text(shown.to_string())
         .height(f32::INFINITY)
         .show_ui(ui, |ui| {
+            flat_items(ui);
             // Each name in its own font. Only the rows in view are drawn (and their fonts
             // loaded), so a long font list stays quick.
             let names = fonts::system_families();
@@ -352,4 +356,9 @@ pub fn excludes(ui: &mut Ui, list: &mut [String]) -> Response {
 /// A checkbox without a label of its own (the row has one).
 pub fn check(ui: &mut Ui, v: &mut bool) -> Response {
     ui.checkbox(v, "")
+}
+
+/// A section title: bold, in the strong text colour.
+pub fn heading(title: &str) -> RichText {
+    RichText::new(title).family(fonts::bold_family()).strong()
 }

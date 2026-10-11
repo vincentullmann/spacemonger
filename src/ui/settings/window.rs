@@ -118,6 +118,9 @@ impl SettingsWindow {
                 if ui.input(|i| i.viewport().close_requested()) {
                     self.close();
                 }
+                if self.capture.is_none() {
+                    super::zoom_keys(ui.ctx(), &mut s.general.ui_zoom);
+                }
                 self.window_ui(ui, s);
             },
         );
@@ -224,11 +227,12 @@ impl SettingsWindow {
             },
         );
         ui.spacing_mut().item_spacing.y = 2.0;
+        crate::ui::widgets::flat_items(ui);
         for (group, pages) in SIDEBAR {
             ui.add_space(10.0);
             ui.horizontal(|ui| {
                 ui.add_space(PADDING - 10.0);
-                ui.label(RichText::new(group).small().weak());
+                ui.weak(group);
             });
             ui.add_space(2.0);
             for &(page, glyph, name) in pages {

@@ -2,6 +2,7 @@
 
 use super::form::{self, group, rows};
 use super::{General, Labels, Layout, PathBar, Scan, Settings, Text, Theme, Tiles, Tooltips};
+use crate::constants::UI_ZOOM;
 use crate::ui::palette::{Palette, Scheme};
 use crate::utils::format::SizeFormat;
 use eframe::egui::Ui;
@@ -127,12 +128,28 @@ pub fn appearance(ui: &mut Ui, s: &mut Settings) {
             |ui, v| form::choice(ui, "theme", v, &THEMES),
         );
         r.row(
-            "Font",
+            "UI zoom",
+            "Scales the whole window: text, buttons, bars and the map. Also Ctrl + / Ctrl - / Ctrl 0.",
+            &mut g.ui_zoom,
+            &dg.ui_zoom,
+            |ui, v| form::number(ui, v, UI_ZOOM.0..=UI_ZOOM.1, 5.0, "%"),
+        );
+        r.row(
+            "UI font size",
+            "Text size of menus, dialogs, settings and the title bar. Map labels have their own.",
+            &mut g.ui_font_size,
+            &dg.ui_font_size,
+            |ui, v| form::number(ui, v, 9.0..=20.0, 0.5, "px"),
+        );
+        r.row(
+            "Map font",
             "Font for box labels and the path bar. Default is the built-in font.",
             &mut f.family,
             &d.family,
             form::font_family,
         );
+    });
+    group(ui, "Formats", |r| {
         r.row(
             "Size format",
             "How file sizes are shown in labels and tips. Totals (title bar, free space) use binary or decimal units.",

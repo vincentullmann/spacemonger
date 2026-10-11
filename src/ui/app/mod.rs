@@ -62,6 +62,7 @@ impl SpaceMonger {
     pub fn new(cc: &eframe::CreationContext<'_>, open_path: Option<PathBuf>) -> Self {
         let settings = Settings::load(cc.storage);
         Theme::install(&cc.egui_ctx);
+        cc.egui_ctx.options_mut(|o| o.zoom_with_keyboard = false);
         let mut app = Self {
             tree: None,
             live: None,
@@ -115,6 +116,9 @@ impl SpaceMonger {
         if old.is_none_or(|o| o.text.family != s.text.family) {
             fonts::apply(ctx, &s.text.family);
         }
+        if old.is_none_or(|o| o.general.ui_font_size != s.general.ui_font_size) {
+            fonts::set_ui_size(ctx, s.general.ui_font_size);
+        }
         if old.is_none_or(|o| o.format_options() != s.format_options()) {
             crate::utils::format::set_options(s.format_options());
         }
@@ -130,6 +134,20 @@ impl SpaceMonger {
             self.generation += 1;
         }
         self.applied = Some(self.settings.clone());
+    }
+
+    /// Ctrl + / Ctrl - / Ctrl 0 step the UI zoom setting (egui's own handling of those keys
+    /// is off, so the setting stays the one place the zoom comes from). The zoom itself is
+    /// applied once no mouse button is down, so dragging its slider doesn't rescale the
+    /// window under the pointer.
+    fn sync_zoom(&mut self, ctx: &egui::Context) {
+        let z = &mut self.settings.general.ui_zoom;
+        crate::ui::settings::zoom_keys(ctx, z);
+        let want = *z as f32 / 100.0;
+        let idle = !ctx.input(|i| i.pointer.any_down());
+        if idle && (ctx.zoom_factor() - want).abs() > 1e-4 {
+            ctx.set_zoom_factor(want);
+        }
     }
 
     /// Force a layout rebuild (the tree or layout settings changed).
@@ -243,6 +261,7 @@ impl eframe::App for SpaceMonger {
             .inner;
         act = act.or(tm);
 
+        self.sync_zoom(&ctx);
         if !self.modal_open() && !self.settings_window.capturing() && !ctx.text_edit_focused() {
             act = act.or(ctx.input(|i| self.settings.keys.action_for_keys(i)));
         }

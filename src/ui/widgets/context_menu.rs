@@ -7,6 +7,7 @@ use eframe::egui;
 pub fn context_menu(resp: &egui::Response, st: &CommandState) -> Option<Action> {
     let mut act = None;
     resp.context_menu(|ui| {
+        super::flat_items(ui);
         let mut item = |ui: &mut egui::Ui, enabled: bool, label: &str, a: Action| {
             if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
                 act = Some(a);

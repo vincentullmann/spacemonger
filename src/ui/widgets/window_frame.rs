@@ -26,13 +26,7 @@ pub fn window_frame(ctx: &egui::Context, radius: f32) {
     let r = ctx.content_rect();
     let layer = LayerId::new(Order::Foreground, Id::new("window_frame"));
 
-    let color = ctx
-        .global_style()
-        .visuals
-        .widgets
-        .noninteractive
-        .bg_stroke
-        .color;
+    let color = ctx.global_style().visuals.window_stroke.color;
     ctx.layer_painter(layer)
         .rect_stroke(r, radius, Stroke::new(1.0, color), StrokeKind::Inside);
 
