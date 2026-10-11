@@ -138,11 +138,12 @@ impl Theme {
             w.corner_radius = CORNER_RADIUS.into();
         }
 
-        // Selected items: a soft fill of the dimmed text colour, normal text on it. The accent
-        // is kept for progress, links, the changed marker and the text cursor.
+        // Selected items: a soft fill of the dimmed text colour, and the strong text colour
+        // so the label stays clear on that fill. The accent is kept for progress, links,
+        // the changed marker and the text cursor.
         visuals.hyperlink_color = self.accent_color;
         visuals.selection.bg_fill = self.text_color_dimmed.gamma_multiply(0.5);
-        visuals.selection.stroke.color = self.text_color_main;
+        visuals.selection.stroke.color = self.text_color_header;
         visuals.text_cursor.stroke.color = self.accent_color;
         // One glyph rasterizer for both themes. Dark mode thickens antialiased edges, which
         // makes the treemap's black labels look like they grew a shadow.
@@ -186,6 +187,7 @@ mod tests {
         assert_eq!(visuals.text_color(), theme.text_color_main);
         assert_eq!(visuals.weak_text_color(), theme.text_color_dimmed);
         assert_eq!(visuals.strong_text_color(), theme.text_color_header);
+        assert_eq!(visuals.selection.stroke.color, theme.text_color_header);
         assert_eq!(visuals.hyperlink_color, theme.accent_color);
         assert_eq!(accent(&visuals), theme.accent_color);
     }
