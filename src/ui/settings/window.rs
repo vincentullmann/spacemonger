@@ -6,10 +6,12 @@
 //! compositor can show them (square without one). Pages are picked in a sidebar on the left.
 
 use super::{form, pages, Settings};
+use crate::constants::APP_ID;
 use crate::ui::keymap::{same_shortcut, shortcut_text, Command, Keymap};
 use crate::ui::platform;
+use crate::ui::widgets::buttons::{add_button, reset_button};
 use crate::ui::widgets::dialog::{self, HEADER_H, PADDING};
-use crate::ui::widgets::{titlebar, window_frame};
+use crate::ui::widgets::{move_on_drag, window_frame};
 use eframe::egui::{
     self, Align, CornerRadius, Event, Id, Key, KeyboardShortcut, Layout, Margin, Rect, RichText,
     Sense, Stroke, UiBuilder, Vec2, ViewportBuilder, ViewportId,
@@ -107,7 +109,7 @@ impl SettingsWindow {
             .with_title(TITLE)
             .with_window_type(egui::X11WindowType::Dialog)
             .with_taskbar(false)
-            .with_app_id("spacemonger")
+            .with_app_id(APP_ID)
             .with_decorations(false)
             .with_transparent(true)
             .with_inner_size([760.0, 600.0])
@@ -203,7 +205,7 @@ impl SettingsWindow {
                     });
             });
 
-        titlebar::move_on_drag(ui, &drag, |p| !close_rect.contains(p));
+        move_on_drag(ui, &drag, |p| !close_rect.contains(p));
         if close {
             self.close();
         }
@@ -314,10 +316,7 @@ impl SettingsWindow {
                         form::line(
                             ui,
                             |ui| {
-                                reset_clicked = ui
-                                    .add_enabled(!is_default, egui::Button::new("⟲").small())
-                                    .on_hover_text("Reset to default")
-                                    .clicked();
+                                reset_clicked = reset_button(ui, !is_default);
                             },
                             |ui| {
                                 let text = if is_default {
@@ -358,7 +357,7 @@ impl SettingsWindow {
                                     }
                                 }
                                 let adding = self.capture == Some((cmd, None));
-                                if form::add_button(ui, adding)
+                                if add_button(ui, adding)
                                     .on_hover_text("Add a shortcut")
                                     .clicked()
                                 {

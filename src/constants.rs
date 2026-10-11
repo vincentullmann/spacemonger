@@ -4,6 +4,12 @@ use std::time::Duration;
 
 pub const APP_NAME: &str = "SpaceMonger One";
 
+/// Application id: window class / Wayland app id, and eframe's storage name.
+pub const APP_ID: &str = "spacemonger";
+
+/// Size of icon glyphs on buttons (title bar, dialog ×).
+pub const ICON_SIZE: f32 = 16.0;
+
 /// Zoom factor per point of wheel scroll at the default zoom speed (a mouse notch is ~50
 /// points, about 1.2x).
 pub const WHEEL_ZOOM: f64 = 0.004;

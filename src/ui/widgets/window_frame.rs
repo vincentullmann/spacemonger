@@ -1,12 +1,11 @@
-//! What the system frame did before decorations were turned off: a thin border, resizing from
-//! the window's edges and corners (neither while maximised or full screen), and handing moves
-//! and resizes to the window manager.
+//! What the system frame did before decorations were turned off: a thin border, and resizing
+//! from the window's edges and corners (neither while maximised or full screen).
 
+use super::window_drag::wm_grab;
 use eframe::egui::{
-    self, CursorIcon, Event, Id, LayerId, Modifiers, Order, PointerButton, Pos2, RawInput, Rect,
-    ResizeDirection, Sense, Stroke, StrokeKind, Ui, UiBuilder, ViewportCommand, ViewportId,
+    self, CursorIcon, Id, LayerId, Order, Rect, ResizeDirection, Sense, Stroke, StrokeKind, Ui,
+    UiBuilder, ViewportCommand,
 };
-use std::collections::HashMap;
 
 /// Width of the grab zone along each edge.
 const EDGE: f32 = 6.0;
@@ -80,58 +79,5 @@ fn cursor(dir: ResizeDirection) -> CursorIcon {
         D::NorthWest => CursorIcon::ResizeNorthWest,
         D::SouthEast => CursorIcon::ResizeSouthEast,
         D::SouthWest => CursorIcon::ResizeSouthWest,
-    }
-}
-
-/// Send a move or resize that the window manager carries out (`StartDrag`, `BeginResize`).
-/// The WM takes the pointer, so the button release never reaches us, and egui would think the
-/// button is still down: no hover until the next click. [`GrabRelease`] makes it up.
-pub fn wm_grab(ctx: &egui::Context, cmd: ViewportCommand) {
-    ctx.send_viewport_cmd(cmd);
-    let at = ctx.input(|i| (i.pointer.interact_pos(), i.modifiers));
-    if let (Some(pos), modifiers) = at {
-        let id = ctx.viewport_id();
-        ctx.plugin_or_default::<GrabRelease>()
-            .lock()
-            .pending
-            .insert(id, (pos, modifiers));
-    }
-    ctx.request_repaint();
-}
-
-/// Adds the button release a [`wm_grab`] swallows to the next input of that viewport.
-/// An egui plugin rather than the app's `raw_input_hook`, which only sees the main window.
-#[derive(Default)]
-pub struct GrabRelease {
-    pending: HashMap<ViewportId, (Pos2, Modifiers)>,
-}
-
-impl egui::Plugin for GrabRelease {
-    fn debug_name(&self) -> &'static str {
-        "GrabRelease"
-    }
-
-    fn input_hook(&mut self, _ctx: &egui::Context, raw: &mut RawInput) {
-        let Some((pos, modifiers)) = self.pending.remove(&raw.viewport_id) else {
-            return;
-        };
-        let released = raw.events.iter().any(|e| {
-            matches!(
-                e,
-                Event::PointerButton {
-                    button: PointerButton::Primary,
-                    pressed: false,
-                    ..
-                }
-            )
-        });
-        if !released {
-            raw.events.push(Event::PointerButton {
-                pos,
-                button: PointerButton::Primary,
-                pressed: false,
-                modifiers,
-            });
-        }
     }
 }

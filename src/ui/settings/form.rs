@@ -3,6 +3,7 @@
 
 use super::{Line, Shown};
 use crate::ui::fonts;
+use crate::ui::widgets::buttons::{add_button, reset_button};
 use crate::ui::widgets::flat_items;
 use eframe::egui::{self, emath::Numeric, Color32, Response, RichText, Ui};
 use std::ops::RangeInclusive;
@@ -109,11 +110,7 @@ impl Rows<'_> {
             line(
                 ui,
                 |ui| {
-                    let clicked = ui
-                        .add_enabled(changed, egui::Button::new("⟲").small())
-                        .on_hover_text("Reset to default")
-                        .clicked();
-                    if clicked {
+                    if reset_button(ui, changed) {
                         reset.set(true);
                     }
                 },
@@ -288,20 +285,6 @@ pub fn colors(ui: &mut Ui, colors: &mut Vec<Color32>) -> Response {
         }
     })
     .response
-}
-
-/// A small frameless "+" ("…" while `waiting`): no background until hovered, then a fill
-/// without an outline.
-pub fn add_button(ui: &mut Ui, waiting: bool) -> Response {
-    ui.scope(|ui| {
-        flat_items(ui);
-        ui.add(
-            egui::Button::new(if waiting { "…" } else { "+" })
-                .frame_when_inactive(false)
-                .selected(waiting),
-        )
-    })
-    .inner
 }
 
 /// System font picker ("Default" is egui's built-in font).

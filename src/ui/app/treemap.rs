@@ -63,7 +63,11 @@ impl SpaceMonger {
             return None;
         }
         let mut act = self.clicks(&resp, &d, mods);
-        act = act.or(context_menu(&resp, &self.command_state()));
+        act = act.or(context_menu(
+            &resp,
+            &self.command_state(),
+            &self.settings.keys,
+        ));
         self.show_infotip(ui, &resp);
 
         if self.camera.anim.is_some() {
