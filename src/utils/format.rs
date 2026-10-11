@@ -94,7 +94,12 @@ pub fn file_size(size: u64) -> String {
 
 /// "1,234,567 bytes"
 pub fn bytes(size: u64) -> String {
-    format!("{} bytes", size.to_formatted_string(&Locale::en))
+    format!("{} bytes", count(size))
+}
+
+/// "1,234,567": a count with thousands separators.
+pub fn count(n: u64) -> String {
+    n.to_formatted_string(&Locale::en)
 }
 
 /// "05 Mar 2024   14:07:09" in local time (or the date format from the options).

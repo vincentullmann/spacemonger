@@ -11,4 +11,6 @@ pub enum FsError {
     },
     #[error("Not a folder: {}", .0.display())]
     NotAFolder(PathBuf),
+    #[error("The scan stopped unexpectedly")]
+    ScanPanicked,
 }

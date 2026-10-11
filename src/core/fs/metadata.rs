@@ -23,8 +23,18 @@ pub(super) struct Meta {
     pub created: i64,
 }
 
-pub(super) fn meta(path: &Path) -> Option<Meta> {
-    let m = fs::symlink_metadata(path).ok()?;
+/// Metadata of the file at `path` (not following a symlink).
+pub(super) fn meta(path: &Path) -> std::io::Result<Meta> {
+    Ok(from_metadata(path, &fs::symlink_metadata(path)?))
+}
+
+/// Metadata of a directory entry. Stats relative to the open directory where the platform
+/// allows, which saves resolving the full path again. `path` is the entry's full path.
+pub(super) fn entry_meta(entry: &fs::DirEntry, path: &Path) -> std::io::Result<Meta> {
+    Ok(from_metadata(path, &entry.metadata()?))
+}
+
+fn from_metadata(path: &Path, m: &fs::Metadata) -> Meta {
     let ft = m.file_type();
     let secs = |t: std::io::Result<std::time::SystemTime>| {
         t.ok()
@@ -32,11 +42,11 @@ pub(super) fn meta(path: &Path) -> Option<Meta> {
             .map_or(0, |d| d.as_secs() as i64)
     };
     let (mtime, created) = (secs(m.modified()), secs(m.created()));
-    let alloc = filesize::file_real_size_fast(path, &m).unwrap_or(m.len());
+    let alloc = filesize::file_real_size_fast(path, m).unwrap_or(m.len());
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
-        Some(Meta {
+        Meta {
             is_dir: ft.is_dir(),
             is_file: ft.is_file(),
             dev: m.dev(),
@@ -46,11 +56,11 @@ pub(super) fn meta(path: &Path) -> Option<Meta> {
             alloc,
             mtime,
             created,
-        })
+        }
     }
     #[cfg(not(unix))]
     {
-        Some(Meta {
+        Meta {
             is_dir: ft.is_dir(),
             is_file: ft.is_file(),
             dev: 0,
@@ -60,6 +70,6 @@ pub(super) fn meta(path: &Path) -> Option<Meta> {
             alloc,
             mtime,
             created,
-        })
+        }
     }
 }

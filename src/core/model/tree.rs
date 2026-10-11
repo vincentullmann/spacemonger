@@ -10,6 +10,8 @@ pub struct Tree {
     pub free_space: u64,
     pub num_files: u64,
     pub num_folders: u64,
+    /// Folders and entries the scan couldn't read.
+    pub unreadable: u64,
     /// Number of entries currently hidden from the view by the user.
     pub hidden_count: usize,
     /// Entries named `.something` are left out (see [`Tree::set_dotfiles_hidden`]).
@@ -168,6 +170,21 @@ impl Tree {
 mod tests {
     use super::*;
 
+    /// A tree over `root` with the counts the tests start from.
+    fn tree(root: Folder, root_path: &str) -> Tree {
+        Tree {
+            root,
+            root_path: PathBuf::from(root_path),
+            total_space: 0,
+            free_space: 0,
+            num_files: 3,
+            num_folders: 1,
+            unreadable: 0,
+            hidden_count: 0,
+            dotfiles_hidden: false,
+        }
+    }
+
     fn file(name: &str, size: u64) -> Entry {
         Entry {
             name: name.into(),
@@ -201,16 +218,7 @@ mod tests {
             ],
             total: 22,
         };
-        let mut t = Tree {
-            root,
-            root_path: PathBuf::from("/"),
-            total_space: 0,
-            free_space: 0,
-            num_files: 3,
-            num_folders: 1,
-            hidden_count: 0,
-            dotfiles_hidden: false,
-        };
+        let mut t = tree(root, "/");
         t.hide(&[0], 0); // d/f
         assert_eq!((t.root.total, t.root.entries[0].size), (12, 5));
         t.hide(&[], 0); // d
@@ -244,16 +252,7 @@ mod tests {
             ],
             total: 22,
         };
-        let mut t = Tree {
-            root,
-            root_path: PathBuf::from("/"),
-            total_space: 0,
-            free_space: 0,
-            num_files: 3,
-            num_folders: 1,
-            hidden_count: 0,
-            dotfiles_hidden: false,
-        };
+        let mut t = tree(root, "/");
         t.set_dotfiles_hidden(true);
         assert_eq!((t.root.total, t.root.entries[0].size), (5, 5));
         t.hide(&[0], 1); // d/g
@@ -285,16 +284,7 @@ mod tests {
             ],
             total: 22,
         };
-        let mut t = Tree {
-            root,
-            root_path: PathBuf::from("/r"),
-            total_space: 0,
-            free_space: 0,
-            num_files: 3,
-            num_folders: 1,
-            hidden_count: 0,
-            dotfiles_hidden: false,
-        };
+        let mut t = tree(root, "/r");
         t.remove(&[], 0); // d, with its two files
         assert_eq!((t.num_files, t.num_folders, t.root.total), (1, 0, 7));
         // A path into the removed folder no longer panics.
@@ -303,19 +293,13 @@ mod tests {
 
     #[test]
     fn hiding_a_left_out_dotfile_subtracts_nothing() {
-        let mut t = Tree {
-            root: Folder {
+        let mut t = tree(
+            Folder {
                 entries: vec![file(".x", 7), file("y", 3)],
                 total: 10,
             },
-            root_path: PathBuf::from("/"),
-            total_space: 0,
-            free_space: 0,
-            num_files: 2,
-            num_folders: 0,
-            hidden_count: 0,
-            dotfiles_hidden: false,
-        };
+            "/",
+        );
         t.set_dotfiles_hidden(true);
         t.hide(&[], 0);
         assert_eq!(t.root.total, 3);

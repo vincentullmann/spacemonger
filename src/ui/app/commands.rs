@@ -20,9 +20,8 @@ impl SpaceMonger {
         if !is_drive {
             self.settings.layout.show_free = false;
         }
-        if let Some(job) = self.scan.take() {
-            job.cancel();
-        }
+        // Dropping a running job cancels it.
+        self.scan = None;
         self.tree = None;
         self.live = None;
         self.zoom.clear();
@@ -49,6 +48,12 @@ impl SpaceMonger {
                     self.live = Some(t);
                     self.invalidate();
                 }
+            }
+            ScanStatus::Failed(e) => {
+                self.error = Some(e.into());
+                self.scan = None;
+                self.live = None;
+                self.invalidate();
             }
             ScanStatus::Finished(mut tree) => {
                 if let Some(t) = &mut tree {
@@ -183,7 +188,6 @@ impl SpaceMonger {
 
         if let Some(job) = &self.scan {
             if scan_dialog(ctx, job) {
-                job.cancel();
                 self.scan = None;
                 self.live = None;
                 self.invalidate();
