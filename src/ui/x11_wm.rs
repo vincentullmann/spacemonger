@@ -14,6 +14,7 @@ use eframe::egui::Pos2;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 use x11rb::connection::Connection;
 use x11rb::protocol::xproto::{
     AtomEnum, ClientMessageEvent, ConnectionExt as _, EventMask, ImageFormat, PropMode, Window,
@@ -34,6 +35,10 @@ struct Wm {
     conn: RustConnection,
     window: Window,
     root: Window,
+    /// `_NET_WM_CM_S<screen>`: owned by the running compositor, if any.
+    cm_atom: u32,
+    /// Last compositor check: (when, whether one runs).
+    composited: Mutex<Option<(Instant, bool)>>,
     shadow_atom: u32,
     /// Property value: 8 pixmaps, then the top, right, bottom, left paddings. `None` if the
     /// server has no 32-bit depth to draw them in.
@@ -45,6 +50,8 @@ struct Wm {
 
 static WM: OnceLock<Wm> = OnceLock::new();
 static GAVE_UP: AtomicBool = AtomicBool::new(false);
+/// Not an X11 window: Wayland, always composited.
+static WAYLAND: AtomicBool = AtomicBool::new(false);
 
 /// Connect once the window exists. Call every frame; it does its work once.
 pub fn install(frame: &eframe::Frame) {
@@ -55,7 +62,8 @@ pub fn install(frame: &eframe::Frame) {
         return; // not created yet
     };
     let RawWindowHandle::Xlib(win) = win.as_raw() else {
-        GAVE_UP.store(true, Ordering::Relaxed); // Wayland
+        GAVE_UP.store(true, Ordering::Relaxed);
+        WAYLAND.store(true, Ordering::Relaxed);
         return;
     };
     match setup(win.window as Window) {
@@ -92,6 +100,45 @@ pub fn set_shadow(on: bool) {
         wm.conn.delete_property(wm.window, wm.shadow_atom).map(drop)
     };
     let _ = wm.conn.flush();
+}
+
+/// Give another of our windows (the settings window) the same shadow.
+pub fn add_shadow(window: u32) {
+    let Some(wm) = WM.get() else { return };
+    let Some(value) = wm.shadow else { return };
+    let _ = wm.conn.change_property32(
+        PropMode::REPLACE,
+        window,
+        wm.shadow_atom,
+        AtomEnum::CARDINAL,
+        &value,
+    );
+    let _ = wm.conn.flush();
+}
+
+/// How long a compositor check holds before asking the server again.
+const COMPOSITED_TTL: Duration = Duration::from_secs(1);
+
+/// Whether a compositor is running, so windows can have see-through (rounded) corners.
+/// Asks the X server at most once a second. Not on X11 (Wayland): always.
+pub fn composited() -> bool {
+    let Some(wm) = WM.get() else {
+        return WAYLAND.load(Ordering::Relaxed);
+    };
+    let mut last = wm.composited.lock().expect("x11 composited");
+    if let Some((at, on)) = *last {
+        if at.elapsed() < COMPOSITED_TTL {
+            return on;
+        }
+    }
+    let on = wm
+        .conn
+        .get_selection_owner(wm.cm_atom)
+        .ok()
+        .and_then(|c| c.reply().ok())
+        .is_some_and(|r| r.owner != x11rb::NONE);
+    *last = Some((Instant::now(), on));
+    on
 }
 
 /// Whether [`show_window_menu`] will do anything.
@@ -132,6 +179,7 @@ fn setup(window: Window) -> Result<Wm, String> {
             .atom)
     };
     let shadow_atom = atom(b"_KDE_NET_WM_SHADOW")?;
+    let cm_atom = atom(format!("_NET_WM_CM_S{screen}").as_bytes())?;
     let menu = atom(b"_GTK_SHOW_WINDOW_MENU")?;
     let supported = atom(b"_NET_SUPPORTED")?;
     let listed: Vec<u32> = conn
@@ -147,6 +195,8 @@ fn setup(window: Window) -> Result<Wm, String> {
         conn,
         window,
         root,
+        cm_atom,
+        composited: Mutex::new(None),
         shadow_atom,
         shadow,
         shadow_on: Mutex::new(None),

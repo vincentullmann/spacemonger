@@ -256,7 +256,7 @@ impl eframe::App for SpaceMonger {
             self.apply_settings(&ctx);
         }
 
-        window_frame(&ctx);
+        window_frame(&ctx, 0.0);
 
         // The taskbar still shows the title.
         let title = window_title(self.tree.as_ref(), &self.selection, &self.zoom);
@@ -272,10 +272,6 @@ impl eframe::App for SpaceMonger {
         crate::ui::x11_sync::frame_drawn(&ctx);
     }
 
-    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
-        crate::ui::widgets::release_after_grab(ctx, raw_input);
-    }
-
     /// Runs once before every [`Self::ui`]. eframe 0.36 has no `update`; this is that hook.
     fn logic(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // The previous frame is on screen now; release the window manager's resize step.
@@ -283,10 +279,10 @@ impl eframe::App for SpaceMonger {
         crate::ui::x11_sync::acknowledge();
     }
 
-    fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {
-        Theme::of(visuals.dark_mode)
-            .background
-            .to_normalized_gamma_f32()
+    /// See-through, for the settings window's rounded corners (all windows share this). The
+    /// main window's panels cover all of it.
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        [0.0; 4]
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {

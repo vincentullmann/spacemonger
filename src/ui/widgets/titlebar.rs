@@ -135,10 +135,6 @@ fn progress_line(ui: &Ui, full: Rect, frac: f32) {
 }
 
 /// Drag empty bar space to move the window, double-click it to toggle maximised.
-///
-/// The move starts once the pointer has moved a few pixels with the button down, tracked
-/// here from the raw pointer rather than egui's drag state, so it also works on the click
-/// that focuses an inactive window. Then the window manager takes over (see `wm_grab`).
 fn move_or_maximize(
     ui: &Ui,
     bg: &egui::Response,
@@ -149,6 +145,15 @@ fn move_or_maximize(
         ui.send_viewport_cmd(ViewportCommand::Maximized(!maximized));
         return;
     }
+    move_on_drag(ui, bg, empty);
+}
+
+/// Drag `bg` (where `empty` says it isn't covered) to move the window.
+///
+/// The move starts once the pointer has moved a few pixels with the button down, tracked
+/// here from the raw pointer rather than egui's drag state, so it also works on the click
+/// that focuses an inactive window. Then the window manager takes over (see `wm_grab`).
+pub fn move_on_drag(ui: &Ui, bg: &egui::Response, empty: impl Fn(egui::Pos2) -> bool) {
     let (pressed, down, pos) = ui.input(|i| {
         (
             i.pointer.primary_pressed(),

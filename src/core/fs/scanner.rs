@@ -32,6 +32,8 @@ impl Default for ScanOptions {
 /// Shared state between the scanner threads and the UI.
 pub struct ScanControl {
     pub cancelled: AtomicBool,
+    /// Scanner threads wait while this is set (at the same points they check for a cancel).
+    pub paused: AtomicBool,
     pub files: AtomicU64,
     pub folders: AtomicU64,
     pub bytes: AtomicU64,
@@ -53,6 +55,7 @@ impl ScanControl {
     pub fn new(opts: ScanOptions) -> Self {
         Self {
             cancelled: AtomicBool::new(false),
+            paused: AtomicBool::new(false),
             files: AtomicU64::new(0),
             folders: AtomicU64::new(0),
             bytes: AtomicU64::new(0),
@@ -66,7 +69,17 @@ impl ScanControl {
     pub fn cancel(&self) {
         self.cancelled.store(true, Ordering::Relaxed);
     }
+    pub fn set_paused(&self, paused: bool) {
+        self.paused.store(paused, Ordering::Relaxed);
+    }
+    pub fn is_paused(&self) -> bool {
+        self.paused.load(Ordering::Relaxed)
+    }
+    /// Whether to stop. While paused, waits here until resumed or cancelled.
     fn is_cancelled(&self) -> bool {
+        while self.is_paused() && !self.cancelled.load(Ordering::Relaxed) {
+            std::thread::sleep(PAUSE_POLL);
+        }
         self.cancelled.load(Ordering::Relaxed)
     }
     /// Returns false if this (device, inode) was already counted (hard links, bind mounts).
@@ -87,6 +100,9 @@ impl ScanControl {
         Some(make_tree(drive, root.snapshot(min), self))
     }
 }
+
+/// How often a paused scanner thread looks whether it may go on.
+const PAUSE_POLL: std::time::Duration = std::time::Duration::from_millis(50);
 
 /// A live snapshot keeps entries of at least this fraction of the bytes found so far.
 const LIVE_DETAIL: u64 = 200_000;
@@ -210,7 +226,7 @@ pub fn scan(drive: &Drive, ctl: &ScanControl) -> Option<Tree> {
     });
     // Taking it back waits out any snapshot in progress, leaving the scan the only owner.
     ctl.live().take();
-    if ctl.is_cancelled() {
+    if ctl.cancelled.load(Ordering::Relaxed) {
         return None;
     }
     let root = Arc::into_inner(root)?;
@@ -222,6 +238,34 @@ pub fn scan(drive: &Drive, ctl: &ScanControl) -> Option<Tree> {
 mod tests {
     use super::*;
     use crate::core::fs::drive_for_path;
+
+    #[test]
+    fn pause_holds_the_scan_until_resumed_or_cancelled() {
+        let dir = std::env::temp_dir().join(format!("sm_pause_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("a")).unwrap();
+        fs::write(dir.join("a/f"), vec![1u8; 10]).unwrap();
+        let drive = drive_for_path(&dir).unwrap();
+
+        let ctl = Arc::new(ScanControl::default());
+        ctl.set_paused(true);
+        let (d, c) = (drive.clone(), ctl.clone());
+        let t = std::thread::spawn(move || scan(&d, &c).map(|t| t.num_files));
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        assert!(!t.is_finished());
+        assert_eq!(ctl.files.load(Ordering::Relaxed), 0);
+        ctl.set_paused(false);
+        assert_eq!(t.join().unwrap(), Some(1));
+
+        let ctl = Arc::new(ScanControl::default());
+        ctl.set_paused(true);
+        let c = ctl.clone();
+        let t = std::thread::spawn(move || scan(&drive, &c).is_none());
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        ctl.cancel();
+        assert!(t.join().unwrap());
+        let _ = fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn scans_and_removes() {

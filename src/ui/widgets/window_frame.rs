@@ -3,17 +3,19 @@
 //! and resizes to the window manager.
 
 use eframe::egui::{
-    self, CursorIcon, Event, Id, LayerId, Order, PointerButton, RawInput, Rect, ResizeDirection,
-    Sense, Stroke, StrokeKind, Ui, UiBuilder, ViewportCommand,
+    self, CursorIcon, Event, Id, LayerId, Modifiers, Order, PointerButton, Pos2, RawInput, Rect,
+    ResizeDirection, Sense, Stroke, StrokeKind, Ui, UiBuilder, ViewportCommand, ViewportId,
 };
+use std::collections::HashMap;
 
 /// Width of the grab zone along each edge.
 const EDGE: f32 = 6.0;
 /// Length of the corner zones along each edge.
 const CORNER: f32 = 14.0;
 
-/// Call last in the frame, so the edge cursors win over whatever is underneath.
-pub fn window_frame(ctx: &egui::Context) {
+/// Call last in the frame, so the edge cursors win over whatever is underneath. `radius`
+/// rounds the border's corners (for a window with transparent corners).
+pub fn window_frame(ctx: &egui::Context, radius: f32) {
     let (maximized, fullscreen) = ctx.input(|i| {
         let v = i.viewport();
         (v.maximized.unwrap_or(false), v.fullscreen.unwrap_or(false))
@@ -32,7 +34,7 @@ pub fn window_frame(ctx: &egui::Context) {
         .bg_stroke
         .color;
     ctx.layer_painter(layer)
-        .rect_stroke(r, 0.0, Stroke::new(1.0, color), StrokeKind::Inside);
+        .rect_stroke(r, radius, Stroke::new(1.0, color), StrokeKind::Inside);
 
     use ResizeDirection as D;
     let (x0, x1, y0, y1) = (r.left(), r.right(), r.top(), r.bottom());
@@ -87,40 +89,55 @@ fn cursor(dir: ResizeDirection) -> CursorIcon {
     }
 }
 
-const GRAB_PENDING: &str = "wm_grab_release_pending";
-
 /// Send a move or resize that the window manager carries out (`StartDrag`, `BeginResize`).
 /// The WM takes the pointer, so the button release never reaches us, and egui would think the
-/// button is still down: no hover until the next click. [`release_after_grab`] makes it up.
+/// button is still down: no hover until the next click. [`GrabRelease`] makes it up.
 pub fn wm_grab(ctx: &egui::Context, cmd: ViewportCommand) {
     ctx.send_viewport_cmd(cmd);
-    ctx.data_mut(|d| d.insert_temp(Id::new(GRAB_PENDING), true));
+    let at = ctx.input(|i| (i.pointer.interact_pos(), i.modifiers));
+    if let (Some(pos), modifiers) = at {
+        let id = ctx.viewport_id();
+        ctx.plugin_or_default::<GrabRelease>()
+            .lock()
+            .pending
+            .insert(id, (pos, modifiers));
+    }
     ctx.request_repaint();
 }
 
-/// From the app's `raw_input_hook`: after a [`wm_grab`], add the release egui won't get.
-pub fn release_after_grab(ctx: &egui::Context, raw: &mut RawInput) {
-    let pending = ctx.data_mut(|d| d.remove_temp::<bool>(Id::new(GRAB_PENDING)));
-    if pending != Some(true) {
-        return;
+/// Adds the button release a [`wm_grab`] swallows to the next input of that viewport.
+/// An egui plugin rather than the app's `raw_input_hook`, which only sees the main window.
+#[derive(Default)]
+pub struct GrabRelease {
+    pending: HashMap<ViewportId, (Pos2, Modifiers)>,
+}
+
+impl egui::Plugin for GrabRelease {
+    fn debug_name(&self) -> &'static str {
+        "GrabRelease"
     }
-    let released = raw.events.iter().any(|e| {
-        matches!(
-            e,
-            Event::PointerButton {
+
+    fn input_hook(&mut self, _ctx: &egui::Context, raw: &mut RawInput) {
+        let Some((pos, modifiers)) = self.pending.remove(&raw.viewport_id) else {
+            return;
+        };
+        let released = raw.events.iter().any(|e| {
+            matches!(
+                e,
+                Event::PointerButton {
+                    button: PointerButton::Primary,
+                    pressed: false,
+                    ..
+                }
+            )
+        });
+        if !released {
+            raw.events.push(Event::PointerButton {
+                pos,
                 button: PointerButton::Primary,
                 pressed: false,
-                ..
-            }
-        )
-    });
-    let (pos, modifiers) = ctx.input(|i| (i.pointer.interact_pos(), i.modifiers));
-    if let (false, Some(pos)) = (released, pos) {
-        raw.events.push(Event::PointerButton {
-            pos,
-            button: PointerButton::Primary,
-            pressed: false,
-            modifiers,
-        });
+                modifiers,
+            });
+        }
     }
 }

@@ -59,8 +59,13 @@ pub fn scan_title(job: &ScanJob) -> (String, f32) {
     } else {
         0.0
     };
+    let verb = if ctl.is_paused() {
+        "Paused"
+    } else {
+        "Scanning"
+    };
     let text = format!(
-        "Scanning {}  -  {} files  -  {}  -  {APP_NAME}",
+        "{verb} {}  -  {} files  -  {}  -  {APP_NAME}",
         job.drive.root.display(),
         files.to_formatted_string(&Locale::en),
         format::size_string(bytes, 0, false),
