@@ -15,6 +15,7 @@ use crate::ui::dialogs::DriveDialog;
 use crate::ui::error::AppError;
 use crate::ui::fonts;
 use crate::ui::palette::Palette;
+use crate::ui::platform;
 use crate::ui::settings::{Settings, SettingsWindow};
 use crate::ui::theme::Theme;
 use crate::ui::title::{scan_title, window_title};
@@ -202,21 +203,7 @@ impl SpaceMonger {
 impl eframe::App for SpaceMonger {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        #[cfg(target_os = "linux")]
-        {
-            let bg = self.palette.background;
-            crate::ui::x11_sync::install(frame, &ctx, bg);
-            crate::ui::x11_dialog::remember_main(frame);
-            crate::ui::x11_sync::set_background(bg);
-            crate::ui::x11_wm::install(frame);
-            let full = ctx.input(|i| {
-                let v = i.viewport();
-                v.maximized.unwrap_or(false) || v.fullscreen.unwrap_or(false)
-            });
-            crate::ui::x11_wm::set_shadow(!full);
-        }
-        #[cfg(not(target_os = "linux"))]
-        let _ = frame;
+        platform::main_frame_start(frame, &ctx, self.palette.background);
         // Folder title bars fit the label font as it renders (its line height, not just its
         // size), so a taller system font doesn't get cut off.
         let title_h = fonts::title_height(&ctx, &self.settings.map_font());
@@ -286,15 +273,13 @@ impl eframe::App for SpaceMonger {
         }
 
         // This frame is drawn at the window's current size: let the WM move on once it's shown.
-        #[cfg(target_os = "linux")]
-        crate::ui::x11_sync::frame_drawn(&ctx);
+        platform::main_frame_drawn(&ctx);
     }
 
     /// Runs once before every [`Self::ui`]. eframe 0.36 has no `update`; this is that hook.
     fn logic(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // The previous frame is on screen now; release the window manager's resize step.
-        #[cfg(target_os = "linux")]
-        crate::ui::x11_sync::acknowledge();
+        platform::frame_presented();
     }
 
     /// See-through, for the settings window's rounded corners (all windows share this). The

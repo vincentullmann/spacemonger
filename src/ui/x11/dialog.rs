@@ -5,9 +5,8 @@
 //! egui creates the settings viewport itself and doesn't hand out its window handle, so we
 //! find it among this process's top-level windows by title once it's mapped.
 
-use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+use super::{atom, conn, root, window_of, Handle, XResult};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::OnceLock;
 use x11rb::connection::Connection;
 use x11rb::protocol::xproto::{
     AtomEnum, ClientMessageEvent, ConnectionExt as _, EventMask, PropMode, Window,
@@ -15,29 +14,27 @@ use x11rb::protocol::xproto::{
 use x11rb::rust_connection::RustConnection;
 use x11rb::wrapper::ConnectionExt as _;
 
+/// How many windows the property lists are read up to.
+const MAX_WINDOWS: u32 = 4096;
+/// Longest window title compared, in 32-bit units.
+const MAX_TITLE: u32 = 256;
+/// `_NET_WM_STATE` client message: add the listed states.
+const STATE_ADD: u32 = 1;
+
 /// The main window, once known.
 static MAIN: AtomicU32 = AtomicU32::new(0);
-
-fn conn() -> Option<&'static (RustConnection, usize)> {
-    static CONN: OnceLock<Option<(RustConnection, usize)>> = OnceLock::new();
-    CONN.get_or_init(|| x11rb::connect(None).ok()).as_ref()
-}
 
 /// Note the main window (call every frame; it only does work once).
 pub fn remember_main(frame: &eframe::Frame) {
     if MAIN.load(Ordering::Relaxed) != 0 {
         return;
     }
-    if let Ok(h) = frame.window_handle() {
-        match h.as_raw() {
-            RawWindowHandle::Xlib(w) => MAIN.store(w.window as u32, Ordering::Relaxed),
-            RawWindowHandle::Xcb(w) => MAIN.store(w.window.get(), Ordering::Relaxed),
-            _ => {}
-        }
+    if let Handle::X11(w) = window_of(frame) {
+        MAIN.store(w, Ordering::Relaxed);
     }
 }
 
-/// What [`attach`] got to.
+/// What [`attach_dialog`] got to.
 pub enum Attach {
     /// Not there yet (the window may not be mapped): try again next frame.
     Pending,
@@ -47,7 +44,7 @@ pub enum Attach {
 
 /// Find this process's window titled `title` and make it a dialog of the main window.
 /// Not on X11: done at once, nothing to do.
-pub fn attach(title: &str) -> Attach {
+pub fn attach_dialog(title: &str) -> Attach {
     let main = MAIN.load(Ordering::Relaxed);
     let Some((conn, screen)) = conn() else {
         return Attach::Done(None);
@@ -55,32 +52,23 @@ pub fn attach(title: &str) -> Attach {
     if main == 0 {
         return Attach::Pending;
     }
-    let root = conn.setup().roots[*screen].root;
+    let root = root(conn, *screen);
     match find(conn, root, title) {
-        Some(w) => {
-            let _ = make_dialog(conn, root, w, main);
+        Ok(Some(w)) => {
+            if let Err(e) = make_dialog(conn, root, w, main) {
+                eprintln!("settings window not made a dialog: {e}");
+            }
             Attach::Done(Some(w))
         }
-        None => Attach::Pending,
+        _ => Attach::Pending,
     }
 }
 
-fn atom(conn: &RustConnection, name: &str) -> Option<u32> {
-    Some(
-        conn.intern_atom(false, name.as_bytes())
-            .ok()?
-            .reply()
-            .ok()?
-            .atom,
-    )
-}
-
 /// Top-level windows: the window manager's client list, or the root's children without one.
-fn find(conn: &RustConnection, root: Window, title: &str) -> Option<Window> {
+fn find(conn: &RustConnection, root: Window, title: &str) -> XResult<Option<Window>> {
     let client_list = atom(conn, "_NET_CLIENT_LIST")?;
     let mut candidates: Vec<Window> = conn
-        .get_property(false, root, client_list, AtomEnum::WINDOW, 0, 4096)
-        .ok()?
+        .get_property(false, root, client_list, AtomEnum::WINDOW, 0, MAX_WINDOWS)?
         .reply()
         .ok()
         .and_then(|r| r.value32().map(|v| v.collect()))
@@ -94,7 +82,7 @@ fn find(conn: &RustConnection, root: Window, title: &str) -> Option<Window> {
         atom(conn, "UTF8_STRING")?,
     );
     let pid = std::process::id();
-    candidates.into_iter().find(|&w| {
+    Ok(candidates.into_iter().find(|&w| {
         let ours = conn
             .get_property(false, w, pid_atom, AtomEnum::CARDINAL, 0, 1)
             .ok()
@@ -102,39 +90,37 @@ fn find(conn: &RustConnection, root: Window, title: &str) -> Option<Window> {
             .and_then(|r| r.value32().and_then(|mut v| v.next()))
             == Some(pid);
         let named = conn
-            .get_property(false, w, name_atom, utf8, 0, 256)
+            .get_property(false, w, name_atom, utf8, 0, MAX_TITLE)
             .ok()
             .and_then(|c| c.reply().ok())
             .is_some_and(|r| r.value == title.as_bytes());
         ours && named
-    })
+    }))
 }
 
-fn make_dialog(conn: &RustConnection, root: Window, w: Window, main: Window) -> Option<()> {
+/// Transient for `main`, typed as a dialog, and out of the taskbar and pager.
+fn make_dialog(conn: &RustConnection, root: Window, w: Window, main: Window) -> XResult<()> {
     conn.change_property32(
         PropMode::REPLACE,
         w,
         AtomEnum::WM_TRANSIENT_FOR,
         AtomEnum::WINDOW,
         &[main],
-    )
-    .ok()?;
+    )?;
     let ty = atom(conn, "_NET_WM_WINDOW_TYPE")?;
     let dialog = atom(conn, "_NET_WM_WINDOW_TYPE_DIALOG")?;
-    conn.change_property32(PropMode::REPLACE, w, ty, AtomEnum::ATOM, &[dialog])
-        .ok()?;
+    conn.change_property32(PropMode::REPLACE, w, ty, AtomEnum::ATOM, &[dialog])?;
     // _NET_WM_STATE on a mapped window is changed by asking the window manager.
     let state = atom(conn, "_NET_WM_STATE")?;
     let skip_taskbar = atom(conn, "_NET_WM_STATE_SKIP_TASKBAR")?;
     let skip_pager = atom(conn, "_NET_WM_STATE_SKIP_PAGER")?;
-    const ADD: u32 = 1;
-    let msg = ClientMessageEvent::new(32, w, state, [ADD, skip_taskbar, skip_pager, 1, 0]);
+    let msg = ClientMessageEvent::new(32, w, state, [STATE_ADD, skip_taskbar, skip_pager, 1, 0]);
     conn.send_event(
         false,
         root,
         EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY,
         msg,
-    )
-    .ok()?;
-    conn.flush().ok()
+    )?;
+    conn.flush()?;
+    Ok(())
 }

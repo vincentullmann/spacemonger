@@ -7,6 +7,7 @@
 
 use super::{form, pages, Settings};
 use crate::ui::keymap::{same_shortcut, shortcut_text, Command, Keymap};
+use crate::ui::platform;
 use crate::ui::widgets::dialog::{self, HEADER_H, PADDING};
 use crate::ui::widgets::{titlebar, window_frame};
 use eframe::egui::{
@@ -266,18 +267,7 @@ impl SettingsWindow {
     /// little while.
     fn attach(&mut self, ctx: &egui::Context) {
         let Some(tries) = self.attaching else { return };
-        #[cfg(target_os = "linux")]
-        let done = match crate::ui::x11_dialog::attach(TITLE) {
-            crate::ui::x11_dialog::Attach::Pending => false,
-            crate::ui::x11_dialog::Attach::Done(window) => {
-                if let Some(w) = window {
-                    crate::ui::x11_wm::add_shadow(w);
-                }
-                true
-            }
-        };
-        #[cfg(not(target_os = "linux"))]
-        let done = true;
+        let done = platform::attach_dialog(TITLE);
         self.attaching = if done || tries > 120 {
             None
         } else {
@@ -418,11 +408,7 @@ fn captured(ui: &egui::Ui) -> Option<Option<KeyboardShortcut>> {
 
 /// The main menu's corner radius where a compositor can show see-through corners, else none.
 fn corner_radius(ui: &egui::Ui) -> CornerRadius {
-    #[cfg(target_os = "linux")]
-    let composited = crate::ui::x11_wm::composited();
-    #[cfg(not(target_os = "linux"))]
-    let composited = true;
-    if composited {
+    if platform::composited() {
         ui.visuals().menu_corner_radius
     } else {
         CornerRadius::ZERO

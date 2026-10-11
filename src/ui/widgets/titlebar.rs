@@ -94,13 +94,8 @@ pub fn titlebar(
 
 /// The window manager's own window menu (keep above, move to desktop, …), where it offers one.
 fn window_menu(ui: &Ui, pos: egui::Pos2) {
-    #[cfg(target_os = "linux")]
-    {
-        let px = (pos.to_vec2() * ui.ctx().pixels_per_point()).to_pos2();
-        crate::ui::x11_wm::show_window_menu(px);
-    }
-    #[cfg(not(target_os = "linux"))]
-    let _ = (ui, pos);
+    let px = (pos.to_vec2() * ui.ctx().pixels_per_point()).to_pos2();
+    crate::ui::platform::show_window_menu(px);
 }
 
 /// While the search icon is hovered: a greyed-out search box where the title goes, to show
