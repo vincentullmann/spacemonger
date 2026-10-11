@@ -4,7 +4,7 @@ use super::{Anchor, Anim, Fit};
 use crate::constants::MAX_ZOOM;
 use crate::core::geometry::{Point, Rect, Size, TranslateScale, Vec2};
 use crate::core::layout::{self, child_boxes, Item, Reshape, Scene};
-use crate::core::model::Kind;
+use crate::core::model::{path_after_remove, Kind};
 use std::time::Instant;
 
 #[derive(Default)]
@@ -48,6 +48,18 @@ impl Camera {
         self.cam = None;
         self.fit = None;
         self.anim = None;
+    }
+
+    /// The entry `index` in `folder` was removed from the tree: follow the index paths the
+    /// camera holds. A fitted folder that was removed (or sat inside the removed entry) is let
+    /// go; the camera itself stays where it is.
+    pub fn entry_removed(&mut self, folder: &[usize], index: usize) {
+        let _ = self.finish_anim();
+        self.resize_anchor = None;
+        self.fit = self.fit.take().and_then(|mut f| {
+            f.reshape.path = path_after_remove(&f.reshape.path, folder, index)?;
+            Some(f)
+        });
     }
 
     /// Start fully zoomed out if there's no camera yet.

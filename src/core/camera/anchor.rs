@@ -63,6 +63,10 @@ impl Camera {
                 height: vh,
             },
         ) = (self.view, view);
+        // A minimised window has no size: keep the camera for when it comes back.
+        if vw <= 0.0 || vh <= 0.0 {
+            return;
+        }
         let Some(cam) = self.cam.filter(|_| ow > 0.0 && oh > 0.0) else {
             self.view = view;
             self.cam = None;

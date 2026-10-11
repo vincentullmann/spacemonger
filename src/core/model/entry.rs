@@ -25,10 +25,20 @@ pub struct Entry {
 }
 
 impl Entry {
+    /// The folder's contents, for a folder.
     pub fn child(&self) -> Option<&Folder> {
         match &self.kind {
             Kind::Dir(f) => Some(f),
             _ => None,
+        }
+    }
+
+    /// (files, folders) this entry stands for: itself and, for a folder, everything in it.
+    pub fn counts(&self) -> (u64, u64) {
+        match &self.kind {
+            Kind::File => (1, 0),
+            Kind::Free => (0, 0),
+            Kind::Dir(f) => f.entries.iter().map(Entry::counts).fold((0, 1), |(a, b), (c, d)| (a + c, b + d)),
         }
     }
 }

@@ -43,7 +43,8 @@ impl Tree {
         let mut p = self.root_path.clone();
         let mut f = &self.root;
         for &i in folder {
-            let e = &f.entries[i];
+            // A stale path (the tree changed under it) stops at the last folder that exists.
+            let Some(e) = f.entries.get(i) else { return p };
             p.push(&e.name);
             match e.child() {
                 Some(c) => f = c,
@@ -60,13 +61,11 @@ impl Tree {
 
     /// Hide an entry from the view: ancestors shrink by its size; `unhide_all` restores it.
     pub fn hide(&mut self, folder: &[usize], index: usize) {
-        let Some(size) = self
-            .entry_at(folder, index)
-            .filter(|e| !e.hidden)
-            .map(|e| e.size)
-        else {
+        let Some(e) = self.entry_at(folder, index).filter(|e| !e.hidden) else {
             return;
         };
+        // A dotfile left out of the sizes already has nothing left to subtract.
+        let size = if self.is_left_out(e) { 0 } else { e.size };
         self.shrink_ancestors(folder, size);
         if let Some(f) = self.folder_at_mut(folder) {
             f.entries[index].hidden = true;
@@ -148,26 +147,20 @@ impl Tree {
         f.total = f.total.saturating_sub(size);
     }
 
-    /// Remove an entry after it has been deleted on disk, updating ancestor sizes.
+    /// Remove an entry after it has been deleted on disk, updating ancestor sizes and the
+    /// file / folder counts.
     pub fn remove(&mut self, folder: &[usize], index: usize) {
-        let Some(size) = self.entry_at(folder, index).map(|e| e.size) else {
+        let Some(e) = self.entry_at(folder, index) else {
             return;
         };
-        let mut f = &mut self.root;
-        for &i in folder {
-            f.total = f.total.saturating_sub(size);
-            let e = &mut f.entries[i];
-            e.size = e.size.saturating_sub(size);
-            e.actual = e.actual.saturating_sub(size);
-            f = match &mut e.kind {
-                Kind::Dir(c) => c,
-                _ => return,
-            };
-        }
-        f.total = f.total.saturating_sub(size);
-        if index < f.entries.len() {
+        let size = if self.is_left_out(e) { 0 } else { e.size };
+        let (files, folders) = e.counts();
+        self.shrink_ancestors(folder, size);
+        if let Some(f) = self.folder_at_mut(folder) {
             f.entries.remove(index);
         }
+        self.num_files = self.num_files.saturating_sub(files);
+        self.num_folders = self.num_folders.saturating_sub(folders);
     }
 }
 
@@ -269,5 +262,64 @@ mod tests {
         assert_eq!(t.root.total, 5);
         t.set_dotfiles_hidden(false);
         assert_eq!((t.root.total, t.root.entries[0].size), (22, 15));
+    }
+
+    #[test]
+    fn remove_updates_counts_and_survives_stale_paths() {
+        let sub = Folder {
+            entries: vec![file("f", 10), file("g", 5)],
+            total: 15,
+        };
+        let root = Folder {
+            entries: vec![
+                Entry {
+                    name: "d".into(),
+                    size: 15,
+                    actual: 15,
+                    mtime: 0,
+                    created: 0,
+                    kind: Kind::Dir(Box::new(sub)),
+                    hidden: false,
+                },
+                file("x", 7),
+            ],
+            total: 22,
+        };
+        let mut t = Tree {
+            root,
+            root_path: PathBuf::from("/r"),
+            total_space: 0,
+            free_space: 0,
+            num_files: 3,
+            num_folders: 1,
+            hidden_count: 0,
+            dotfiles_hidden: false,
+        };
+        t.remove(&[], 0); // d, with its two files
+        assert_eq!((t.num_files, t.num_folders, t.root.total), (1, 0, 7));
+        // A path into the removed folder no longer panics.
+        assert_eq!(t.full_path(&[5, 1], Some(0)), PathBuf::from("/r"));
+    }
+
+    #[test]
+    fn hiding_a_left_out_dotfile_subtracts_nothing() {
+        let mut t = Tree {
+            root: Folder {
+                entries: vec![file(".x", 7), file("y", 3)],
+                total: 10,
+            },
+            root_path: PathBuf::from("/"),
+            total_space: 0,
+            free_space: 0,
+            num_files: 2,
+            num_folders: 0,
+            hidden_count: 0,
+            dotfiles_hidden: false,
+        };
+        t.set_dotfiles_hidden(true);
+        t.hide(&[], 0);
+        assert_eq!(t.root.total, 3);
+        t.unhide_all();
+        assert_eq!(t.root.total, 3);
     }
 }

@@ -3,7 +3,7 @@
 use super::SpaceMonger;
 use crate::core::actions::Action;
 use crate::core::fs::{Drive, ScanJob, ScanStatus};
-use crate::core::model::EntryRef;
+use crate::core::model::{path_after_remove, EntryRef};
 use crate::ui::dialogs::{confirm_delete, error_dialog, scan_dialog, DriveDialog};
 use crate::ui::error::AppError;
 use crate::ui::settings::Theme;
@@ -143,11 +143,7 @@ impl SpaceMonger {
         let mut failed = Vec::new();
         for (r, path) in refs.into_iter().zip(paths) {
             match trash::delete(&path) {
-                Ok(()) => {
-                    if let Some(t) = &mut self.tree {
-                        t.remove(&r.folder, r.index);
-                    }
-                }
+                Ok(()) => self.entry_deleted(&r),
                 Err(e) => failed.push((path, e)),
             }
         }
@@ -156,6 +152,18 @@ impl SpaceMonger {
         if !failed.is_empty() {
             self.error = Some(AppError::Trash(failed));
         }
+    }
+
+    /// Take a deleted entry out of the tree, and keep the index paths that point into it
+    /// (zoomed folder, camera) valid.
+    fn entry_deleted(&mut self, r: &EntryRef) {
+        let Some(t) = &mut self.tree else { return };
+        t.remove(&r.folder, r.index);
+        self.zoom = path_after_remove(&self.zoom, &r.folder, r.index).unwrap_or_else(|| r.folder.to_vec());
+        self.camera.entry_removed(&r.folder, r.index);
+        // This frame's layout still has the old indices; it's rebuilt before the next paint.
+        self.items.clear();
+        self.hovered = None;
     }
 
     /// Show whichever dialogs are open and act on their answers.
